@@ -1,4 +1,5 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { db as firestoreDb, doc, setDoc, onSnapshot, collection, getDocs } from "./firebase.js";
 
 const LIGHT={bg:"#f0f4f8",surface:"#fff",card:"#fff",border:"#e2e8f0",border2:"#cbd5e1",text:"#1a202c",muted:"#718096",muted2:"#a0aec0",teal:"#0d9488",tealD:"#0f766e",tealL:"#ccfbf1",pink:"#ec4899",pinkL:"#fce7f3",green:"#10b981",greenL:"#d1fae5",red:"#ef4444",redL:"#fee2e2",gold:"#f59e0b",goldL:"#fef3c7",blue:"#3b82f6",blueL:"#dbeafe",purple:"#8b5cf6",purpleL:"#ede9fe",shadow:"0 1px 4px rgba(0,0,0,0.08)",shadowM:"0 4px 16px rgba(0,0,0,0.10)",shadowL:"0 8px 32px rgba(0,0,0,0.12)"};
 const DARK={bg:"#0f172a",surface:"#1e293b",card:"#1e293b",border:"#334155",border2:"#475569",text:"#f1f5f9",muted:"#94a3b8",muted2:"#64748b",teal:"#2dd4bf",tealD:"#0f766e",tealL:"#134e4a",pink:"#f472b6",pinkL:"#831843",green:"#34d399",greenL:"#064e3b",red:"#f87171",redL:"#7f1d1d",gold:"#fbbf24",goldL:"#78350f",blue:"#60a5fa",blueL:"#1e3a5f",purple:"#a78bfa",purpleL:"#3b0764",shadow:"0 1px 4px rgba(0,0,0,0.3)",shadowM:"0 4px 16px rgba(0,0,0,0.4)",shadowL:"0 8px 32px rgba(0,0,0,0.5)"};
@@ -34,10 +35,11 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const today=()=>new Date().toISOString().slice(0,10);
 const fmt=d=>d?d.split("-").reverse().join("/"):"--";
 const attPct=a=>!a?.length?0:Math.round(a.filter(x=>x.status==="Present").length/a.length*100);
-const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch{return d;}};
-const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
 const tc=(C,color)=>color==="teal"?C.teal:color==="red"?C.red:color==="gold"?C.gold:color==="purple"?C.purple:color==="pink"?C.pink:color==="blue"?C.blue:color==="green"?C.green:C.teal;
 const tb=(C,color)=>color==="teal"?C.tealL:color==="red"?C.redL:color==="gold"?C.goldL:color==="purple"?C.purpleL:color==="pink"?C.pinkL:color==="blue"?C.blueL:color==="green"?C.greenL:C.tealL;
+// Local UI state helpers (timetable, receipts, alert log)
+const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch{return d;}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
 
 function seedData(){
   return {
@@ -147,15 +149,49 @@ function StuSidebar({students,sel,setSel,C,extra}){
 export default function App(){
   const [dark,setDark]=useState(false);
   const C=dark?DARK:LIGHT;
-  const [db,setDb]=useState(()=>lsGet("allbee_db4",null)||seedData());
+  const [db,setDb]=useState(null);
+  const [loading,setLoading]=useState(true);
   const [user,setUser]=useState(null);
   const [toast,setToast]=useState(null);
-  function saveDb(patch){const n={...db,...patch};lsSet("allbee_db4",n);setDb(n);}
+
+  // ── Firebase real-time listener ──────────────────────────────────────────
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(firestoreDb,"allbee","data"),(snap)=>{
+      if(snap.exists()){
+        setDb(snap.data());
+      } else {
+        // First run: seed the database
+        const seed=seedData();
+        setDoc(doc(firestoreDb,"allbee","data"),seed);
+        setDb(seed);
+      }
+      setLoading(false);
+    },(err)=>{
+      console.error("Firebase error:",err);
+      setLoading(false);
+    });
+    return()=>unsub();
+  },[]);
+
+  const saveDb=useCallback((patch)=>{
+    const n={...db,...patch};
+    setDb(n);
+    setDoc(doc(firestoreDb,"allbee","data"),n);
+  },[db]);
+
   function notify(msg,type="success"){setToast({msg,type});setTimeout(()=>setToast(null),3000);}
   function login(u,p){const x=db.users.find(u2=>u2.username===u&&u2.password===p);if(!x)return"Invalid username or password";setUser(x);return null;}
   function logout(){setUser(null);}
-  const myInst=user?.instId?db.institutions.find(i=>i.id===user.instId):null;
+  const myInst=user?.instId?db?.institutions?.find(i=>i.id===user.instId):null;
   const toastBg=toast?.type==="success"?C.teal:toast?.type==="error"?C.red:C.gold;
+
+  if(loading) return(
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
+      <img src={LOGO_SRC} alt="AllBee EduSphere" style={{width:90,objectFit:"contain"}}/>
+      <div style={{fontSize:14,color:C.muted,fontWeight:600}}>Connecting to AllBee EduSphere…</div>
+      <div style={{width:220,height:4,background:C.border,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:"60%",background:C.teal,borderRadius:99,animation:"slideIn 1.2s ease infinite"}}/></div>
+    </div>
+  );
   return <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'Segoe UI',Inter,system-ui,sans-serif",fontSize:14,transition:"background 0.2s,color 0.2s"}}>
     <style>{`*{box-sizing:border-box;}::placeholder{color:${C.muted2};}@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes slideIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}input:focus,select:focus,textarea:focus{outline:none;border-color:${C.teal}!important;box-shadow:0 0 0 3px ${C.teal}22!important;}button{cursor:pointer;transition:all 0.15s;font-family:inherit;}button:active{transform:scale(0.97);}::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:${C.border2};border-radius:4px}`}</style>
     {toast&&<div style={{position:"fixed",top:18,right:18,zIndex:9999,padding:"12px 20px",borderRadius:10,fontWeight:600,fontSize:13,animation:"fadeIn 0.2s",boxShadow:C.shadowL,background:toastBg,color:"#fff"}}>{toast.type==="success"?"✓ ":toast.type==="error"?"✕ ":"⚠ "}{toast.msg}</div>}
