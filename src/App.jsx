@@ -57,6 +57,7 @@ function seedData(){
       {id:"u4",username:"dance_admin",password:"dance123",role:"admin",name:"Nataraj Admin",instId:"i4"},
     ],
     students:[],
+    staffAttendance:[],
   };
 }
 
@@ -362,8 +363,122 @@ function SAReports({db,C}){
   </div>;
 }
 
+
+// ─── Staff Attendance ───────────────────────────────────────────────────────
+function StaffAttend({db,saveDb,user,inst,color,isAdmin,notify,C}){
+  const nowTime=()=>new Date().toTimeString().slice(0,5);
+  const todayStr=today();
+  const myRecords=(db.staffAttendance||[]).filter(r=>r.instId===inst.id);
+  const myTodayRec=myRecords.find(r=>r.userId===user.id&&r.date===todayStr);
+  const [filterDate,setFilterDate]=useState(todayStr);
+  const [filterUser,setFilterUser]=useState("all");
+
+  function checkIn(){
+    if(myTodayRec?.inTime){notify("Already checked in today","gold");return;}
+    const rec={id:uid(),instId:inst.id,userId:user.id,userName:user.name,date:todayStr,inTime:nowTime(),outTime:null};
+    saveDb({staffAttendance:[...(db.staffAttendance||[]),rec]});
+    notify("✅ Checked in at "+rec.inTime);
+  }
+  function checkOut(){
+    if(!myTodayRec){notify("Check in first","error");return;}
+    if(myTodayRec.outTime){notify("Already checked out","gold");return;}
+    saveDb({staffAttendance:(db.staffAttendance||[]).map(r=>r.id===myTodayRec.id?{...r,outTime:nowTime()}:r)});
+    notify("👋 Checked out at "+nowTime());
+  }
+  function durMins(inT,outT){
+    if(!inT||!outT)return null;
+    const [ih,im]=inT.split(":").map(Number);
+    const [oh,om]=outT.split(":").map(Number);
+    return(oh*60+om)-(ih*60+im);
+  }
+  function fmtDur(mins){if(mins===null)return"--";const h=Math.floor(mins/60),m=mins%60;return h>0?`${h}h ${m}m`:`${m}m`;}
+
+  // staff who belong to this institution
+  const instStaff=(db.users||[]).filter(u=>u.instId===inst.id);
+
+  // filtered records for admin view
+  const filtered=myRecords.filter(r=>{
+    const dateOk=filterDate?r.date===filterDate:true;
+    const userOk=filterUser==="all"||r.userId===filterUser;
+    return dateOk&&userOk;
+  }).sort((a,b)=>b.date.localeCompare(a.date)||b.inTime.localeCompare(a.inTime));
+
+  const statusColor=myTodayRec?.outTime?C.muted:myTodayRec?.inTime?C.green:C.red;
+  const statusLabel=myTodayRec?.outTime?"Checked Out":myTodayRec?.inTime?"Checked In":"Not Checked In";
+
+  const TH={padding:"10px 16px",textAlign:"left",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid ${C.border}`,background:C.bg};
+  const TD={padding:"11px 16px",fontSize:12,color:C.text,borderBottom:`1px solid ${C.border}`};
+
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    <PH title="🕐 Staff Attendance" sub="Clock in and out — visible to admin" C={C}/>
+
+    {/* My Clock Card — visible to all staff/admin */}
+    <div style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,padding:24,marginBottom:22,boxShadow:C.shadowM,display:"flex",alignItems:"center",gap:24,flexWrap:"wrap"}}>
+      <div style={{flex:1,minWidth:160}}>
+        <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Today — {fmt(todayStr)}</div>
+        <div style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:4}}>{user.name}</div>
+        <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 12px",borderRadius:20,background:myTodayRec?.outTime?C.border:myTodayRec?.inTime?C.greenL:C.redL,color:statusColor,fontSize:11,fontWeight:700}}>
+          <span style={{width:7,height:7,borderRadius:"50%",background:statusColor,display:"inline-block"}}/>
+          {statusLabel}
+        </div>
+      </div>
+      <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+        {myTodayRec?.inTime&&<div style={{textAlign:"center",padding:"12px 20px",background:C.greenL,borderRadius:12,minWidth:90}}>
+          <div style={{fontSize:10,color:C.green,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>In Time</div>
+          <div style={{fontSize:22,fontWeight:800,color:C.green,fontFamily:"monospace"}}>{myTodayRec.inTime}</div>
+        </div>}
+        {myTodayRec?.outTime&&<div style={{textAlign:"center",padding:"12px 20px",background:C.blueL,borderRadius:12,minWidth:90}}>
+          <div style={{fontSize:10,color:C.blue,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Out Time</div>
+          <div style={{fontSize:22,fontWeight:800,color:C.blue,fontFamily:"monospace"}}>{myTodayRec.outTime}</div>
+        </div>}
+        {myTodayRec?.inTime&&myTodayRec?.outTime&&<div style={{textAlign:"center",padding:"12px 20px",background:C.purpleL,borderRadius:12,minWidth:90}}>
+          <div style={{fontSize:10,color:C.purple,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Duration</div>
+          <div style={{fontSize:22,fontWeight:800,color:C.purple}}>{fmtDur(durMins(myTodayRec.inTime,myTodayRec.outTime))}</div>
+        </div>}
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <button onClick={checkIn} disabled={!!myTodayRec?.inTime} style={{padding:"11px 28px",borderRadius:10,border:"none",background:myTodayRec?.inTime?"#ccc":C.green,color:"#fff",fontWeight:700,fontSize:13,cursor:myTodayRec?.inTime?"not-allowed":"pointer",opacity:myTodayRec?.inTime?0.6:1}}>✅ Check In</button>
+          <button onClick={checkOut} disabled={!myTodayRec?.inTime||!!myTodayRec?.outTime} style={{padding:"11px 28px",borderRadius:10,border:"none",background:(!myTodayRec?.inTime||myTodayRec?.outTime)?"#ccc":C.blue,color:"#fff",fontWeight:700,fontSize:13,cursor:(!myTodayRec?.inTime||myTodayRec?.outTime)?"not-allowed":"pointer",opacity:(!myTodayRec?.inTime||myTodayRec?.outTime)?0.6:1}}>👋 Check Out</button>
+        </div>
+      </div>
+    </div>
+
+    {/* Admin view — full records table */}
+    {isAdmin&&<div>
+      <div style={{fontWeight:700,fontSize:14,marginBottom:14,color:C.text}}>📋 Attendance Records</div>
+      <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+        <Inp C={C} type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)} style={{width:"auto"}}/>
+        <Sel C={C} value={filterUser} onChange={e=>setFilterUser(e.target.value)} style={{width:"auto"}}>
+          <option value="all">All Staff</option>
+          {instStaff.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
+        </Sel>
+        <Btn C={C} color="teal" size="sm" outline onClick={()=>{setFilterDate("");setFilterUser("all");}}>Clear Filter</Btn>
+        {/* Summary chips */}
+        {filterDate&&<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          {instStaff.map(u=>{const rec=myRecords.find(r=>r.userId===u.id&&r.date===filterDate);const dur=rec?durMins(rec.inTime,rec.outTime):null;return<div key={u.id} style={{padding:"5px 12px",borderRadius:20,background:rec?.outTime?C.greenL:rec?.inTime?C.goldL:C.redL,color:rec?.outTime?C.green:rec?.inTime?C.gold:C.red,fontSize:11,fontWeight:600}}>{u.name}: {rec?.inTime||"Absent"}{rec?.outTime?" → "+rec.outTime:""}{dur!==null?" ("+fmtDur(dur)+")":""}</div>;})}
+        </div>}
+      </div>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,overflow:"auto",boxShadow:C.shadow}}>
+        <table style={{width:"100%",borderCollapse:"collapse",minWidth:600}}>
+          <thead><tr>{["Staff Name","Date","In Time","Out Time","Duration","Status"].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
+          <tbody>
+            {filtered.map(r=>{const mins=durMins(r.inTime,r.outTime);const status=r.outTime?"Complete":r.inTime?"In Progress":"--";const sc=r.outTime?C.green:r.inTime?C.gold:C.red;return<tr key={r.id}>
+              <td style={TD}><div style={{fontWeight:600}}>{r.userName}</div></td>
+              <td style={TD}>{fmt(r.date)}</td>
+              <td style={{...TD,fontFamily:"monospace",color:C.green,fontWeight:700}}>{r.inTime||"--"}</td>
+              <td style={{...TD,fontFamily:"monospace",color:C.blue,fontWeight:700}}>{r.outTime||"--"}</td>
+              <td style={{...TD,color:C.purple,fontWeight:600}}>{fmtDur(mins)}</td>
+              <td style={TD}><span style={{padding:"3px 10px",borderRadius:20,background:r.outTime?C.greenL:r.inTime?C.goldL:C.redL,color:sc,fontSize:10,fontWeight:700}}>{status}</span></td>
+            </tr>;})}
+            {!filtered.length&&<tr><td colSpan={6}><Empty msg="No records found" C={C}/></td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>}
+  </div>;
+}
+
 // Institution Dashboard Shell
-const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"idcard",i:"🪪",l:"ID Cards"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"alerts",i:"📣",l:"Alerts"},{k:"reports",i:"📊",l:"Reports"}];
+const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"idcard",i:"🪪",l:"ID Cards"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"alerts",i:"📣",l:"Alerts"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"reports",i:"📊",l:"Reports"}];
 
 function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const [tab,setTab]=useState("home");
@@ -397,6 +512,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
         {tab==="idcard"&&<InstIDCards students={myStudents} inst={inst} color={color} C={C}/>}
         {tab==="receipt"&&<InstReceipts students={myStudents} inst={inst} color={color} C={C}/>}
         {tab==="alerts"&&<InstAlerts students={myStudents} inst={inst} color={color} notify={notify} C={C}/>}
+        {tab==="staffatt"&&<StaffAttend db={db} saveDb={saveDb} user={user} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
         {tab==="reports"&&<InstReports students={myStudents} inst={inst} color={color} C={C}/>}
       </div>
     </div>
