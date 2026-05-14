@@ -121,7 +121,7 @@ function TopBar({C,dark,setDark,onLogout,user,right}){
     <div style={{flex:1}}/>
     <button onClick={()=>setDark(d=>!d)} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",border:`1px solid ${C.border}`,borderRadius:20,background:C.surface,color:C.muted,fontSize:12,cursor:"pointer"}}>{dark?"☀ Light":"🌙 Dark"}</button>
     {user&&<div style={{display:"flex",alignItems:"center",gap:10}}>
-      <div style={{textAlign:"right"}}><div style={{fontWeight:700,fontSize:12,color:C.text}}>{user.name}</div><div style={{fontSize:9,padding:"1px 8px",borderRadius:20,background:C.tealL,color:C.teal,fontWeight:700,textTransform:"uppercase",display:"inline-block"}}>{user.role}</div></div>
+      <div style={{textAlign:"right"}}><div style={{fontWeight:700,fontSize:12,color:C.text}}>{user.name}</div><div style={{fontSize:9,padding:"1px 8px",borderRadius:20,background:user.role==="admin"?C.tealL:user.role==="accountant"?C.goldL:user.role==="staff"?C.blueL:user.role==="student"?C.purpleL:C.tealL,color:user.role==="admin"?C.teal:user.role==="accountant"?C.gold:user.role==="staff"?C.blue:user.role==="student"?C.purple:C.teal,fontWeight:700,textTransform:"uppercase",display:"inline-block"}}>{user.role}</div></div>
       <button onClick={onLogout} style={{padding:"7px 14px",border:`1px solid ${C.border}`,borderRadius:8,background:C.surface,color:C.muted,fontSize:12,fontWeight:600,cursor:"pointer"}}>Sign Out</button>
     </div>}
   </div>;
@@ -181,7 +181,22 @@ export default function App(){
   },[db]);
 
   function notify(msg,type="success"){setToast({msg,type});setTimeout(()=>setToast(null),3000);}
-  function login(u,p){const x=db.users.find(u2=>u2.username===u&&u2.password===p);if(!x)return"Invalid username or password";setUser(x);return null;}
+  function login(u,p,portalType){
+    if(portalType==="student"){
+      // student logs in with rollNo + password (DOB as default)
+      const stu=db.students.find(s=>s.rollNo===u&&(s.loginPass||s.dob)===p);
+      if(!stu)return"Invalid Roll No or Password";
+      // create a virtual user object for the student
+      const inst=db.institutions.find(i=>i.id===stu.instId);
+      setUser({id:stu.id,name:stu.name,role:"student",studentId:stu.id,instId:stu.instId,instName:inst?.name});
+      return null;
+    }
+    const x=db.users.find(u2=>u2.username===u&&u2.password===p);
+    if(!x)return"Invalid username or password";
+    if(portalType==="admin"&&x.role!=="superadmin"&&x.role!=="admin"&&x.role!=="accountant")return"This account is not an admin account";
+    if(portalType==="staff"&&x.role!=="staff")return"This account is not a staff account";
+    setUser(x);return null;
+  }
   function logout(){setUser(null);}
   const myInst=user?.instId?db?.institutions?.find(i=>i.id===user.instId):null;
   const toastBg=toast?.type==="success"?C.teal:toast?.type==="error"?C.red:C.gold;
@@ -198,14 +213,25 @@ export default function App(){
     {toast&&<div style={{position:"fixed",top:18,right:18,zIndex:9999,padding:"12px 20px",borderRadius:10,fontWeight:600,fontSize:13,animation:"fadeIn 0.2s",boxShadow:C.shadowL,background:toastBg,color:"#fff"}}>{toast.type==="success"?"✓ ":toast.type==="error"?"✕ ":"⚠ "}{toast.msg}</div>}
     {!user&&<LoginPage onLogin={login} db={db} C={C} dark={dark} setDark={setDark}/>}
     {user?.role==="superadmin"&&<SuperAdmin db={db} saveDb={saveDb} onLogout={logout} notify={notify} user={user} C={C} dark={dark} setDark={setDark}/>}
-    {(user?.role==="admin"||user?.role==="staff")&&myInst&&<InstDash db={db} saveDb={saveDb} onLogout={logout} notify={notify} user={user} inst={myInst} C={C} dark={dark} setDark={setDark}/>}
+    {(user?.role==="admin"||user?.role==="staff"||user?.role==="accountant")&&myInst&&<InstDash db={db} saveDb={saveDb} onLogout={logout} notify={notify} user={user} inst={myInst} C={C} dark={dark} setDark={setDark}/>}
+    {user?.role==="student"&&<StudentPortal db={db} saveDb={saveDb} onLogout={logout} notify={notify} user={user} C={C} dark={dark} setDark={setDark}/>}
   </div>;
 }
 
-// Login Page
+// Login Page — 3 Portals
 function LoginPage({onLogin,db,C,dark,setDark}){
+  const PORTALS=[
+    {key:"admin",icon:"🛡",label:"Admin",color:"teal",sub:"Admin & Accountant login",userLabel:"Username",passLabel:"Password"},
+    {key:"staff",icon:"👨‍🏫",label:"Staff",color:"blue",sub:"Staff & Teacher login",userLabel:"Username",passLabel:"Password"},
+    {key:"student",icon:"🎓",label:"Student",color:"purple",sub:"Student self-service portal",userLabel:"Roll Number",passLabel:"Date of Birth (YYYY-MM-DD)"},
+  ];
+  const [portal,setPortal]=useState("admin");
   const [u,setU]=useState("");const [p,setP]=useState("");const [err,setErr]=useState("");const [show,setShow]=useState(false);
-  function go(){const e=onLogin(u,p);if(e)setErr(e);}
+  const PT=PORTALS.find(x=>x.key===portal);
+  function go(){const e=onLogin(u,p,portal);if(e){setErr(e);}else{setErr("");}}
+  function switchPortal(k){setPortal(k);setU("");setP("");setErr("");}
+  const portalColor=PT.color==="teal"?C.teal:PT.color==="blue"?C.blue:C.purple;
+  const portalBg=PT.color==="teal"?C.tealL:PT.color==="blue"?C.blueL:C.purpleL;
   return <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column"}}>
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 24px",height:52,display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:C.shadow}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -215,21 +241,50 @@ function LoginPage({onLogin,db,C,dark,setDark}){
       <button onClick={()=>setDark(d=>!d)} style={{padding:"6px 14px",border:`1px solid ${C.border}`,borderRadius:20,background:C.surface,color:C.muted,fontSize:12,cursor:"pointer"}}>{dark?"☀ Light":"🌙 Dark"}</button>
     </div>
     <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-      <div style={{width:"100%",maxWidth:420,animation:"fadeUp 0.5s ease"}}>
-        <div style={{background:C.surface,borderRadius:16,border:`1px solid ${C.border}`,boxShadow:C.shadowL,padding:32}}>
-          <div style={{textAlign:"center",marginBottom:24}}>
-            <img src={LOGO_SRC} alt="AllBee EduSphere" style={{width:80,height:80,margin:"0 auto 12px",display:"block",objectFit:"contain"}}/>
-            <div style={{fontSize:22,fontWeight:800,color:C.text}}>Welcome back</div>
-            <div style={{fontSize:13,color:C.muted,marginTop:4}}>Sign in to manage your institution</div>
-          </div>
-          <div style={{marginBottom:14}}><LBL C={C}>Username</LBL><Inp C={C} value={u} onChange={e=>setU(e.target.value)} placeholder="Enter username" onKeyDown={e=>e.key==="Enter"&&go()}/></div>
-          <div style={{marginBottom:18}}><LBL C={C}>Password</LBL><div style={{position:"relative"}}><Inp C={C} type={show?"text":"password"} value={p} onChange={e=>setP(e.target.value)} placeholder="Enter password" onKeyDown={e=>e.key==="Enter"&&go()} style={{paddingRight:42}}/><button onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,fontSize:14,padding:4}}>{show?"🙈":"👁"}</button></div></div>
-          {err&&<div style={{background:C.redL,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.red,marginBottom:14}}>⚠ {err}</div>}
-          <button onClick={go} style={{width:"100%",padding:"12px",border:"none",borderRadius:10,background:`linear-gradient(135deg,${C.teal},${C.tealD})`,color:"#fff",fontSize:15,fontWeight:700,boxShadow:`0 4px 14px ${C.teal}44`,cursor:"pointer"}}>Sign In →</button>
-
+      <div style={{width:"100%",maxWidth:440,animation:"fadeUp 0.5s ease"}}>
+        {/* Logo */}
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <img src={LOGO_SRC} alt="AllBee EduSphere" style={{width:76,height:76,margin:"0 auto 10px",display:"block",objectFit:"contain"}}/>
+          <div style={{fontSize:20,fontWeight:800,color:C.text}}>AllBee EduSphere</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:3}}>Select your portal to sign in</div>
         </div>
-        <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:7}}>
-          {db.institutions.map(inst=>{const m=TYPE_META[inst.type]||TYPE_META["College"];return<div key={inst.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,boxShadow:C.shadow}}><span style={{fontSize:16}}>{m.icon}</span><div style={{flex:1}}><div style={{fontWeight:600,fontSize:12,color:C.text}}>{inst.name}</div><div style={{fontSize:10,color:C.muted}}>{inst.type} - {inst.city}</div></div><div style={{width:7,height:7,borderRadius:"50%",background:inst.active?C.green:C.red}}/></div>;})}
+        {/* Portal Tabs */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:20}}>
+          {PORTALS.map(pt=>{
+            const ptColor=pt.color==="teal"?C.teal:pt.color==="blue"?C.blue:C.purple;
+            const ptBg=pt.color==="teal"?C.tealL:pt.color==="blue"?C.blueL:C.purpleL;
+            const active=portal===pt.key;
+            return <button key={pt.key} onClick={()=>switchPortal(pt.key)} style={{padding:"14px 8px",borderRadius:12,border:`2px solid ${active?ptColor:C.border}`,background:active?ptBg:C.surface,color:active?ptColor:C.muted,fontWeight:active?700:500,fontSize:11,display:"flex",flexDirection:"column",alignItems:"center",gap:5,cursor:"pointer",transition:"all 0.2s"}}>
+              <span style={{fontSize:22}}>{pt.icon}</span>
+              <span style={{fontWeight:700,fontSize:12}}>{pt.label}</span>
+              <span style={{fontSize:9,opacity:0.8,textAlign:"center",lineHeight:1.3}}>{pt.sub}</span>
+            </button>;
+          })}
+        </div>
+        {/* Login Card */}
+        <div style={{background:C.surface,borderRadius:16,border:`2px solid ${portalColor}33`,boxShadow:C.shadowL,padding:28,animation:"fadeIn 0.3s ease"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:22,padding:"10px 14px",background:portalBg,borderRadius:10}}>
+            <span style={{fontSize:24}}>{PT.icon}</span>
+            <div><div style={{fontWeight:800,fontSize:14,color:portalColor}}>{PT.label} Portal</div><div style={{fontSize:11,color:C.muted}}>{PT.sub}</div></div>
+          </div>
+          <div style={{marginBottom:14}}>
+            <LBL C={C}>{PT.userLabel}</LBL>
+            <Inp C={C} value={u} onChange={e=>setU(e.target.value)} placeholder={PT.key==="student"?"Enter roll number":"Enter username"} onKeyDown={e=>e.key==="Enter"&&go()}/>
+          </div>
+          <div style={{marginBottom:18}}>
+            <LBL C={C}>{PT.passLabel}</LBL>
+            <div style={{position:"relative"}}>
+              <Inp C={C} type={show?"text":"password"} value={p} onChange={e=>setP(e.target.value)} placeholder={PT.key==="student"?"YYYY-MM-DD (date of birth)":"Enter password"} onKeyDown={e=>e.key==="Enter"&&go()} style={{paddingRight:42}}/>
+              <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,fontSize:14,padding:4}}>{show?"🙈":"👁"}</button>
+            </div>
+            {PT.key==="student"&&<div style={{fontSize:10,color:C.muted,marginTop:5}}>💡 Default password is your date of birth (e.g. 2005-03-14). Contact admin to change.</div>}
+          </div>
+          {err&&<div style={{background:C.redL,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.red,marginBottom:14}}>⚠ {err}</div>}
+          <button onClick={go} style={{width:"100%",padding:"12px",border:"none",borderRadius:10,background:`linear-gradient(135deg,${portalColor},${portalColor}cc)`,color:"#fff",fontSize:15,fontWeight:700,boxShadow:`0 4px 14px ${portalColor}44`,cursor:"pointer"}}>Sign In to {PT.label} Portal →</button>
+        </div>
+        {/* Institutions */}
+        <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:6}}>
+          {db.institutions.map(inst=>{const m=TYPE_META[inst.type]||TYPE_META["College"];return<div key={inst.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",background:C.surface,borderRadius:10,border:`1px solid ${C.border}`}}><span style={{fontSize:15}}>{m.icon}</span><div style={{flex:1}}><div style={{fontWeight:600,fontSize:11,color:C.text}}>{inst.name}</div><div style={{fontSize:9,color:C.muted}}>{inst.type} · {inst.city}</div></div><div style={{width:6,height:6,borderRadius:"50%",background:inst.active?C.green:C.red}}/></div>;})}
         </div>
         <div style={{textAlign:"center",marginTop:14,fontSize:11,color:C.muted}}>🐝 Powered by AllBee Solutions</div>
       </div>
@@ -281,7 +336,7 @@ function SAOverview({db,C}){
       </div>
       <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
         <Sec C={C}>Users</Sec>
-        {db.users.filter(u=>u.role!=="superadmin").map(u=>{const inst=db.institutions.find(i=>i.id===u.instId);return<div key={u.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:`1px solid ${C.border}`}}><Avatar name={u.name} color={u.role==="admin"?C.teal:C.green} size={30}/><div style={{flex:1}}><div style={{fontWeight:600,fontSize:12,color:C.text}}>{u.name}</div><div style={{fontSize:10,color:C.muted,fontFamily:"monospace"}}>{u.username}</div></div><div style={{textAlign:"right"}}><Badge label={u.role} color={u.role==="admin"?"teal":"green"} C={C}/><div style={{fontSize:9,color:C.muted,marginTop:2}}>{inst?.name?.slice(0,18)||"--"}</div></div></div>;})}
+        {db.users.filter(u=>u.role!=="superadmin").map(u=>{const inst=db.institutions.find(i=>i.id===u.instId);return<div key={u.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:`1px solid ${C.border}`}}><Avatar name={u.name} color={u.role==="admin"?C.teal:C.green} size={30}/><div style={{flex:1}}><div style={{fontWeight:600,fontSize:12,color:C.text}}>{u.name}</div><div style={{fontSize:10,color:C.muted,fontFamily:"monospace"}}>{u.username}</div></div><div style={{textAlign:"right"}}><Badge label={u.role} color={u.role==="admin"?"teal":u.role==="accountant"?"gold":u.role==="staff"?"blue":"green"} C={C}/><div style={{fontSize:9,color:C.muted,marginTop:2}}>{inst?.name?.slice(0,18)||"--"}</div></div></div>;})}
       </div>
     </div>
   </div>;
@@ -324,7 +379,7 @@ function SAUsers({db,onAdd,onDelete,onUpdate,C}){
         <FG label="Username *" C={C}><Inp C={C} value={form.username} onChange={e=>setForm(f=>({...f,username:e.target.value}))} placeholder="Username"/></FG>
         <FG label="Password *" C={C}><Inp C={C} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder="Password"/></FG>
         <FG label="Email" C={C}><Inp C={C} value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="Email"/></FG>
-        <FG label="Role" C={C}><Sel C={C} value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))}><option value="admin">Admin</option><option value="staff">Staff</option></Sel></FG>
+        <FG label="Role" C={C}><Sel C={C} value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))}><option value="admin">Admin</option><option value="staff">Staff</option><option value="accountant">Accountant</option></Sel></FG>
         <FG label="Institution *" C={C}><Sel C={C} value={form.instId} onChange={e=>setForm(f=>({...f,instId:e.target.value}))}><option value="">-- Select --</option>{db.institutions.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</Sel></FG>
       </div>
       <div style={{display:"flex",gap:10}}><Btn onClick={submit} C={C} color="purple">Create</Btn><Btn onClick={()=>setShowAdd(false)} C={C} color="red" outline>Cancel</Btn></div>
@@ -332,7 +387,7 @@ function SAUsers({db,onAdd,onDelete,onUpdate,C}){
     <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,overflow:"hidden",boxShadow:C.shadow}}>
       <table style={{width:"100%",borderCollapse:"collapse"}}>
         <thead><tr>{["User","Username","Role","Institution","Actions"].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
-        <tbody>{db.users.filter(u=>u.role!=="superadmin").map(u=>{const inst=db.institutions.find(i=>i.id===u.instId);return<tr key={u.id} style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:"11px 16px"}}><div style={{display:"flex",alignItems:"center",gap:9}}><Avatar name={u.name} color={u.role==="admin"?C.teal:C.green} size={30}/><div><div style={{fontWeight:600,fontSize:12,color:C.text}}>{u.name}</div><div style={{fontSize:10,color:C.muted}}>{u.email}</div></div></div></td><td style={{padding:"11px 16px",fontFamily:"monospace",fontSize:12,color:C.teal}}>{u.username}</td><td style={{padding:"11px 16px"}}><Badge label={u.role} color={u.role==="admin"?"teal":"green"} C={C}/></td><td style={{padding:"11px 16px",fontSize:12,color:C.muted}}>{inst?.name?.slice(0,22)||"--"}</td><td style={{padding:"11px 16px"}}><div style={{display:"flex",gap:6}}><Btn onClick={()=>{const np=window.prompt("New password:",u.password);if(np)onUpdate(u.id,{password:np});}} C={C} color="gold" size="sm" outline>Reset Pwd</Btn><Btn onClick={()=>onDelete(u.id)} C={C} color="red" size="sm" outline>Delete</Btn></div></td></tr>;})}
+        <tbody>{db.users.filter(u=>u.role!=="superadmin").map(u=>{const inst=db.institutions.find(i=>i.id===u.instId);return<tr key={u.id} style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:"11px 16px"}}><div style={{display:"flex",alignItems:"center",gap:9}}><Avatar name={u.name} color={u.role==="admin"?C.teal:C.green} size={30}/><div><div style={{fontWeight:600,fontSize:12,color:C.text}}>{u.name}</div><div style={{fontSize:10,color:C.muted}}>{u.email}</div></div></div></td><td style={{padding:"11px 16px",fontFamily:"monospace",fontSize:12,color:C.teal}}>{u.username}</td><td style={{padding:"11px 16px"}}><Badge label={u.role} color={u.role==="admin"?"teal":u.role==="accountant"?"gold":u.role==="staff"?"blue":"green"} C={C}/></td><td style={{padding:"11px 16px",fontSize:12,color:C.muted}}>{inst?.name?.slice(0,22)||"--"}</td><td style={{padding:"11px 16px"}}><div style={{display:"flex",gap:6}}><Btn onClick={()=>{const np=window.prompt("New password:",u.password);if(np)onUpdate(u.id,{password:np});}} C={C} color="gold" size="sm" outline>Reset Pwd</Btn><Btn onClick={()=>onDelete(u.id)} C={C} color="red" size="sm" outline>Delete</Btn></div></td></tr>;})}
         {!db.users.filter(u=>u.role!=="superadmin").length&&<tr><td colSpan={5}><Empty msg="No users" C={C}/></td></tr>}</tbody>
       </table>
     </div>
@@ -363,6 +418,136 @@ function SAReports({db,C}){
   </div>;
 }
 
+
+
+// ─── Student Portal ──────────────────────────────────────────────────────────
+function StudentPortal({db,onLogout,user,C,dark,setDark}){
+  const [tab,setTab]=useState("home");
+  const stu=db.students.find(s=>s.id===user.studentId);
+  const inst=db.institutions.find(i=>i.id===user.instId);
+  if(!stu)return <div style={{padding:40,textAlign:"center",color:C.muted}}>Student record not found.</div>;
+  const color=inst?.color||C.teal;
+  const att=attPct(stu.attendance||[]);
+  const totalFee=stu.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;
+  const paidFee=stu.fees?.reduce((a,f)=>a+Number(f.paid||0),0)||0;
+  const dueFee=totalFee-paidFee;
+  const STABS=[{k:"home",i:"🏠",l:"Home"},{k:"attendance",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"marks",i:"📝",l:"Exam Marks"},{k:"homework",i:"📚",l:"Homework"},{k:"assignments",i:"📋",l:"Assignments"}];
+  const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid ${C.border}`,background:C.bg};
+  const TD={padding:"10px 14px",fontSize:12,color:C.text,borderBottom:`1px solid ${C.border}`};
+  return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
+    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={inst?.name||""}/>
+    <div style={{display:"flex",flex:1}}>
+      <div style={{width:190,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"14px 10px",position:"sticky",top:56,height:"calc(100vh - 56px)",overflowY:"auto",display:"flex",flexDirection:"column",gap:2}}>
+        {/* Student card */}
+        <div style={{padding:12,background:C.bg,borderRadius:10,border:`1px solid ${C.border}`,marginBottom:10,textAlign:"center"}}>
+          <Avatar name={stu.name} photo={stu.photo} color={color} size={52} style={{margin:"0 auto 8px"}}/>
+          <div style={{fontWeight:700,fontSize:12,color:C.text}}>{stu.name}</div>
+          <div style={{fontSize:10,color:C.muted,fontFamily:"monospace"}}>{stu.rollNo}</div>
+          <div style={{marginTop:6}}><Badge label="Student" color="purple" C={C}/></div>
+        </div>
+        {STABS.map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{width:"100%",textAlign:"left",padding:"8px 11px",border:"none",borderRadius:8,background:tab===t.k?C.purpleL:"transparent",color:tab===t.k?C.purple:C.text,fontWeight:tab===t.k?700:500,fontSize:11.5,display:"flex",alignItems:"center",gap:7,cursor:"pointer"}}>{t.i} {t.l}</button>)}
+      </div>
+      <div style={{flex:1,padding:24,overflowY:"auto"}}>
+        {/* HOME */}
+        {tab==="home"&&<div style={{animation:"fadeUp 0.4s ease"}}>
+          <PH title={`👋 Welcome, ${stu.name.split(" ")[0]}!`} sub={`${inst?.name} · ${stu.class||stu.course||""}`} C={C}/>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:22}}>
+            <StatCard icon="📅" label="Attendance" value={`${att}%`} color={att>=75?"green":"red"} C={C} onClick={()=>setTab("attendance")}/>
+            <StatCard icon="💰" label="Fee Due" value={`₹${dueFee.toLocaleString()}`} color={dueFee>0?"pink":"green"} C={C} onClick={()=>setTab("fees")}/>
+            <StatCard icon="📚" label="HW Pending" value={stu.homeworks?.filter(h=>h.status==="Pending").length||0} color="purple" C={C} onClick={()=>setTab("homework")}/>
+            <StatCard icon="📝" label="Exams Done" value={stu.exams?.length||0} color="blue" C={C} onClick={()=>setTab("marks")}/>
+          </div>
+          {/* Recent attendance */}
+          <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:18,marginBottom:16,boxShadow:C.shadow}}>
+            <div style={{fontWeight:700,fontSize:13,marginBottom:12,color:C.text}}>📅 Recent Attendance</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {(stu.attendance||[]).slice(-20).reverse().map((a,i)=><div key={i} title={a.date} style={{padding:"4px 10px",borderRadius:20,background:a.status==="Present"?C.greenL:a.status==="Leave"?C.goldL:C.redL,color:a.status==="Present"?C.green:a.status==="Leave"?C.gold:C.red,fontSize:10,fontWeight:600}}>{a.date?.slice(5)} {a.status==="Present"?"✓":a.status==="Leave"?"L":"✗"}</div>)}
+              {!stu.attendance?.length&&<div style={{color:C.muted,fontSize:12}}>No attendance records yet</div>}
+            </div>
+          </div>
+          {/* Profile info */}
+          <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:18,boxShadow:C.shadow}}>
+            <div style={{fontWeight:700,fontSize:13,marginBottom:12,color:C.text}}>👤 My Profile</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              {[["Roll No",stu.rollNo],["Class/Course",stu.class||stu.course||"--"],["Phone",stu.phone||"--"],["Parent",stu.parentName||"--"],["Parent Phone",stu.parentPhone||"--"],["DOB",stu.dob||"--"]].map(([l,v])=><div key={l} style={{padding:"8px 12px",background:C.bg,borderRadius:8,border:`1px solid ${C.border}`}}><div style={{fontSize:9,color:C.muted,textTransform:"uppercase",fontWeight:700,marginBottom:3}}>{l}</div><div style={{fontWeight:600,fontSize:12,color:C.text}}>{v}</div></div>)}
+            </div>
+          </div>
+        </div>}
+        {/* ATTENDANCE */}
+        {tab==="attendance"&&<div style={{animation:"fadeUp 0.4s ease"}}>
+          <PH title="📅 My Attendance" sub={`${att}% overall attendance`} C={C}/>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:18}}>
+            {[["Present",C.green,(stu.attendance||[]).filter(a=>a.status==="Present").length],["Absent",C.red,(stu.attendance||[]).filter(a=>a.status==="Absent").length],["Leave",C.gold,(stu.attendance||[]).filter(a=>a.status==="Leave").length]].map(([l,col,v])=><div key={l} style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:16,textAlign:"center"}}><div style={{fontSize:26,fontWeight:800,color:col}}>{v}</div><div style={{fontSize:11,color:C.muted}}>{l}</div></div>)}
+          </div>
+          {/* Progress bar */}
+          <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:18,marginBottom:18,boxShadow:C.shadow}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontWeight:600,fontSize:13,color:C.text}}>Attendance Rate</span><span style={{fontWeight:800,fontSize:14,color:att>=75?C.green:C.red}}>{att}%</span></div>
+            <div style={{height:12,background:C.bg,borderRadius:99,overflow:"hidden",border:`1px solid ${C.border}`}}><div style={{height:"100%",width:`${att}%`,background:att>=75?C.green:C.red,borderRadius:99,transition:"width 0.5s"}}/></div>
+            <div style={{fontSize:11,color:C.muted,marginTop:6}}>{att>=75?"✅ Good attendance — keep it up!":"⚠️ Attendance below 75% — please improve"}</div>
+          </div>
+          <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,overflow:"auto",boxShadow:C.shadow}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead><tr>{["Date","Status"].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
+              <tbody>{(stu.attendance||[]).slice().reverse().map((a,i)=><tr key={i}><td style={TD}>{fmt(a.date)}</td><td style={TD}><span style={{padding:"3px 10px",borderRadius:20,background:a.status==="Present"?C.greenL:a.status==="Leave"?C.goldL:C.redL,color:a.status==="Present"?C.green:a.status==="Leave"?C.gold:C.red,fontSize:10,fontWeight:700}}>{a.status}</span></td></tr>)}
+              {!stu.attendance?.length&&<tr><td colSpan={2}><Empty msg="No records" C={C}/></td></tr>}</tbody>
+            </table>
+          </div>
+        </div>}
+        {/* FEES */}
+        {tab==="fees"&&<div style={{animation:"fadeUp 0.4s ease"}}>
+          <PH title="💰 My Fees" sub={dueFee>0?`₹${dueFee.toLocaleString()} due`:"All fees paid!"} C={C}/>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:18}}>
+            {[["Total",C.blue,`₹${totalFee.toLocaleString()}`],["Paid",C.green,`₹${paidFee.toLocaleString()}`],["Due",dueFee>0?C.red:C.green,`₹${dueFee.toLocaleString()}`]].map(([l,col,v])=><div key={l} style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:16,textAlign:"center"}}><div style={{fontSize:22,fontWeight:800,color:col}}>{v}</div><div style={{fontSize:11,color:C.muted}}>{l}</div></div>)}
+          </div>
+          <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,overflow:"auto",boxShadow:C.shadow}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead><tr>{["Month","Amount","Paid","Due","Status"].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
+              <tbody>{(stu.fees||[]).map((f,i)=>{const due=Number(f.amount||0)-Number(f.paid||0);return<tr key={i}><td style={TD}>{f.month}</td><td style={TD}>₹{Number(f.amount||0).toLocaleString()}</td><td style={{...TD,color:C.green,fontWeight:600}}>₹{Number(f.paid||0).toLocaleString()}</td><td style={{...TD,color:due>0?C.red:C.green,fontWeight:600}}>₹{due.toLocaleString()}</td><td style={TD}><span style={{padding:"3px 10px",borderRadius:20,background:f.status==="Paid"?C.greenL:f.status==="Partial"?C.goldL:C.redL,color:f.status==="Paid"?C.green:f.status==="Partial"?C.gold:C.red,fontSize:10,fontWeight:700}}>{f.status}</span></td></tr>;})}
+              {!stu.fees?.length&&<tr><td colSpan={5}><Empty msg="No fee records" C={C}/></td></tr>}</tbody>
+            </table>
+          </div>
+        </div>}
+        {/* MARKS */}
+        {tab==="marks"&&<div style={{animation:"fadeUp 0.4s ease"}}>
+          <PH title="📝 Exam Marks" C={C}/>
+          <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,overflow:"auto",boxShadow:C.shadow}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead><tr>{["Exam","Subject","Marks","Max","Grade","Result"].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
+              <tbody>{(stu.exams||[]).map((e,i)=>{const pct=e.maxMarks>0?Math.round(e.marks/e.maxMarks*100):0;return<tr key={i}><td style={TD}><div style={{fontWeight:600}}>{e.exam}</div><div style={{fontSize:10,color:C.muted}}>{fmt(e.date)}</div></td><td style={TD}>{e.subject}</td><td style={{...TD,fontWeight:700,color:C.teal}}>{e.marks}</td><td style={TD}>{e.maxMarks}</td><td style={TD}><Badge label={e.grade||"--"} color="blue" C={C}/></td><td style={TD}><span style={{padding:"3px 10px",borderRadius:20,background:pct>=35?C.greenL:C.redL,color:pct>=35?C.green:C.red,fontSize:10,fontWeight:700}}>{pct>=35?"Pass":"Fail"}</span></td></tr>;})}
+              {!stu.exams?.length&&<tr><td colSpan={6}><Empty msg="No exam records" C={C}/></td></tr>}</tbody>
+            </table>
+          </div>
+        </div>}
+        {/* HOMEWORK */}
+        {tab==="homework"&&<div style={{animation:"fadeUp 0.4s ease"}}>
+          <PH title="📚 Homework" C={C}/>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {(stu.homeworks||[]).map((h,i)=><div key={i} style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:"14px 18px",boxShadow:C.shadow}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+                <div><div style={{fontWeight:700,fontSize:13,color:C.text}}>{h.subject}</div><div style={{fontSize:12,color:C.muted,marginTop:3}}>{h.description}</div></div>
+                <div style={{textAlign:"right",flexShrink:0}}><span style={{padding:"3px 10px",borderRadius:20,background:h.status==="Submitted"?C.greenL:h.status==="Pending"?C.goldL:C.redL,color:h.status==="Submitted"?C.green:h.status==="Pending"?C.gold:C.red,fontSize:10,fontWeight:700}}>{h.status}</span><div style={{fontSize:10,color:C.muted,marginTop:4}}>Due: {h.dueDate}</div></div>
+              </div>
+            </div>)}
+            {!stu.homeworks?.length&&<Empty msg="No homework assigned" C={C}/>}
+          </div>
+        </div>}
+        {/* ASSIGNMENTS */}
+        {tab==="assignments"&&<div style={{animation:"fadeUp 0.4s ease"}}>
+          <PH title="📋 Assignments" C={C}/>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {(stu.assignments||[]).map((a,i)=><div key={i} style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:"14px 18px",boxShadow:C.shadow}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+                <div><div style={{fontWeight:700,fontSize:13,color:C.text}}>{a.title}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{a.subject} · <Badge label={a.type||"Written"} color="teal" C={C}/></div>{a.description&&<div style={{fontSize:11,color:C.muted,marginTop:4}}>{a.description}</div>}</div>
+                <div style={{textAlign:"right",flexShrink:0}}><span style={{padding:"3px 10px",borderRadius:20,background:a.status==="Submitted"?C.greenL:a.status==="Graded"?C.blueL:a.status==="Assigned"?C.goldL:C.redL,color:a.status==="Submitted"?C.green:a.status==="Graded"?C.blue:a.status==="Assigned"?C.gold:C.red,fontSize:10,fontWeight:700}}>{a.status}</span><div style={{fontSize:10,color:C.muted,marginTop:4}}>Due: {a.dueDate}</div>{a.grade&&<div style={{fontSize:10,color:C.purple,fontWeight:700,marginTop:2}}>Grade: {a.grade}</div>}</div>
+              </div>
+            </div>)}
+            {!stu.assignments?.length&&<Empty msg="No assignments yet" C={C}/>}
+          </div>
+        </div>}
+      </div>
+    </div>
+  </div>;
+}
 
 // ─── Staff Attendance ───────────────────────────────────────────────────────
 function StaffAttend({db,saveDb,user,inst,color,isAdmin,notify,C}){
@@ -492,7 +677,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
     <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={`${m.icon} ${inst.name}`}/>
     <div style={{display:"flex",flex:1}}>
       <div style={{width:200,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"12px 10px",position:"sticky",top:56,height:"calc(100vh - 56px)",overflowY:"auto",display:"flex",flexDirection:"column",gap:1}}>
-        {INST_TABS.filter(t=>isAdmin||t.k!=="register").map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{width:"100%",textAlign:"left",padding:"8px 11px",border:"none",borderRadius:8,background:tab===t.k?C.tealL:"transparent",color:tab===t.k?C.teal:C.text,fontWeight:tab===t.k?700:500,fontSize:11.5,display:"flex",alignItems:"center",gap:7,marginBottom:1,cursor:"pointer"}}>{t.i} {t.l}</button>)}
+        {INST_TABS.filter(t=>{if(user.role==="accountant")return["home","students","fees","receipt","reports"].includes(t.k);return isAdmin||t.k!=="register";}).map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{width:"100%",textAlign:"left",padding:"8px 11px",border:"none",borderRadius:8,background:tab===t.k?C.tealL:"transparent",color:tab===t.k?C.teal:C.text,fontWeight:tab===t.k?700:500,fontSize:11.5,display:"flex",alignItems:"center",gap:7,marginBottom:1,cursor:"pointer"}}>{t.i} {t.l}</button>)}
         <div style={{flex:1}}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,padding:"6px 0"}}>
           <div style={{padding:"7px",background:C.bg,borderRadius:8,textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:16,fontWeight:800,color}}>{myStudents.length}</div><div style={{fontSize:8,color:C.muted}}>Students</div></div>
