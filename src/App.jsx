@@ -662,8 +662,101 @@ function StaffAttend({db,saveDb,user,inst,color,isAdmin,notify,C}){
   </div>;
 }
 
+
+// ─── Inst Staff Management (Admin only) ─────────────────────────────────────
+function InstStaff({staff,inst,color,onAdd,onUpdate,onDelete,notify,C}){
+  const blank={name:"",username:"",password:"",email:"",phone:"",role:"staff",designation:""};
+  const [showAdd,setShowAdd]=useState(false);
+  const [form,setForm]=useState(blank);
+  const [editId,setEditId]=useState(null);
+  const [editForm,setEditForm]=useState(null);
+  const TH={padding:"10px 16px",textAlign:"left",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid ${C.border}`,background:C.bg};
+  const TD={padding:"11px 16px",fontSize:12,color:C.text,borderBottom:`1px solid ${C.border}`};
+
+  function submit(){
+    if(!form.name.trim()||!form.username.trim()||!form.password.trim()){notify("Name, username and password required","error");return;}
+    onAdd(form);setForm(blank);setShowAdd(false);
+  }
+  function saveEdit(id){
+    if(!editForm.name||!editForm.username||!editForm.password){notify("Required fields missing","error");return;}
+    onUpdate(id,editForm);setEditId(null);setEditForm(null);
+  }
+
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+      <PH title="👨‍🏫 Staff Management" sub={`${staff.length} staff member${staff.length!==1?"s":""} at ${inst.name}`} C={C}/>
+      <Btn onClick={()=>{setShowAdd(s=>!s);setEditId(null);}} C={C} color="blue">+ Add Staff</Btn>
+    </div>
+
+    {/* Add Form */}
+    {showAdd&&<div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,marginBottom:18,boxShadow:C.shadow,animation:"fadeIn 0.3s ease"}}>
+      <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>New Staff Member</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:14}}>
+        <FG label="Full Name *" C={C}><Inp C={C} value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Full name"/></FG>
+        <FG label="Username *" C={C}><Inp C={C} value={form.username} onChange={e=>setForm(f=>({...f,username:e.target.value}))} placeholder="Login username"/></FG>
+        <FG label="Password *" C={C}><Inp C={C} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder="Login password"/></FG>
+        <FG label="Designation" C={C}><Inp C={C} value={form.designation} onChange={e=>setForm(f=>({...f,designation:e.target.value}))} placeholder="e.g. Math Teacher"/></FG>
+        <FG label="Phone" C={C}><Inp C={C} value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} placeholder="Phone number"/></FG>
+        <FG label="Email" C={C}><Inp C={C} value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="Email address"/></FG>
+        <FG label="Role" C={C}><Sel C={C} value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))}><option value="staff">Staff</option><option value="accountant">Accountant</option></Sel></FG>
+      </div>
+      <div style={{display:"flex",gap:10}}>
+        <Btn onClick={submit} C={C} color="blue">Add Staff</Btn>
+        <Btn onClick={()=>setShowAdd(false)} C={C} color="red" outline>Cancel</Btn>
+      </div>
+    </div>}
+
+    {/* Staff Table */}
+    <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,overflow:"hidden",boxShadow:C.shadow}}>
+      <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <thead><tr>{["Staff Member","Login","Role","Contact","Actions"].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
+        <tbody>
+          {staff.map(u=>{
+            const isEditing=editId===u.id;
+            return <tr key={u.id} style={{borderBottom:`1px solid ${C.border}`}}>
+              {isEditing?<>
+                <td style={TD}><Inp C={C} value={editForm.name} onChange={e=>setEditForm(f=>({...f,name:e.target.value}))} style={{padding:"6px 10px",fontSize:12}}/></td>
+                <td style={TD}>
+                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                    <Inp C={C} value={editForm.username} onChange={e=>setEditForm(f=>({...f,username:e.target.value}))} placeholder="Username" style={{padding:"6px 10px",fontSize:12}}/>
+                    <Inp C={C} value={editForm.password} onChange={e=>setEditForm(f=>({...f,password:e.target.value}))} placeholder="Password" style={{padding:"6px 10px",fontSize:12}}/>
+                  </div>
+                </td>
+                <td style={TD}><Sel C={C} value={editForm.role} onChange={e=>setEditForm(f=>({...f,role:e.target.value}))} style={{padding:"6px 10px",fontSize:12}}><option value="staff">Staff</option><option value="accountant">Accountant</option></Sel></td>
+                <td style={TD}>
+                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                    <Inp C={C} value={editForm.phone||""} onChange={e=>setEditForm(f=>({...f,phone:e.target.value}))} placeholder="Phone" style={{padding:"6px 10px",fontSize:12}}/>
+                    <Inp C={C} value={editForm.designation||""} onChange={e=>setEditForm(f=>({...f,designation:e.target.value}))} placeholder="Designation" style={{padding:"6px 10px",fontSize:12}}/>
+                  </div>
+                </td>
+                <td style={TD}><div style={{display:"flex",gap:6}}>
+                  <Btn onClick={()=>saveEdit(u.id)} C={C} color="green" size="sm">Save</Btn>
+                  <Btn onClick={()=>{setEditId(null);setEditForm(null);}} C={C} color="red" size="sm" outline>Cancel</Btn>
+                </div></td>
+              </>:<>
+                <td style={TD}><div style={{display:"flex",alignItems:"center",gap:9}}>
+                  <Avatar name={u.name} color={u.role==="accountant"?C.gold:color} size={32}/>
+                  <div><div style={{fontWeight:600,color:C.text}}>{u.name}</div><div style={{fontSize:10,color:C.muted}}>{u.designation||"Staff"}</div></div>
+                </div></td>
+                <td style={TD}><div style={{fontFamily:"monospace",color:C.teal,fontWeight:600}}>{u.username}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>••••••</div></td>
+                <td style={TD}><Badge label={u.role} color={u.role==="accountant"?"gold":"blue"} C={C}/></td>
+                <td style={TD}><div style={{fontSize:11}}>{u.phone||"--"}</div><div style={{fontSize:10,color:C.muted}}>{u.email||""}</div></td>
+                <td style={TD}><div style={{display:"flex",gap:6}}>
+                  <Btn onClick={()=>{setEditId(u.id);setEditForm({...u});setShowAdd(false);}} C={C} color="teal" size="sm" outline>Edit</Btn>
+                  <Btn onClick={()=>{if(window.confirm("Remove "+u.name+"?"))onDelete(u.id);}} C={C} color="red" size="sm" outline>Remove</Btn>
+                </div></td>
+              </>}
+            </tr>;
+          })}
+          {!staff.length&&<tr><td colSpan={5}><Empty msg="No staff yet — add one above" C={C}/></td></tr>}
+        </tbody>
+      </table>
+    </div>
+  </div>;
+}
+
 // Institution Dashboard Shell
-const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"idcard",i:"🪪",l:"ID Cards"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"alerts",i:"📣",l:"Alerts"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"reports",i:"📊",l:"Reports"}];
+const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"staff",i:"👨‍🏫",l:"Staff"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"idcard",i:"🪪",l:"ID Cards"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"alerts",i:"📣",l:"Alerts"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"reports",i:"📊",l:"Reports"}];
 
 function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const [tab,setTab]=useState("home");
@@ -671,13 +764,17 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const m=TYPE_META[inst.type]||TYPE_META["College"];
   const myStudents=useMemo(()=>db.students.filter(s=>s.instId===inst.id),[db.students,inst.id]);
   const isAdmin=user.role==="admin";
+  const myStaff=useMemo(()=>(db.users||[]).filter(u=>u.instId===inst.id&&u.role!=="admin"&&u.role!=="accountant"),[db.users,inst.id]);
+  function addStaff(d){if((db.users||[]).find(u=>u.username===d.username)){notify("Username already exists","error");return;}saveDb({users:[...(db.users||[]),{...d,id:uid(),instId:inst.id}]});notify("Staff added!");}
+  function updStaff(id,p){saveDb({users:(db.users||[]).map(u=>u.id===id?{...u,...p}:u)});notify("Updated");}
+  function delStaff(id){saveDb({users:(db.users||[]).filter(u=>u.id!==id)});notify("Staff removed","error");}
   function addStudent(data){const s={...data,id:uid(),instId:inst.id,createdAt:today(),attendance:[],fees:[],homeworks:[],exams:[],assignments:[]};saveDb({students:[...db.students,s]});notify("Student registered!");setTab("students");}
   function updStudent(id,patch){saveDb({students:db.students.map(s=>s.id===id?{...s,...patch}:s)});}
   return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
     <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={`${m.icon} ${inst.name}`}/>
     <div style={{display:"flex",flex:1}}>
       <div style={{width:200,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"12px 10px",position:"sticky",top:56,height:"calc(100vh - 56px)",overflowY:"auto",display:"flex",flexDirection:"column",gap:1}}>
-        {INST_TABS.filter(t=>{if(user.role==="accountant")return["home","students","fees","receipt","reports"].includes(t.k);return isAdmin||t.k!=="register";}).map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{width:"100%",textAlign:"left",padding:"8px 11px",border:"none",borderRadius:8,background:tab===t.k?C.tealL:"transparent",color:tab===t.k?C.teal:C.text,fontWeight:tab===t.k?700:500,fontSize:11.5,display:"flex",alignItems:"center",gap:7,marginBottom:1,cursor:"pointer"}}>{t.i} {t.l}</button>)}
+        {INST_TABS.filter(t=>{if(user.role==="accountant")return["home","students","fees","receipt","reports"].includes(t.k);if(!isAdmin)return!["register","staff"].includes(t.k);return true;}).map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{width:"100%",textAlign:"left",padding:"8px 11px",border:"none",borderRadius:8,background:tab===t.k?C.tealL:"transparent",color:tab===t.k?C.teal:C.text,fontWeight:tab===t.k?700:500,fontSize:11.5,display:"flex",alignItems:"center",gap:7,marginBottom:1,cursor:"pointer"}}>{t.i} {t.l}</button>)}
         <div style={{flex:1}}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,padding:"6px 0"}}>
           <div style={{padding:"7px",background:C.bg,borderRadius:8,textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:16,fontWeight:800,color}}>{myStudents.length}</div><div style={{fontSize:8,color:C.muted}}>Students</div></div>
@@ -686,6 +783,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
       </div>
       <div style={{flex:1,padding:24,overflowY:"auto"}}>
         {tab==="home"&&<InstHome inst={inst} students={myStudents} color={color} setTab={setTab} m={m} C={C}/>}
+        {tab==="staff"&&isAdmin&&<InstStaff staff={myStaff} inst={inst} color={color} onAdd={addStaff} onUpdate={updStaff} onDelete={delStaff} notify={notify} C={C}/>}
         {tab==="students"&&<InstStudents students={myStudents} inst={inst} color={color} onUpdate={updStudent} C={C}/>}
         {tab==="register"&&isAdmin&&<InstRegister inst={inst} onSave={addStudent} color={color} m={m} C={C}/>}
         {tab==="attend"&&<InstAttend students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
