@@ -113,20 +113,48 @@ function PhotoUpload({photo,onChange,color,C,size=80}){
   </div>;
 }
 
-function TopBar({C,dark,setDark,onLogout,user,right}){
-  return <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 24px",height:56,display:"flex",alignItems:"center",gap:16,position:"sticky",top:0,zIndex:100,boxShadow:C.shadow}}>
-    <div style={{display:"flex",alignItems:"center",gap:10}}>
-      <img src={LOGO_SRC} alt="AllBee EduSphere" style={{width:34,height:34,borderRadius:9,objectFit:"contain"}}/>
-      <div><div style={{fontWeight:800,fontSize:13,color:C.teal}}>AllBee EduSphere</div><div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em"}}>Smart Student Management by AllBee</div></div>
+function TopBar({C,dark,setDark,onLogout,user,right,onMenuToggle,showMenu}){
+  const roleColor=user?.role==="admin"?C.teal:user?.role==="accountant"?C.gold:user?.role==="staff"?C.blue:user?.role==="student"?C.purple:C.teal;
+  const roleBg=user?.role==="admin"?C.tealL:user?.role==="accountant"?C.goldL:user?.role==="staff"?C.blueL:user?.role==="student"?C.purpleL:C.tealL;
+  return <>
+    <style>{`
+      .tb-right-desktop{display:flex;align-items:center;gap:10px;}
+      .tb-logo-text{display:block;}
+      .tb-inst-name{display:block;padding-left:16px;border-left:2px solid;font-weight:700;font-size:14px;}
+      @media(max-width:640px){
+        .tb-logo-text{display:none;}
+        .tb-inst-name{display:none;}
+        .tb-right-desktop .tb-username{display:none;}
+      }
+    `}</style>
+    <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 14px",height:54,display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:200,boxShadow:C.shadow,flexShrink:0}}>
+      {/* Hamburger — mobile only */}
+      {onMenuToggle&&<button onClick={onMenuToggle} style={{display:"flex",flexDirection:"column",gap:4,padding:"6px 8px",border:"none",background:"transparent",cursor:"pointer",flexShrink:0}}>
+        <span style={{display:"block",width:20,height:2,background:showMenu?C.teal:C.muted,borderRadius:2,transition:"all 0.2s",transform:showMenu?"rotate(45deg) translate(4px,4px)":"none"}}/>
+        <span style={{display:"block",width:20,height:2,background:showMenu?C.teal:C.muted,borderRadius:2,transition:"all 0.2s",opacity:showMenu?0:1}}/>
+        <span style={{display:"block",width:20,height:2,background:showMenu?C.teal:C.muted,borderRadius:2,transition:"all 0.2s",transform:showMenu?"rotate(-45deg) translate(4px,-4px)":"none"}}/>
+      </button>}
+      {/* Logo */}
+      <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+        <img src={LOGO_SRC} alt="AllBee" style={{width:32,height:32,objectFit:"contain",flexShrink:0}}/>
+        <div className="tb-logo-text"><div style={{fontWeight:800,fontSize:12,color:C.teal,lineHeight:1.2}}>AllBee EduSphere</div><div style={{fontSize:8,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em"}}>Smart Student Management</div></div>
+      </div>
+      {/* Institution name */}
+      {right&&<div className="tb-inst-name" style={{borderColor:C.border,color:C.text,paddingLeft:16,fontSize:13,fontWeight:700,borderLeft:`2px solid ${C.border}`,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:200}}>{right}</div>}
+      <div style={{flex:1}}/>
+      {/* Right side */}
+      <div className="tb-right-desktop" style={{display:"flex",alignItems:"center",gap:8}}>
+        <button onClick={()=>setDark(d=>!d)} style={{padding:"5px 10px",border:`1px solid ${C.border}`,borderRadius:20,background:"transparent",color:C.muted,fontSize:11,cursor:"pointer",whiteSpace:"nowrap"}}>{dark?"☀":"🌙"}</button>
+        {user&&<>
+          <div className="tb-username" style={{textAlign:"right"}}>
+            <div style={{fontWeight:700,fontSize:11,color:C.text,whiteSpace:"nowrap"}}>{user.name}</div>
+            <div style={{fontSize:9,padding:"1px 7px",borderRadius:20,background:roleBg,color:roleColor,fontWeight:700,textTransform:"uppercase",display:"inline-block"}}>{user.role}</div>
+          </div>
+          <button onClick={onLogout} style={{padding:"6px 12px",border:`1px solid ${C.border}`,borderRadius:8,background:C.surface,color:C.muted,fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Sign Out</button>
+        </>}
+      </div>
     </div>
-    {right&&<div style={{paddingLeft:16,borderLeft:`2px solid ${C.border}`,fontWeight:700,fontSize:14,color:C.text}}>{right}</div>}
-    <div style={{flex:1}}/>
-    <button onClick={()=>setDark(d=>!d)} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",border:`1px solid ${C.border}`,borderRadius:20,background:C.surface,color:C.muted,fontSize:12,cursor:"pointer"}}>{dark?"☀ Light":"🌙 Dark"}</button>
-    {user&&<div style={{display:"flex",alignItems:"center",gap:10}}>
-      <div style={{textAlign:"right"}}><div style={{fontWeight:700,fontSize:12,color:C.text}}>{user.name}</div><div style={{fontSize:9,padding:"1px 8px",borderRadius:20,background:user.role==="admin"?C.tealL:user.role==="accountant"?C.goldL:user.role==="staff"?C.blueL:user.role==="student"?C.purpleL:C.tealL,color:user.role==="admin"?C.teal:user.role==="accountant"?C.gold:user.role==="staff"?C.blue:user.role==="student"?C.purple:C.teal,fontWeight:700,textTransform:"uppercase",display:"inline-block"}}>{user.role}</div></div>
-      <button onClick={onLogout} style={{padding:"7px 14px",border:`1px solid ${C.border}`,borderRadius:8,background:C.surface,color:C.muted,fontSize:12,fontWeight:600,cursor:"pointer"}}>Sign Out</button>
-    </div>}
-  </div>;
+  </>;
 }
 
 function StuSidebar({students,sel,setSel,C,extra}){
@@ -486,10 +514,12 @@ function StudentPortal({db,onLogout,user,C,dark,setDark}){
   const STABS=[{k:"home",i:"🏠",l:"Home"},{k:"attendance",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"marks",i:"📝",l:"Exam Marks"},{k:"homework",i:"📚",l:"Homework"},{k:"assignments",i:"📋",l:"Assignments"}];
   const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid ${C.border}`,background:C.bg};
   const TD={padding:"10px 14px",fontSize:12,color:C.text,borderBottom:`1px solid ${C.border}`};
-  return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
-    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={inst?.name||""}/>
-    <div style={{display:"flex",flex:1}}>
-      <div style={{width:190,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"14px 10px",position:"sticky",top:56,height:"calc(100vh - 56px)",overflowY:"auto",display:"flex",flexDirection:"column",gap:2}}>
+  const [sideOpen,setSideOpen]=useState(false);
+  return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:C.bg}}>
+    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={inst?.name||""} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen}/>
+    <div className={"inst-overlay"+(sideOpen?" open":"")} onClick={()=>setSideOpen(false)} style={{display:sideOpen?"block":"none",position:"fixed",inset:0,top:54,background:"#0005",zIndex:140}}/>
+    <div style={{display:"flex",flex:1,minHeight:0}}>
+      <div className={"inst-sidebar"+(sideOpen?" open":"")} style={{width:190,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"14px 10px",position:"sticky",top:54,height:"calc(100vh - 54px)",overflowY:"auto",display:"flex",flexDirection:"column",gap:2}}>
         {/* Student card */}
         <div style={{padding:12,background:C.bg,borderRadius:10,border:`1px solid ${C.border}`,marginBottom:10,textAlign:"center"}}>
           <Avatar name={stu.name} photo={stu.photo} color={color} size={52} style={{margin:"0 auto 8px"}}/>
@@ -497,7 +527,7 @@ function StudentPortal({db,onLogout,user,C,dark,setDark}){
           <div style={{fontSize:10,color:C.muted,fontFamily:"monospace"}}>{stu.rollNo}</div>
           <div style={{marginTop:6}}><Badge label="Student" color="purple" C={C}/></div>
         </div>
-        {STABS.map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{width:"100%",textAlign:"left",padding:"8px 11px",border:"none",borderRadius:8,background:tab===t.k?C.purpleL:"transparent",color:tab===t.k?C.purple:C.text,fontWeight:tab===t.k?700:500,fontSize:11.5,display:"flex",alignItems:"center",gap:7,cursor:"pointer"}}>{t.i} {t.l}</button>)}
+        {STABS.map(t=><button key={t.k} onClick={()=>{setTab(t.k);setSideOpen(false);}} style={{width:"100%",textAlign:"left",padding:"8px 11px",border:"none",borderRadius:8,background:tab===t.k?C.purpleL:"transparent",color:tab===t.k?C.purple:C.text,fontWeight:tab===t.k?700:500,fontSize:11.5,display:"flex",alignItems:"center",gap:7,cursor:"pointer"}}>{t.i} {t.l}</button>)}
       </div>
       <div style={{flex:1,padding:24,overflowY:"auto"}}>
         {/* HOME */}
@@ -1153,6 +1183,7 @@ const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"staff",i:"👨‍🏫",l:"Staf
 
 function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const [tab,setTab]=useState("home");
+  const [sideOpen,setSideOpen]=useState(false);
   const color=inst.color||C.teal;
   const m=TYPE_META[inst.type]||TYPE_META["College"];
   const myStudents=useMemo(()=>db.students.filter(s=>s.instId===inst.id),[db.students,inst.id]);
@@ -1163,19 +1194,68 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   function delStaff(id){saveDb({users:(db.users||[]).filter(u=>u.id!==id)});notify("Staff removed","error");}
   function addStudent(data){const s={...data,id:uid(),instId:inst.id,createdAt:today(),attendance:[],fees:[],homeworks:[],exams:[],assignments:[]};saveDb({students:[...db.students,s]});notify("Student registered!");setTab("students");}
   function updStudent(id,patch){saveDb({students:db.students.map(s=>s.id===id?{...s,...patch}:s)});}
-  return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
-    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={`${m.icon} ${inst.name}`}/>
-    <div style={{display:"flex",flex:1}}>
-      <div style={{width:200,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"12px 10px",position:"sticky",top:56,height:"calc(100vh - 56px)",overflowY:"auto",display:"flex",flexDirection:"column",gap:1}}>
-        {INST_TABS.filter(t=>{if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);if(!isAdmin)return!["register","staff","courses"].includes(t.k);if(t.k==="courses")return inst.type==="Computer Institute";return true;}).map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{width:"100%",textAlign:"left",padding:"8px 11px",border:"none",borderRadius:8,background:tab===t.k?C.tealL:"transparent",color:tab===t.k?C.teal:C.text,fontWeight:tab===t.k?700:500,fontSize:11.5,display:"flex",alignItems:"center",gap:7,marginBottom:1,cursor:"pointer"}}>{t.i} {t.l}</button>)}
+  function goTab(k){setTab(k);setSideOpen(false);}
+  const visibleTabs=INST_TABS.filter(t=>{if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);if(!isAdmin)return!["register","staff","courses"].includes(t.k);if(t.k==="courses")return inst.type==="Computer Institute";return true;});
+  const curTab=visibleTabs.find(t=>t.k===tab);
+  return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:C.bg}}>
+    <style>{`
+      .inst-sidebar{width:210px;background:var(--sb-bg);border-right:1px solid var(--sb-border);padding:12px 10px;position:sticky;top:54px;height:calc(100vh - 54px);overflow-y:auto;display:flex;flex-direction:column;gap:1px;flex-shrink:0;transition:transform 0.25s ease;}
+      .inst-content{flex:1;padding:20px;overflow-y:auto;min-width:0;}
+      @media(max-width:640px){
+        .inst-sidebar{position:fixed;top:54px;left:0;height:calc(100vh - 54px);z-index:150;transform:translateX(-100%);box-shadow:4px 0 20px #0004;}
+        .inst-sidebar.open{transform:translateX(0);}
+        .inst-overlay{display:block;}
+        .inst-content{padding:14px;}
+      }
+      @media(min-width:641px){
+        .inst-sidebar{transform:none !important;}
+        .inst-overlay{display:none !important;}
+      }
+      .inst-overlay{display:none;position:fixed;inset:0;top:54px;background:#0005;z-index:140;}
+      .tab-btn{width:100%;text-align:left;padding:9px 12px;border:none;border-radius:9px;display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;transition:background 0.15s,color 0.15s;margin-bottom:2px;}
+    `}</style>
+    {/* CSS vars for sidebar */}
+    <style>{`:root{--sb-bg:${C.surface};--sb-border:${C.border};}`}</style>
+    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={`${m.icon} ${inst.name}`} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen}/>
+    {/* Overlay for mobile */}
+    <div className={"inst-overlay"+(sideOpen?" open":"")} onClick={()=>setSideOpen(false)} style={{display:sideOpen?"block":"none",position:"fixed",inset:0,top:54,background:"#0005",zIndex:140}}/>
+    <div style={{display:"flex",flex:1,minHeight:0}}>
+      {/* Sidebar */}
+      <div className={"inst-sidebar"+(sideOpen?" open":"")} style={{"--sb-bg":C.surface,"--sb-border":C.border}}>
+        {/* Mobile: show user info at top of drawer */}
+        <div style={{display:"none"}} className="mobile-user-header">
+          <div style={{padding:"10px 12px",marginBottom:8,background:C.bg,borderRadius:10,border:`1px solid ${C.border}`}}>
+            <div style={{fontWeight:700,fontSize:13,color:C.text}}>{user.name}</div>
+            <div style={{fontSize:10,color:C.muted}}>{inst.name}</div>
+          </div>
+        </div>
+        {visibleTabs.map(t=><button key={t.k} className="tab-btn" onClick={()=>goTab(t.k)}
+          style={{background:tab===t.k?C.tealL:"transparent",color:tab===t.k?C.teal:C.text,fontWeight:tab===t.k?700:500}}>
+          <span style={{fontSize:16,flexShrink:0}}>{t.i}</span>
+          <span>{t.l}</span>
+        </button>)}
         <div style={{flex:1}}/>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,padding:"6px 0"}}>
-          <div style={{padding:"7px",background:C.bg,borderRadius:8,textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:16,fontWeight:800,color}}>{myStudents.length}</div><div style={{fontSize:8,color:C.muted}}>Students</div></div>
-          <div style={{padding:"7px",background:C.bg,borderRadius:8,textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:16,fontWeight:800,color:C.green}}>{myStudents.filter(s=>s.attendance?.find(a=>a.date===today())?.status==="Present").length}</div><div style={{fontSize:8,color:C.muted}}>Today</div></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,padding:"8px 0 4px"}}>
+          <div style={{padding:"8px 6px",background:C.bg,borderRadius:8,textAlign:"center",border:`1px solid ${C.border}`}}>
+            <div style={{fontSize:18,fontWeight:800,color}}>{myStudents.length}</div>
+            <div style={{fontSize:9,color:C.muted}}>Students</div>
+          </div>
+          <div style={{padding:"8px 6px",background:C.bg,borderRadius:8,textAlign:"center",border:`1px solid ${C.border}`}}>
+            <div style={{fontSize:18,fontWeight:800,color:C.green}}>{myStudents.filter(s=>s.attendance?.find(a=>a.date===today())?.status==="Present").length}</div>
+            <div style={{fontSize:9,color:C.muted}}>Today</div>
+          </div>
         </div>
       </div>
-      <div style={{flex:1,padding:24,overflowY:"auto"}}>
-        {tab==="home"&&<InstHome inst={inst} students={myStudents} color={color} setTab={setTab} m={m} C={C}/>}
+      {/* Main content */}
+      <div className="inst-content">
+        {/* Mobile breadcrumb */}
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:14,padding:"7px 12px",background:C.surface,borderRadius:9,border:`1px solid ${C.border}`}}>
+          <span style={{fontSize:16}}>{curTab?.i}</span>
+          <span style={{fontWeight:700,fontSize:13,color:C.text}}>{curTab?.l}</span>
+          <div style={{flex:1}}/>
+          <span style={{fontSize:11,color:C.muted}}>{m.icon} {inst.name}</span>
+        </div>
+        {tab==="home"&&<InstHome inst={inst} students={myStudents} color={color} setTab={goTab} m={m} C={C}/>}
         {tab==="staff"&&isAdmin&&<InstStaff staff={myStaff} inst={inst} color={color} onAdd={addStaff} onUpdate={updStaff} onDelete={delStaff} notify={notify} C={C}/>}
         {tab==="students"&&<InstStudents students={myStudents} inst={inst} color={color} onUpdate={updStudent} C={C}/>}
         {tab==="register"&&isAdmin&&<InstRegister inst={inst} onSave={addStudent} color={color} m={m} C={C}/>}
