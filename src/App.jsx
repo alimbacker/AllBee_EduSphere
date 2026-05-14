@@ -218,78 +218,128 @@ export default function App(){
   </div>;
 }
 
-// Login Page — 3 Portals
+// Login Page — 3 Portals (responsive)
 function LoginPage({onLogin,db,C,dark,setDark}){
   const PORTALS=[
-    {key:"admin",icon:"🛡",label:"Admin",color:"teal",sub:"Admin & Accountant login",userLabel:"Username",passLabel:"Password"},
-    {key:"staff",icon:"👨‍🏫",label:"Staff",color:"blue",sub:"Staff & Teacher login",userLabel:"Username",passLabel:"Password"},
-    {key:"student",icon:"🎓",label:"Student",color:"purple",sub:"Student self-service portal",userLabel:"Roll Number",passLabel:"Date of Birth (YYYY-MM-DD)"},
+    {key:"admin",icon:"🛡",label:"Admin",color:"teal",sub:"Admin & Accountant",userLabel:"Username",passLabel:"Password"},
+    {key:"staff",icon:"👨‍🏫",label:"Staff",color:"blue",sub:"Staff & Teacher",userLabel:"Username",passLabel:"Password"},
+    {key:"student",icon:"🎓",label:"Student",color:"purple",sub:"Student Portal",userLabel:"Roll Number",passLabel:"Date of Birth"},
   ];
   const [portal,setPortal]=useState("admin");
-  const [u,setU]=useState("");const [p,setP]=useState("");const [err,setErr]=useState("");const [show,setShow]=useState(false);
+  const [u,setU]=useState("");
+  const [p,setP]=useState("");
+  const [err,setErr]=useState("");
+  const [show,setShow]=useState(false);
   const PT=PORTALS.find(x=>x.key===portal);
-  function go(){const e=onLogin(u,p,portal);if(e){setErr(e);}else{setErr("");}}
-  function switchPortal(k){setPortal(k);setU("");setP("");setErr("");}
-  const portalColor=PT.color==="teal"?C.teal:PT.color==="blue"?C.blue:C.purple;
-  const portalBg=PT.color==="teal"?C.tealL:PT.color==="blue"?C.blueL:C.purpleL;
-  return <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column"}}>
-    <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 24px",height:52,display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:C.shadow}}>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <img src={LOGO_SRC} alt="AllBee EduSphere" style={{width:30,height:30,borderRadius:8,objectFit:"contain"}}/>
-        <div><div style={{fontWeight:800,fontSize:13,color:C.teal}}>AllBee EduSphere</div><div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em"}}>Smart Student Management by AllBee</div></div>
+  const pColor=PT.color==="teal"?C.teal:PT.color==="blue"?C.blue:C.purple;
+  const pBg=PT.color==="teal"?C.tealL:PT.color==="blue"?C.blueL:C.purpleL;
+  function go(){const e=onLogin(u,p,portal);if(e)setErr(e);else setErr("");}
+  function sw(k){setPortal(k);setU("");setP("");setErr("");}
+  return(
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column"}}>
+      <style>{`
+        .login-wrap{width:100%;max-width:420px;margin:0 auto;padding:16px;}
+        .portal-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;}
+        .portal-btn{padding:12px 6px;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;transition:all 0.18s;border:2px solid;}
+        .portal-icon{font-size:24px;line-height:1;}
+        .portal-label{font-size:13px;font-weight:700;}
+        .portal-sub{font-size:9px;opacity:0.75;text-align:center;line-height:1.3;}
+        .login-card{border-radius:16px;padding:24px;animation:fadeIn 0.25s ease;}
+        .sign-btn{width:100%;padding:13px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;transition:opacity 0.15s;}
+        .sign-btn:active{opacity:0.85;}
+        @media(max-width:480px){
+          .login-wrap{padding:12px;}
+          .portal-btn{padding:10px 4px;}
+          .portal-icon{font-size:20px;}
+          .portal-label{font-size:11px;}
+          .portal-sub{display:none;}
+          .login-card{padding:18px;}
+          .sign-btn{font-size:14px;padding:12px;}
+        }
+      `}</style>
+
+      {/* Top bar */}
+      <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 16px",height:50,display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:C.shadow,flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:9}}>
+          <img src={LOGO_SRC} alt="AllBee" style={{width:28,height:28,objectFit:"contain"}}/>
+          <div>
+            <div style={{fontWeight:800,fontSize:13,color:C.teal,lineHeight:1.2}}>AllBee EduSphere</div>
+            <div style={{fontSize:8,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em"}}>Smart Student Management</div>
+          </div>
+        </div>
+        <button onClick={()=>setDark(d=>!d)} style={{padding:"5px 12px",border:`1px solid ${C.border}`,borderRadius:20,background:"transparent",color:C.muted,fontSize:11,cursor:"pointer"}}>{dark?"☀":"🌙"}</button>
       </div>
-      <button onClick={()=>setDark(d=>!d)} style={{padding:"6px 14px",border:`1px solid ${C.border}`,borderRadius:20,background:C.surface,color:C.muted,fontSize:12,cursor:"pointer"}}>{dark?"☀ Light":"🌙 Dark"}</button>
-    </div>
-    <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-      <div style={{width:"100%",maxWidth:440,animation:"fadeUp 0.5s ease"}}>
-        {/* Logo */}
-        <div style={{textAlign:"center",marginBottom:24}}>
-          <img src={LOGO_SRC} alt="AllBee EduSphere" style={{width:76,height:76,margin:"0 auto 10px",display:"block",objectFit:"contain"}}/>
-          <div style={{fontSize:20,fontWeight:800,color:C.text}}>AllBee EduSphere</div>
-          <div style={{fontSize:12,color:C.muted,marginTop:3}}>Select your portal to sign in</div>
-        </div>
-        {/* Portal Tabs */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:20}}>
-          {PORTALS.map(pt=>{
-            const ptColor=pt.color==="teal"?C.teal:pt.color==="blue"?C.blue:C.purple;
-            const ptBg=pt.color==="teal"?C.tealL:pt.color==="blue"?C.blueL:C.purpleL;
-            const active=portal===pt.key;
-            return <button key={pt.key} onClick={()=>switchPortal(pt.key)} style={{padding:"14px 8px",borderRadius:12,border:`2px solid ${active?ptColor:C.border}`,background:active?ptBg:C.surface,color:active?ptColor:C.muted,fontWeight:active?700:500,fontSize:11,display:"flex",flexDirection:"column",alignItems:"center",gap:5,cursor:"pointer",transition:"all 0.2s"}}>
-              <span style={{fontSize:22}}>{pt.icon}</span>
-              <span style={{fontWeight:700,fontSize:12}}>{pt.label}</span>
-              <span style={{fontSize:9,opacity:0.8,textAlign:"center",lineHeight:1.3}}>{pt.sub}</span>
-            </button>;
-          })}
-        </div>
-        {/* Login Card */}
-        <div style={{background:C.surface,borderRadius:16,border:`2px solid ${portalColor}33`,boxShadow:C.shadowL,padding:28,animation:"fadeIn 0.3s ease"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:22,padding:"10px 14px",background:portalBg,borderRadius:10}}>
-            <span style={{fontSize:24}}>{PT.icon}</span>
-            <div><div style={{fontWeight:800,fontSize:14,color:portalColor}}>{PT.label} Portal</div><div style={{fontSize:11,color:C.muted}}>{PT.sub}</div></div>
+
+      {/* Main */}
+      <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto",padding:"16px 0"}}>
+        <div className="login-wrap" style={{animation:"fadeUp 0.4s ease"}}>
+
+          {/* Logo block */}
+          <div style={{textAlign:"center",marginBottom:20}}>
+            <img src={LOGO_SRC} alt="AllBee EduSphere" style={{width:72,height:72,objectFit:"contain",margin:"0 auto 8px",display:"block"}}/>
+            <div style={{fontSize:18,fontWeight:800,color:C.text}}>AllBee EduSphere</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:3}}>Choose your portal to sign in</div>
           </div>
-          <div style={{marginBottom:14}}>
-            <LBL C={C}>{PT.userLabel}</LBL>
-            <Inp C={C} value={u} onChange={e=>setU(e.target.value)} placeholder={PT.key==="student"?"Enter roll number":"Enter username"} onKeyDown={e=>e.key==="Enter"&&go()}/>
+
+          {/* Portal selector */}
+          <div className="portal-grid">
+            {PORTALS.map(pt=>{
+              const pc=pt.color==="teal"?C.teal:pt.color==="blue"?C.blue:C.purple;
+              const pb=pt.color==="teal"?C.tealL:pt.color==="blue"?C.blueL:C.purpleL;
+              const active=portal===pt.key;
+              return(
+                <button key={pt.key} className="portal-btn" onClick={()=>sw(pt.key)}
+                  style={{borderColor:active?pc:C.border,background:active?pb:C.surface,color:active?pc:C.muted}}>
+                  <span className="portal-icon">{pt.icon}</span>
+                  <span className="portal-label">{pt.label}</span>
+                  <span className="portal-sub">{pt.sub}</span>
+                </button>
+              );
+            })}
           </div>
-          <div style={{marginBottom:18}}>
-            <LBL C={C}>{PT.passLabel}</LBL>
-            <div style={{position:"relative"}}>
-              <Inp C={C} type={show?"text":"password"} value={p} onChange={e=>setP(e.target.value)} placeholder={PT.key==="student"?"YYYY-MM-DD (date of birth)":"Enter password"} onKeyDown={e=>e.key==="Enter"&&go()} style={{paddingRight:42}}/>
-              <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,fontSize:14,padding:4}}>{show?"🙈":"👁"}</button>
+
+          {/* Login card */}
+          <div className="login-card" style={{background:C.surface,border:`2px solid ${pColor}33`,boxShadow:C.shadowL}}>
+            {/* Portal header strip */}
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,padding:"9px 13px",background:pBg,borderRadius:9}}>
+              <span style={{fontSize:20}}>{PT.icon}</span>
+              <div>
+                <div style={{fontWeight:800,fontSize:13,color:pColor}}>{PT.label} Portal</div>
+                <div style={{fontSize:10,color:C.muted}}>{PT.sub}</div>
+              </div>
             </div>
-            {PT.key==="student"&&<div style={{fontSize:10,color:C.muted,marginTop:5}}>💡 Default password is your date of birth (e.g. 2005-03-14). Contact admin to change.</div>}
+
+            {/* Fields */}
+            <div style={{marginBottom:12}}>
+              <LBL C={C}>{PT.userLabel}</LBL>
+              <Inp C={C} value={u} onChange={e=>setU(e.target.value)}
+                placeholder={PT.key==="student"?"Enter roll number":"Enter username"}
+                onKeyDown={e=>e.key==="Enter"&&go()}/>
+            </div>
+            <div style={{marginBottom:16}}>
+              <LBL C={C}>{PT.passLabel}</LBL>
+              <div style={{position:"relative"}}>
+                <Inp C={C} type={show?"text":"password"} value={p} onChange={e=>setP(e.target.value)}
+                  placeholder={PT.key==="student"?"YYYY-MM-DD":"Enter password"}
+                  onKeyDown={e=>e.key==="Enter"&&go()} style={{paddingRight:40}}/>
+                <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,fontSize:14,padding:4}}>{show?"🙈":"👁"}</button>
+              </div>
+              {PT.key==="student"&&<div style={{fontSize:10,color:C.muted,marginTop:4}}>💡 Default password is your date of birth, e.g. 2005-03-14</div>}
+            </div>
+
+            {err&&<div style={{background:C.redL,border:`1px solid ${C.red}44`,borderRadius:8,padding:"9px 13px",fontSize:12,color:C.red,marginBottom:14}}>⚠ {err}</div>}
+
+            <button className="sign-btn" onClick={go}
+              style={{background:`linear-gradient(135deg,${pColor},${pColor}cc)`,color:"#fff",boxShadow:`0 4px 12px ${pColor}44`}}>
+              Sign In to {PT.label} Portal →
+            </button>
           </div>
-          {err&&<div style={{background:C.redL,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.red,marginBottom:14}}>⚠ {err}</div>}
-          <button onClick={go} style={{width:"100%",padding:"12px",border:"none",borderRadius:10,background:`linear-gradient(135deg,${portalColor},${portalColor}cc)`,color:"#fff",fontSize:15,fontWeight:700,boxShadow:`0 4px 14px ${portalColor}44`,cursor:"pointer"}}>Sign In to {PT.label} Portal →</button>
+
+          <div style={{textAlign:"center",marginTop:14,fontSize:10,color:C.muted}}>🐝 Powered by AllBee Solutions</div>
         </div>
-        {/* Institutions */}
-        <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:6}}>
-          {db.institutions.map(inst=>{const m=TYPE_META[inst.type]||TYPE_META["College"];return<div key={inst.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",background:C.surface,borderRadius:10,border:`1px solid ${C.border}`}}><span style={{fontSize:15}}>{m.icon}</span><div style={{flex:1}}><div style={{fontWeight:600,fontSize:11,color:C.text}}>{inst.name}</div><div style={{fontSize:9,color:C.muted}}>{inst.type} · {inst.city}</div></div><div style={{width:6,height:6,borderRadius:"50%",background:inst.active?C.green:C.red}}/></div>;})}
-        </div>
-        <div style={{textAlign:"center",marginTop:14,fontSize:11,color:C.muted}}>🐝 Powered by AllBee Solutions</div>
       </div>
     </div>
-  </div>;
+  );
 }
 
 // Super Admin
