@@ -533,7 +533,7 @@ function StudentPortal({db,onLogout,user,C,dark,setDark}){
         {/* HOME */}
         {tab==="home"&&<div style={{animation:"fadeUp 0.4s ease"}}>
           <PH title={`👋 Welcome, ${stu.name.split(" ")[0]}!`} sub={`${inst?.name} · ${stu.class||stu.course||""}`} C={C}/>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:22}}>
+          <div className="stat-grid-4">
             <StatCard icon="📅" label="Attendance" value={`${att}%`} color={att>=75?"green":"red"} C={C} onClick={()=>setTab("attendance")}/>
             <StatCard icon="💰" label="Fee Due" value={`₹${dueFee.toLocaleString()}`} color={dueFee>0?"pink":"green"} C={C} onClick={()=>setTab("fees")}/>
             <StatCard icon="📚" label="HW Pending" value={stu.homeworks?.filter(h=>h.status==="Pending").length||0} color="purple" C={C} onClick={()=>setTab("homework")}/>
@@ -1213,6 +1213,19 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
       }
       .inst-overlay{display:none;position:fixed;inset:0;top:54px;background:#0005;z-index:140;}
       .tab-btn{width:100%;text-align:left;padding:9px 12px;border:none;border-radius:9px;display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;transition:background 0.15s,color 0.15s;margin-bottom:2px;}
+      .stat-grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+      .stat-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;}
+      .stat-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;}
+      .breadcrumb-bar{display:flex;align-items:center;gap:6px;margin-bottom:14px;padding:7px 12px;border-radius:9px;}
+      @media(max-width:640px){
+        .stat-grid-4{grid-template-columns:1fr 1fr !important;}
+        .stat-grid-2{grid-template-columns:1fr !important;}
+        .stat-grid-3{grid-template-columns:1fr 1fr !important;}
+        .hide-mobile{display:none !important;}
+      }
+      @media(min-width:641px){
+        .breadcrumb-bar{display:none !important;}
+      }
     `}</style>
     {/* CSS vars for sidebar */}
     <style>{`:root{--sb-bg:${C.surface};--sb-border:${C.border};}`}</style>
@@ -1249,7 +1262,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
       {/* Main content */}
       <div className="inst-content">
         {/* Mobile breadcrumb */}
-        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:14,padding:"7px 12px",background:C.surface,borderRadius:9,border:`1px solid ${C.border}`}}>
+        <div className="breadcrumb-bar" style={{background:C.surface,border:`1px solid ${C.border}`}}>
           <span style={{fontSize:16}}>{curTab?.i}</span>
           <span style={{fontWeight:700,fontSize:13,color:C.text}}>{curTab?.l}</span>
           <div style={{flex:1}}/>
@@ -1286,14 +1299,14 @@ function InstHome({inst,students,color,setTab,m,C}){
   const feePct=tf>0?Math.round(pf/tf*100):0;
   const avgAtt=students.length?Math.round(students.reduce((a,s)=>a+attPct(s.attendance),0)/students.length):0;
   return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <div style={{marginBottom:22}}><div style={{fontSize:22,fontWeight:800,color:C.text}}>{m.icon} {inst.name}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{inst.type} - {inst.city}</div></div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:22}}>
+    <div className="hide-mobile" style={{marginBottom:22}}><div style={{fontSize:22,fontWeight:800,color:C.text}}>{m.icon} {inst.name}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{inst.type} - {inst.city}</div></div>
+    <div className="stat-grid-4">
       <StatCard icon="👥" label="Total Students" value={students.length} color="teal" C={C} onClick={()=>setTab("students")}/>
       <StatCard icon="✅" label="Present Today" value={present} color="green" C={C} onClick={()=>setTab("attend")}/>
       <StatCard icon="💰" label="Fee Pending" value={feePending} color="pink" C={C} onClick={()=>setTab("fees")} sub={`Rs.${(tf-pf).toLocaleString()} due`}/>
       <StatCard icon="📚" label="HW Pending" value={hwPending} color="purple" C={C} onClick={()=>setTab("homework")}/>
     </div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18,marginBottom:18}}>
+    <div className="stat-grid-2">
       <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:18,boxShadow:C.shadow}}>
         <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>💰 Fee Collection</div>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.muted,fontSize:13}}>Rs.{pf.toLocaleString()} collected</span><span style={{fontWeight:700,color,fontSize:13}}>{feePct}%</span></div>
