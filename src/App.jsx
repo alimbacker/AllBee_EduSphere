@@ -58,6 +58,8 @@ function seedData(){
     ],
     students:[],
     staffAttendance:[],
+    accounts:[],
+    courses:[],
   };
 }
 
@@ -805,8 +807,349 @@ function InstStaff({staff,inst,color,onAdd,onUpdate,onDelete,notify,C}){
   </div>;
 }
 
+
+// ─── Accounts Manager ────────────────────────────────────────────────────────
+function InstAccounts({db,saveDb,inst,color,isAdmin,notify,C}){
+  const [subTab,setSubTab]=useState("dashboard");
+  const blankTx={date:today(),type:"income",category:"",description:"",amount:"",ref:""};
+  const [form,setForm]=useState(blankTx);
+  const [showAdd,setShowAdd]=useState(false);
+  const [filterMonth,setFilterMonth]=useState(today().slice(0,7));
+
+  const allTx=(db.accounts||[]).filter(t=>t.instId===inst.id);
+  const monthTx=allTx.filter(t=>t.date.startsWith(filterMonth));
+
+  // Fee summary from students
+  const myStudents=(db.students||[]).filter(s=>s.instId===inst.id);
+  const totalFeeCharged=myStudents.flatMap(s=>s.fees||[]).reduce((a,f)=>a+Number(f.amount||0),0);
+  const totalFeePaid=myStudents.flatMap(s=>s.fees||[]).reduce((a,f)=>a+Number(f.paid||0),0);
+  const totalFeeDue=totalFeeCharged-totalFeePaid;
+
+  // Account totals
+  const totalIncome=allTx.filter(t=>t.type==="income").reduce((a,t)=>a+Number(t.amount||0),0);
+  const totalExpense=allTx.filter(t=>t.type==="expense").reduce((a,t)=>a+Number(t.amount||0),0);
+  const balance=totalIncome-totalExpense;
+  const mIncome=monthTx.filter(t=>t.type==="income").reduce((a,t)=>a+Number(t.amount||0),0);
+  const mExpense=monthTx.filter(t=>t.type==="expense").reduce((a,t)=>a+Number(t.amount||0),0);
+
+  const INCOME_CATS=["Fee Collection","Donation","Grant","Other Income"];
+  const EXPENSE_CATS=["Salary","Rent","Electricity","Water","Maintenance","Stationery","Equipment","Transport","Cleaning","Internet","Other Expense"];
+
+  function addTx(){
+    if(!form.amount||!form.category||!form.date){notify("Fill amount, category and date","error");return;}
+    const tx={...form,id:uid(),instId:inst.id,amount:Number(form.amount),createdAt:new Date().toISOString()};
+    saveDb({accounts:[...(db.accounts||[]),tx]});
+    setForm(blankTx);setShowAdd(false);
+    notify(form.type==="income"?"💰 Income recorded":"💸 Expense recorded");
+  }
+  function delTx(id){saveDb({accounts:(db.accounts||[]).filter(t=>t.id!==id)});notify("Entry deleted","error");}
+
+  // Group by date for daily view
+  const byDate={};
+  monthTx.forEach(t=>{if(!byDate[t.date])byDate[t.date]={income:0,expense:0,items:[]};byDate[t.date][t.type]+=Number(t.amount||0);byDate[t.date].items.push(t);});
+  const dailyDates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
+
+  const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid ${C.border}`,background:C.bg};
+  const TD={padding:"10px 14px",fontSize:12,color:C.text,borderBottom:`1px solid ${C.border}`};
+
+  const SUBTABS=[{k:"dashboard",l:"📊 Dashboard"},{k:"income",l:"💰 Income"},{k:"expense",l:"💸 Expenses"},{k:"daily",l:"📅 Daily"},{k:"fees",l:"🧾 Fees Summary"}];
+
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+      <PH title="💼 Accounts Manager" sub={`${inst.name} — Financial Overview`} C={C}/>
+      <Btn onClick={()=>{setShowAdd(s=>!s);}} C={C} color="gold">+ Add Entry</Btn>
+    </div>
+
+    {/* Add Entry Form */}
+    {showAdd&&<div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,marginBottom:18,boxShadow:C.shadow,animation:"fadeIn 0.25s ease"}}>
+      <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>New Transaction</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:14}}>
+        <FG label="Type" C={C}>
+          <Sel C={C} value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value,category:""}))}>
+            <option value="income">💰 Income</option>
+            <option value="expense">💸 Expense</option>
+          </Sel>
+        </FG>
+        <FG label="Category *" C={C}>
+          <Sel C={C} value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>
+            <option value="">-- Select --</option>
+            {(form.type==="income"?INCOME_CATS:EXPENSE_CATS).map(c=><option key={c} value={c}>{c}</option>)}
+          </Sel>
+        </FG>
+        <FG label="Amount (₹) *" C={C}>
+          <Inp C={C} type="number" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} placeholder="0.00"/>
+        </FG>
+        <FG label="Date *" C={C}>
+          <Inp C={C} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
+        </FG>
+        <FG label="Reference / Bill No" C={C}>
+          <Inp C={C} value={form.ref} onChange={e=>setForm(f=>({...f,ref:e.target.value}))} placeholder="e.g. INV-001"/>
+        </FG>
+        <FG label="Description" C={C}>
+          <Inp C={C} value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Details..."/>
+        </FG>
+      </div>
+      <div style={{display:"flex",gap:10}}>
+        <Btn onClick={addTx} C={C} color={form.type==="income"?"green":"red"}>Save {form.type==="income"?"Income":"Expense"}</Btn>
+        <Btn onClick={()=>setShowAdd(false)} C={C} color="red" outline>Cancel</Btn>
+      </div>
+    </div>}
+
+    {/* Sub-tabs */}
+    <div style={{display:"flex",gap:6,marginBottom:18,flexWrap:"wrap"}}>
+      {SUBTABS.map(t=><button key={t.k} onClick={()=>setSubTab(t.k)} style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${subTab===t.k?C.gold:C.border}`,background:subTab===t.k?C.goldL:"transparent",color:subTab===t.k?C.gold:C.muted,fontWeight:subTab===t.k?700:500,fontSize:12,cursor:"pointer"}}>{t.l}</button>)}
+    </div>
+
+    {/* Month filter */}
+    {subTab!=="dashboard"&&subTab!=="fees"&&<div style={{display:"flex",gap:10,marginBottom:14,alignItems:"center"}}>
+      <Inp C={C} type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} style={{width:"auto"}}/>
+      <span style={{fontSize:12,color:C.muted}}>{monthTx.length} transactions</span>
+    </div>}
+
+    {/* DASHBOARD */}
+    {subTab==="dashboard"&&<div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:20}}>
+        <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,borderTop:`3px solid ${C.green}`}}>
+          <div style={{fontSize:11,color:C.muted,marginBottom:6,fontWeight:700,textTransform:"uppercase"}}>Total Income</div>
+          <div style={{fontSize:26,fontWeight:800,color:C.green}}>₹{totalIncome.toLocaleString()}</div>
+          <div style={{fontSize:10,color:C.muted,marginTop:4}}>All time</div>
+        </div>
+        <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,borderTop:`3px solid ${C.red}`}}>
+          <div style={{fontSize:11,color:C.muted,marginBottom:6,fontWeight:700,textTransform:"uppercase"}}>Total Expenses</div>
+          <div style={{fontSize:26,fontWeight:800,color:C.red}}>₹{totalExpense.toLocaleString()}</div>
+          <div style={{fontSize:10,color:C.muted,marginTop:4}}>All time</div>
+        </div>
+        <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,borderTop:`3px solid ${balance>=0?C.teal:C.red}`}}>
+          <div style={{fontSize:11,color:C.muted,marginBottom:6,fontWeight:700,textTransform:"uppercase"}}>Net Balance</div>
+          <div style={{fontSize:26,fontWeight:800,color:balance>=0?C.teal:C.red}}>₹{balance.toLocaleString()}</div>
+          <div style={{fontSize:10,color:C.muted,marginTop:4}}>{balance>=0?"Surplus":"Deficit"}</div>
+        </div>
+      </div>
+      {/* This month summary */}
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:18,marginBottom:16,boxShadow:C.shadow}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>📅 This Month — {filterMonth}</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+          <div style={{padding:14,background:C.greenL,borderRadius:10,textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:C.green}}>₹{mIncome.toLocaleString()}</div><div style={{fontSize:10,color:C.muted}}>Income</div></div>
+          <div style={{padding:14,background:C.redL,borderRadius:10,textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:C.red}}>₹{mExpense.toLocaleString()}</div><div style={{fontSize:10,color:C.muted}}>Expenses</div></div>
+          <div style={{padding:14,background:(mIncome-mExpense)>=0?C.tealL:C.redL,borderRadius:10,textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:(mIncome-mExpense)>=0?C.teal:C.red}}>₹{(mIncome-mExpense).toLocaleString()}</div><div style={{fontSize:10,color:C.muted}}>Net</div></div>
+        </div>
+      </div>
+      {/* Top expense categories */}
+      {allTx.filter(t=>t.type==="expense").length>0&&<div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:18,boxShadow:C.shadow}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:12,color:C.text}}>💸 Expense Breakdown</div>
+        {[...new Set(allTx.filter(t=>t.type==="expense").map(t=>t.category))].map(cat=>{
+          const amt=allTx.filter(t=>t.type==="expense"&&t.category===cat).reduce((a,t)=>a+Number(t.amount||0),0);
+          const pct=totalExpense>0?Math.round(amt/totalExpense*100):0;
+          return<div key={cat} style={{marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,color:C.text,fontWeight:600}}>{cat}</span><span style={{fontSize:12,fontWeight:700,color:C.red}}>₹{amt.toLocaleString()} ({pct}%)</span></div>
+            <div style={{height:6,background:C.bg,borderRadius:99,overflow:"hidden",border:`1px solid ${C.border}`}}><div style={{height:"100%",width:`${pct}%`,background:C.red,borderRadius:99}}/></div>
+          </div>;
+        })}
+      </div>}
+    </div>}
+
+    {/* INCOME / EXPENSE TABLE */}
+    {(subTab==="income"||subTab==="expense")&&<div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,overflow:"auto",boxShadow:C.shadow}}>
+      <table style={{width:"100%",borderCollapse:"collapse",minWidth:500}}>
+        <thead><tr>{["Date","Category","Description","Ref","Amount","Action"].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
+        <tbody>
+          {monthTx.filter(t=>t.type===subTab).sort((a,b)=>b.date.localeCompare(a.date)).map(t=><tr key={t.id}>
+            <td style={TD}>{fmt(t.date)}</td>
+            <td style={TD}><Badge label={t.category} color={subTab==="income"?"green":"red"} C={C}/></td>
+            <td style={TD}><span style={{color:C.muted}}>{t.description||"--"}</span></td>
+            <td style={{...TD,fontFamily:"monospace",fontSize:11}}>{t.ref||"--"}</td>
+            <td style={{...TD,fontWeight:800,color:subTab==="income"?C.green:C.red}}>₹{Number(t.amount).toLocaleString()}</td>
+            <td style={TD}><Btn onClick={()=>{if(window.confirm("Delete this entry?"))delTx(t.id);}} C={C} color="red" size="sm" outline>Del</Btn></td>
+          </tr>)}
+          {!monthTx.filter(t=>t.type===subTab).length&&<tr><td colSpan={6}><Empty msg={`No ${subTab} records for ${filterMonth}`} C={C}/></td></tr>}
+        </tbody>
+      </table>
+    </div>}
+
+    {/* DAILY SUMMARY */}
+    {subTab==="daily"&&<div>
+      {dailyDates.length===0&&<Empty msg={`No transactions for ${filterMonth}`} C={C}/>}
+      {dailyDates.map(date=>{const day=byDate[date];return<div key={date} style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,marginBottom:12,overflow:"hidden",boxShadow:C.shadow}}>
+        <div style={{padding:"12px 16px",background:C.bg,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontWeight:700,fontSize:13,color:C.text}}>📅 {fmt(date)}</div>
+          <div style={{display:"flex",gap:12}}>
+            <span style={{fontSize:12,color:C.green,fontWeight:700}}>+₹{day.income.toLocaleString()}</span>
+            <span style={{fontSize:12,color:C.red,fontWeight:700}}>-₹{day.expense.toLocaleString()}</span>
+            <span style={{fontSize:12,fontWeight:800,color:(day.income-day.expense)>=0?C.teal:C.red}}>Net: ₹{(day.income-day.expense).toLocaleString()}</span>
+          </div>
+        </div>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <tbody>{day.items.sort((a,b)=>a.type.localeCompare(b.type)).map(t=><tr key={t.id}>
+            <td style={{...TD,width:90}}><span style={{padding:"2px 8px",borderRadius:20,background:t.type==="income"?C.greenL:C.redL,color:t.type==="income"?C.green:C.red,fontSize:10,fontWeight:700}}>{t.type==="income"?"IN":"OUT"}</span></td>
+            <td style={TD}><Badge label={t.category} color={t.type==="income"?"green":"red"} C={C}/></td>
+            <td style={{...TD,color:C.muted}}>{t.description||"--"}</td>
+            <td style={{...TD,fontFamily:"monospace",fontSize:11,color:C.muted}}>{t.ref||""}</td>
+            <td style={{...TD,fontWeight:700,color:t.type==="income"?C.green:C.red,textAlign:"right"}}>₹{Number(t.amount).toLocaleString()}</td>
+            <td style={{...TD,width:60}}><Btn onClick={()=>{if(window.confirm("Delete?"))delTx(t.id);}} C={C} color="red" size="sm" outline>Del</Btn></td>
+          </tr>)}</tbody>
+        </table>
+      </div>;})}
+    </div>}
+
+    {/* FEES SUMMARY */}
+    {subTab==="fees"&&<div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:20}}>
+        <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,borderTop:`3px solid ${C.blue}`}}>
+          <div style={{fontSize:11,color:C.muted,marginBottom:6,fontWeight:700,textTransform:"uppercase"}}>Total Charged</div>
+          <div style={{fontSize:26,fontWeight:800,color:C.blue}}>₹{totalFeeCharged.toLocaleString()}</div>
+        </div>
+        <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,borderTop:`3px solid ${C.green}`}}>
+          <div style={{fontSize:11,color:C.muted,marginBottom:6,fontWeight:700,textTransform:"uppercase"}}>Collected</div>
+          <div style={{fontSize:26,fontWeight:800,color:C.green}}>₹{totalFeePaid.toLocaleString()}</div>
+        </div>
+        <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,borderTop:`3px solid ${totalFeeDue>0?C.red:C.green}`}}>
+          <div style={{fontSize:11,color:C.muted,marginBottom:6,fontWeight:700,textTransform:"uppercase"}}>Outstanding Due</div>
+          <div style={{fontSize:26,fontWeight:800,color:totalFeeDue>0?C.red:C.green}}>₹{totalFeeDue.toLocaleString()}</div>
+        </div>
+      </div>
+      {/* Collection bar */}
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:18,marginBottom:16,boxShadow:C.shadow}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontWeight:600,color:C.text}}>Collection Rate</span><span style={{fontWeight:800,color:totalFeeCharged>0&&totalFeePaid/totalFeeCharged>=0.8?C.green:C.red}}>{totalFeeCharged>0?Math.round(totalFeePaid/totalFeeCharged*100):0}%</span></div>
+        <div style={{height:12,background:C.bg,borderRadius:99,overflow:"hidden",border:`1px solid ${C.border}`}}><div style={{height:"100%",width:`${totalFeeCharged>0?Math.round(totalFeePaid/totalFeeCharged*100):0}%`,background:`linear-gradient(90deg,${C.green},${C.teal})`,borderRadius:99}}/></div>
+      </div>
+      {/* Per-student due list */}
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,overflow:"auto",boxShadow:C.shadow}}>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead><tr>{["Student","Total Fee","Paid","Due","Status"].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
+          <tbody>
+            {myStudents.filter(s=>(s.fees||[]).length>0).map(s=>{
+              const tf=s.fees.reduce((a,f)=>a+Number(f.amount||0),0);
+              const pf=s.fees.reduce((a,f)=>a+Number(f.paid||0),0);
+              const due=tf-pf;
+              return<tr key={s.id}>
+                <td style={TD}><div style={{fontWeight:600}}>{s.name}</div><div style={{fontSize:10,color:C.muted}}>{s.rollNo}</div></td>
+                <td style={TD}>₹{tf.toLocaleString()}</td>
+                <td style={{...TD,color:C.green,fontWeight:600}}>₹{pf.toLocaleString()}</td>
+                <td style={{...TD,color:due>0?C.red:C.green,fontWeight:700}}>₹{due.toLocaleString()}</td>
+                <td style={TD}><Badge label={due===0?"Paid":due===tf?"Unpaid":"Partial"} color={due===0?"green":due===tf?"red":"gold"} C={C}/></td>
+              </tr>;
+            })}
+            {!myStudents.filter(s=>(s.fees||[]).length>0).length&&<tr><td colSpan={5}><Empty msg="No fee records yet" C={C}/></td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>}
+  </div>;
+}
+
+// ─── Computer Institute Courses ───────────────────────────────────────────────
+function InstCourses({db,saveDb,inst,color,notify,C}){
+  const blank={name:"",duration:"",fee:"",description:"",seats:""};
+  const [form,setForm]=useState(blank);
+  const [showAdd,setShowAdd]=useState(false);
+  const [editId,setEditId]=useState(null);
+  const [editForm,setEditForm]=useState(null);
+
+  const courses=(db.courses||[]).filter(c=>c.instId===inst.id);
+
+  function addCourse(){
+    if(!form.name.trim()||!form.fee){notify("Course name and fee required","error");return;}
+    saveDb({courses:[...(db.courses||[]),{...form,id:uid(),instId:inst.id,fee:Number(form.fee),seats:Number(form.seats)||0,createdAt:today()}]});
+    setForm(blank);setShowAdd(false);notify("✅ Course added!");
+  }
+  function saveEdit(id){
+    if(!editForm.name||!editForm.fee){notify("Required fields missing","error");return;}
+    saveDb({courses:(db.courses||[]).map(c=>c.id===id?{...c,...editForm,fee:Number(editForm.fee),seats:Number(editForm.seats)||0}:c)});
+    setEditId(null);setEditForm(null);notify("Course updated");
+  }
+  function delCourse(id){
+    if(!window.confirm("Delete this course?"))return;
+    saveDb({courses:(db.courses||[]).filter(c=>c.id!==id)});notify("Deleted","error");
+  }
+
+  // students enrolled per course
+  const enrolled=(courseId)=>(db.students||[]).filter(s=>s.instId===inst.id&&s.course===courses.find(c=>c.id===courseId)?.name).length;
+
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+      <PH title="🖥 Courses" sub={`${courses.length} course${courses.length!==1?"s":""} offered at ${inst.name}`} C={C}/>
+      <Btn onClick={()=>{setShowAdd(s=>!s);setEditId(null);}} C={C} color="teal">+ New Course</Btn>
+    </div>
+
+    {/* Add Form */}
+    {showAdd&&<div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,marginBottom:18,boxShadow:C.shadow,animation:"fadeIn 0.25s ease"}}>
+      <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>New Course</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:14}}>
+        <FG label="Course Name *" C={C} span><Inp C={C} value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. MS Office, Tally, Python..."/></FG>
+        <FG label="Duration" C={C}><Inp C={C} value={form.duration} onChange={e=>setForm(f=>({...f,duration:e.target.value}))} placeholder="e.g. 3 Months"/></FG>
+        <FG label="Fee (₹) *" C={C}><Inp C={C} type="number" value={form.fee} onChange={e=>setForm(f=>({...f,fee:e.target.value}))} placeholder="Course fee"/></FG>
+        <FG label="Total Seats" C={C}><Inp C={C} type="number" value={form.seats} onChange={e=>setForm(f=>({...f,seats:e.target.value}))} placeholder="Max students"/></FG>
+        <FG label="Description" C={C} span><Inp C={C} value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Short description"/></FG>
+      </div>
+      <div style={{display:"flex",gap:10}}>
+        <Btn onClick={addCourse} C={C} color="teal">Add Course</Btn>
+        <Btn onClick={()=>setShowAdd(false)} C={C} color="red" outline>Cancel</Btn>
+      </div>
+    </div>}
+
+    {/* Course Cards */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16}}>
+      {courses.map(course=>{
+        const enr=enrolled(course.id);
+        const pct=course.seats>0?Math.round(enr/course.seats*100):null;
+        const isEditing=editId===course.id;
+        return <div key={course.id} style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,borderTop:`3px solid ${color}`}}>
+          {isEditing?<div>
+            <FG label="Name" C={C}><Inp C={C} value={editForm.name} onChange={e=>setEditForm(f=>({...f,name:e.target.value}))} style={{marginBottom:8}}/></FG>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+              <FG label="Duration" C={C}><Inp C={C} value={editForm.duration||""} onChange={e=>setEditForm(f=>({...f,duration:e.target.value}))} placeholder="Duration"/></FG>
+              <FG label="Fee ₹" C={C}><Inp C={C} type="number" value={editForm.fee||""} onChange={e=>setEditForm(f=>({...f,fee:e.target.value}))} placeholder="Fee"/></FG>
+              <FG label="Seats" C={C}><Inp C={C} type="number" value={editForm.seats||""} onChange={e=>setEditForm(f=>({...f,seats:e.target.value}))} placeholder="Seats"/></FG>
+            </div>
+            <FG label="Description" C={C}><Inp C={C} value={editForm.description||""} onChange={e=>setEditForm(f=>({...f,description:e.target.value}))} placeholder="Description"/></FG>
+            <div style={{display:"flex",gap:8,marginTop:10}}>
+              <Btn onClick={()=>saveEdit(course.id)} C={C} color="green" size="sm">Save</Btn>
+              <Btn onClick={()=>{setEditId(null);setEditForm(null);}} C={C} color="red" size="sm" outline>Cancel</Btn>
+            </div>
+          </div>:<>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+              <div>
+                <div style={{fontWeight:800,fontSize:15,color:C.text}}>{course.name}</div>
+                {course.duration&&<div style={{fontSize:11,color:C.muted,marginTop:2}}>⏱ {course.duration}</div>}
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:18,fontWeight:800,color}}> ₹{Number(course.fee).toLocaleString()}</div>
+                <div style={{fontSize:9,color:C.muted}}>Course Fee</div>
+              </div>
+            </div>
+            {course.description&&<div style={{fontSize:11,color:C.muted,marginBottom:12,lineHeight:1.5}}>{course.description}</div>}
+            <div style={{display:"flex",gap:10,marginBottom:pct!==null?10:0}}>
+              <div style={{flex:1,background:C.bg,borderRadius:8,padding:"8px 10px",textAlign:"center",border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:16,fontWeight:800,color}}>{enr}</div>
+                <div style={{fontSize:9,color:C.muted}}>Enrolled</div>
+              </div>
+              {course.seats>0&&<div style={{flex:1,background:C.bg,borderRadius:8,padding:"8px 10px",textAlign:"center",border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:16,fontWeight:800,color:C.text}}>{course.seats}</div>
+                <div style={{fontSize:9,color:C.muted}}>Seats</div>
+              </div>}
+              {course.seats>0&&<div style={{flex:1,background:C.bg,borderRadius:8,padding:"8px 10px",textAlign:"center",border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:16,fontWeight:800,color:pct>=90?C.red:pct>=70?C.gold:C.green}}>{course.seats-enr}</div>
+                <div style={{fontSize:9,color:C.muted}}>Available</div>
+              </div>}
+            </div>
+            {pct!==null&&<div style={{marginBottom:10}}>
+              <div style={{height:5,background:C.bg,borderRadius:99,overflow:"hidden",border:`1px solid ${C.border}`}}><div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:pct>=90?C.red:pct>=70?C.gold:C.green,borderRadius:99}}/></div>
+              <div style={{fontSize:9,color:C.muted,marginTop:3}}>{pct}% full</div>
+            </div>}
+            <div style={{display:"flex",gap:8}}>
+              <Btn onClick={()=>{setEditId(course.id);setEditForm({...course});setShowAdd(false);}} C={C} color="teal" size="sm" outline>Edit</Btn>
+              <Btn onClick={()=>delCourse(course.id)} C={C} color="red" size="sm" outline>Delete</Btn>
+            </div>
+          </>}
+        </div>;
+      })}
+      {!courses.length&&<div style={{gridColumn:"1/-1"}}><Empty msg="No courses yet — add your first course above" C={C}/></div>}
+    </div>
+  </div>;
+}
+
 // Institution Dashboard Shell
-const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"staff",i:"👨‍🏫",l:"Staff"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"idcard",i:"🪪",l:"ID Cards"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"alerts",i:"📣",l:"Alerts"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"reports",i:"📊",l:"Reports"}];
+const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"staff",i:"👨‍🏫",l:"Staff"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"idcard",i:"🪪",l:"ID Cards"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"alerts",i:"📣",l:"Alerts"},{k:"accounts",i:"💼",l:"Accounts"},{k:"courses",i:"🖥",l:"Courses"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"reports",i:"📊",l:"Reports"}];
 
 function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const [tab,setTab]=useState("home");
@@ -824,7 +1167,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
     <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={`${m.icon} ${inst.name}`}/>
     <div style={{display:"flex",flex:1}}>
       <div style={{width:200,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"12px 10px",position:"sticky",top:56,height:"calc(100vh - 56px)",overflowY:"auto",display:"flex",flexDirection:"column",gap:1}}>
-        {INST_TABS.filter(t=>{if(user.role==="accountant")return["home","students","fees","receipt","reports"].includes(t.k);if(!isAdmin)return!["register","staff"].includes(t.k);return true;}).map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{width:"100%",textAlign:"left",padding:"8px 11px",border:"none",borderRadius:8,background:tab===t.k?C.tealL:"transparent",color:tab===t.k?C.teal:C.text,fontWeight:tab===t.k?700:500,fontSize:11.5,display:"flex",alignItems:"center",gap:7,marginBottom:1,cursor:"pointer"}}>{t.i} {t.l}</button>)}
+        {INST_TABS.filter(t=>{if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);if(!isAdmin)return!["register","staff","courses"].includes(t.k);if(t.k==="courses")return inst.type==="Computer Institute";return true;}).map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{width:"100%",textAlign:"left",padding:"8px 11px",border:"none",borderRadius:8,background:tab===t.k?C.tealL:"transparent",color:tab===t.k?C.teal:C.text,fontWeight:tab===t.k?700:500,fontSize:11.5,display:"flex",alignItems:"center",gap:7,marginBottom:1,cursor:"pointer"}}>{t.i} {t.l}</button>)}
         <div style={{flex:1}}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,padding:"6px 0"}}>
           <div style={{padding:"7px",background:C.bg,borderRadius:8,textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:16,fontWeight:800,color}}>{myStudents.length}</div><div style={{fontSize:8,color:C.muted}}>Students</div></div>
@@ -845,6 +1188,8 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
         {tab==="idcard"&&<InstIDCards students={myStudents} inst={inst} color={color} C={C}/>}
         {tab==="receipt"&&<InstReceipts students={myStudents} inst={inst} color={color} C={C}/>}
         {tab==="alerts"&&<InstAlerts students={myStudents} inst={inst} color={color} notify={notify} C={C}/>}
+        {tab==="accounts"&&<InstAccounts db={db} saveDb={saveDb} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
+        {tab==="courses"&&inst.type==="Computer Institute"&&isAdmin&&<InstCourses db={db} saveDb={saveDb} inst={inst} color={color} notify={notify} C={C}/>}
         {tab==="staffatt"&&<StaffAttend db={db} saveDb={saveDb} user={user} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
         {tab==="reports"&&<InstReports students={myStudents} inst={inst} color={color} C={C}/>}
       </div>
