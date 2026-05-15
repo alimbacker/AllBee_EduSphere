@@ -1207,7 +1207,7 @@ function InstCourses({db,saveDb,inst,color,notify,C}){
 }
 
 // Institution Dashboard Shell
-const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"staff",i:"👨‍🏫",l:"Staff"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"idcard",i:"🪪",l:"ID Cards"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"alerts",i:"📣",l:"Alerts"},{k:"accounts",i:"💼",l:"Accounts"},{k:"courses",i:"🖥",l:"Courses"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"reports",i:"📊",l:"Reports"}];
+const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"staff",i:"👨‍🏫",l:"Staff"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"accounts",i:"💼",l:"Accounts"},{k:"courses",i:"🖥",l:"Courses"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"alerts",i:"📣",l:"Alerts"},{k:"reports",i:"📊",l:"Reports"}];
 
 function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const [tab,setTab]=useState("home");
@@ -1351,7 +1351,7 @@ function InstHome({inst,students,color,setTab,m,C}){
         </div>
       </div>
     </div>
-    {students.length>0&&<div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:18,boxShadow:C.shadow}}><Sec C={C}>Recently Registered</Sec><div style={{display:"flex",flexDirection:"column",gap:7}}>{students.slice(-4).reverse().map(s=><div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",background:C.bg,borderRadius:9,border:`1px solid ${C.border}`}}><div style={{display:"flex",alignItems:"center",gap:10}}><Avatar name={s.name} photo={s.photo} color={color} size={32}/><div><div style={{fontWeight:600,fontSize:12,color:C.text}}>{s.name}</div><div style={{fontSize:10,color:C.muted}}>{s.rollNo} - {s.department||s.class||s.course||s.danceStyle}</div></div></div><div style={{fontSize:11,color:C.muted}}>{fmt(s.createdAt)}</div></div>)}</div></div>}
+    {students.length>0&&<div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:18,boxShadow:C.shadow}}><Sec C={C}>Recently Registered</Sec><div style={{display:"flex",flexDirection:"column",gap:7}}>{students.slice(-4).reverse().map(s=><div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",background:C.bg,borderRadius:9,border:`1px solid ${C.border}`}}><div style={{display:"flex",alignItems:"center",gap:10}}><Avatar name={s.name} photo={s.photo} color={color} size={32}/><div><div style={{fontWeight:600,fontSize:12,color:C.text}}>{s.name}</div><div style={{fontSize:10,color:C.muted}}>{s.rollNo} - {s.course||s.department||s.danceStyle||s.class||""}</div></div></div><div style={{fontSize:11,color:C.muted}}>{fmt(s.createdAt)}</div></div>)}</div></div>}
   </div>;
 }
 
@@ -1366,7 +1366,7 @@ function InstStudents({students,inst,color,onUpdate,C}){
       <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,overflow:"hidden",boxShadow:C.shadow}}>
         {!fs.length&&<Empty msg="No students" C={C}/>}
         {fs.map(s=>{const pct=attPct(s.attendance);return<div key={s.id} onClick={()=>setSel(sel?.id===s.id?null:s)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:sel?.id===s.id?C.tealL:"transparent",transition:"background 0.1s"}} onMouseOver={e=>{if(sel?.id!==s.id)e.currentTarget.style.background=C.bg;}} onMouseOut={e=>{if(sel?.id!==s.id)e.currentTarget.style.background="transparent";}}>
-          <div style={{display:"flex",alignItems:"center",gap:11}}><Avatar name={s.name} photo={s.photo} color={color} size={38}/><div><div style={{fontWeight:600,fontSize:13,color:C.text}}>{s.name}</div><div style={{fontSize:11,color:C.muted}}>{s.rollNo} - {s.department||s.class||s.course||s.danceStyle} {s.section?`- ${s.section}`:""}</div></div></div>
+          <div style={{display:"flex",alignItems:"center",gap:11}}><Avatar name={s.name} photo={s.photo} color={color} size={38}/><div><div style={{fontWeight:600,fontSize:13,color:C.text}}>{s.name}</div><div style={{fontSize:11,color:C.muted}}>{s.rollNo} - {s.course||s.department||s.danceStyle||s.class||""}{s.section?` - ${s.section}`:""}{s.batch?` (${s.batch})`:""}</div></div></div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <MiniBar pct={pct} color={pct>=75?C.green:C.red} C={C}/>
             {s.fees?.some(f=>f.status==="Pending"||f.status==="Partial")&&<Badge label="Fee Due" color="pink" C={C}/>}
@@ -1486,7 +1486,7 @@ function StuProfileCard({s,color,onClose,onPhoto,C}){
         <div style={{position:"relative",display:"inline-block",marginBottom:10}}><Avatar name={s.name} photo={s.photo} color={color} size={60}/><button onClick={onPhoto} style={{position:"absolute",bottom:0,right:0,width:22,height:22,borderRadius:"50%",background:color,border:"none",fontSize:10,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>📷</button></div>
         <div style={{fontWeight:800,fontSize:15,color:C.text}}>{s.name}</div>
         <div style={{fontSize:11,color:C.muted}}>{s.rollNo}</div>
-        <div style={{fontSize:12,color,fontWeight:600,marginTop:2}}>{s.department||s.class||s.course||s.danceStyle}</div>
+        <div style={{fontSize:12,color,fontWeight:600,marginTop:2}}>{s.course||s.department||s.danceStyle||s.class||""}{s.batch?` · ${s.batch}`:""}</div>
         <button onClick={()=>onEdit(s)} style={{marginTop:8,padding:"5px 16px",borderRadius:7,border:`1px solid ${color}`,background:"transparent",color,fontSize:12,fontWeight:700,cursor:"pointer"}}>✏ Edit Profile</button>
       </div>
       <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,lineHeight:1,cursor:"pointer"}}>×</button>
@@ -1494,7 +1494,7 @@ function StuProfileCard({s,color,onClose,onPhoto,C}){
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
       {[{l:"Attendance",v:`${pct}%`,c:pct>=75?C.green:C.red},{l:"Avg Marks",v:avgM!=null?`${avgM}%`:"--",c:C.teal},{l:"Fee Paid",v:`Rs.${pf.toLocaleString()}`,c:C.green},{l:"HW Done",v:`${hwDone}/${s.homeworks?.length||0}`,c:C.purple}].map(r=><div key={r.l} style={{background:C.bg,borderRadius:9,padding:"10px",textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:14,fontWeight:800,color:r.c}}>{r.v}</div><div style={{fontSize:9,color:C.muted,marginTop:2}}>{r.l}</div></div>)}
     </div>
-    {[{l:"Phone",v:s.phone},{l:"Email",v:s.email},{l:"Parent",v:s.parent},{l:"Parent Ph",v:s.parentPhone},{l:"DOB",v:fmt(s.dob)},{l:"Gender",v:s.gender},{l:"Blood",v:s.blood},{l:"Admitted",v:fmt(s.admissionDate)}].filter(r=>r.v&&r.v!=="--").map(r=><div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}><span style={{color:C.muted}}>{r.l}</span><span style={{fontWeight:600,color:C.text}}>{r.v}</span></div>)}
+    {[{l:"Course",v:s.course},{l:"Department",v:s.department},{l:"Dance Style",v:s.danceStyle},{l:"Class",v:s.class},{l:"Batch",v:s.batch},{l:"Duration",v:s.duration},{l:"Year",v:s.year},{l:"Phone",v:s.phone},{l:"Email",v:s.email},{l:"Parent",v:s.parent},{l:"Parent Ph",v:s.parentPhone},{l:"DOB",v:fmt(s.dob)},{l:"Gender",v:s.gender},{l:"Blood",v:s.blood},{l:"Admitted",v:fmt(s.admissionDate)}].filter(r=>r.v&&r.v!=="--").map(r=><div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}><span style={{color:C.muted}}>{r.l}</span><span style={{fontWeight:600,color:C.text}}>{r.v}</span></div>)}
     {s.attendance?.length>0&&<div style={{marginTop:12}}><Sec C={C}>Last 7 Days</Sec><div style={{display:"flex",gap:3}}>{s.attendance.slice(-7).map((a,i)=><div key={i} title={`${fmt(a.date)}: ${a.status}`} style={{flex:1,height:24,borderRadius:5,background:a.status==="Present"?C.green:a.status==="Absent"?C.red:C.gold,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700}}>{a.status[0]}</div>)}</div></div>}
   </div>;
 }
@@ -1844,7 +1844,7 @@ function InstAlerts({students,inst,color,notify,C}){
         {filtered.map(s=>{const pct=attOf(s);const hp=s.fees?.some(f=>f.status==="Pending"||f.status==="Partial");return<div key={s.id} style={{display:"flex",alignItems:"center",gap:9,padding:"9px 12px",background:selStudents.includes(s.id)?C.tealL:C.bg,borderRadius:9,border:`1px solid ${selStudents.includes(s.id)?C.teal:C.border}`,cursor:"pointer",transition:"all 0.1s"}} onClick={()=>setSelStudents(p=>p.includes(s.id)?p.filter(x=>x!==s.id):[...p,s.id])}>
           <div style={{width:18,height:18,borderRadius:"50%",background:selStudents.includes(s.id)?C.teal:"transparent",border:`2px solid ${selStudents.includes(s.id)?C.teal:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#fff",flexShrink:0}}>{selStudents.includes(s.id)?"✓":""}</div>
           <Avatar name={s.name} photo={s.photo} color={color} size={28}/>
-          <div style={{flex:1}}><div style={{fontWeight:600,fontSize:12,color:C.text}}>{s.name}</div><div style={{fontSize:10,color:C.muted}}>{s.rollNo} - {s.department||s.class||s.course||s.danceStyle}</div></div>
+          <div style={{flex:1}}><div style={{fontWeight:600,fontSize:12,color:C.text}}>{s.name}</div><div style={{fontSize:10,color:C.muted}}>{s.rollNo} - {s.course||s.department||s.danceStyle||s.class||""}</div></div>
           <div style={{display:"flex",gap:5,alignItems:"center"}}>
             {pct<75&&<Badge label={`${pct}%`} color="red" C={C}/>}
             {hp&&<Badge label="Fee" color="gold" C={C}/>}
