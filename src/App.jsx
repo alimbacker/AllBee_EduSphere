@@ -60,6 +60,7 @@ function seedData(){
     staffAttendance:[],
     accounts:[],
     courses:[],
+    staffTasks:[],
   };
 }
 
@@ -136,7 +137,7 @@ function TopBar({C,dark,setDark,onLogout,user,right,onMenuToggle,showMenu}){
       </button>}
       {/* Logo */}
       <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
-        <img src={LOGO_SRC} alt="AllBee" style={{width:32,height:32,objectFit:"contain",flexShrink:0}}/>
+        <img src={LOGO_SRC} alt="AllBee" style={{width:32,height:32,objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 0 6px #00bcd4aa)"}}/>
         <div className="tb-logo-text"><div style={{fontWeight:800,fontSize:12,color:C.teal,lineHeight:1.2}}>AllBee EduSphere</div><div style={{fontSize:8,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em"}}>Smart Student Management</div></div>
       </div>
       {/* Institution name */}
@@ -233,7 +234,7 @@ export default function App(){
 
   if(loading) return(
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
-      <img src={LOGO_SRC} alt="AllBee EduSphere" style={{width:90,objectFit:"contain"}}/>
+      <img src={LOGO_SRC} alt="AllBee EduSphere" style={{width:90,objectFit:"contain",filter:"drop-shadow(0 0 16px #00bcd4aa)"}}/>
       <div style={{fontSize:14,color:C.muted,fontWeight:600}}>Connecting to AllBee EduSphere…</div>
       <div style={{width:220,height:4,background:C.border,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:"60%",background:C.teal,borderRadius:99,animation:"slideIn 1.2s ease infinite"}}/></div>
     </div>
@@ -306,7 +307,7 @@ function LoginPage({onLogin,db,C,dark,setDark}){
 
           {/* Logo block */}
           <div style={{textAlign:"center",marginBottom:20}}>
-            <img src={LOGO_SRC} alt="AllBee EduSphere" style={{width:72,height:72,objectFit:"contain",margin:"0 auto 8px",display:"block"}}/>
+            <img src={LOGO_SRC} alt="AllBee EduSphere" style={{width:72,height:72,objectFit:"contain",margin:"0 auto 8px",display:"block",filter:"drop-shadow(0 0 14px #00bcd4bb)",mixBlendMode:"normal"}}/>
             <div style={{fontSize:18,fontWeight:800,color:C.text}}>AllBee EduSphere</div>
             <div style={{fontSize:11,color:C.muted,marginTop:3}}>Choose your portal to sign in</div>
           </div>
@@ -516,10 +517,26 @@ function StudentPortal({db,onLogout,user,C,dark,setDark}){
   const TD={padding:"10px 14px",fontSize:12,color:C.text,borderBottom:`1px solid ${C.border}`};
   const [sideOpen,setSideOpen]=useState(false);
   return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:C.bg}}>
+    <style>{`
+      .inst-sidebar{width:210px;background:var(--sb-bg,${C.surface});border-right:1px solid var(--sb-border,${C.border});padding:12px 10px;position:sticky;top:54px;height:calc(100vh - 54px);overflow-y:auto;display:flex;flex-direction:column;gap:1px;flex-shrink:0;transition:transform 0.25s ease;}
+      .inst-content{flex:1;padding:20px;overflow-y:auto;min-width:0;}
+      .tab-btn{width:100%;text-align:left;padding:9px 12px;border:none;border-radius:9px;display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;transition:background 0.15s,color 0.15s;margin-bottom:2px;}
+      .breadcrumb-bar{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9px;}
+      @media(max-width:640px){
+        .inst-sidebar{position:fixed;top:54px;left:0;height:calc(100vh - 54px);z-index:150;transform:translateX(-100%);box-shadow:4px 0 20px #0004;}
+        .inst-sidebar.open{transform:translateX(0);}
+        .inst-content{padding:14px;}
+      }
+      @media(min-width:641px){
+        .inst-sidebar{transform:none !important;}
+        .breadcrumb-bar{display:none !important;}
+      }
+    `}</style>
+    <style>{`:root{--sb-bg:${C.surface};--sb-border:${C.border};}`}</style>
     <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={inst?.name||""} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen}/>
-    <div className={"inst-overlay"+(sideOpen?" open":"")} onClick={()=>setSideOpen(false)} style={{display:sideOpen?"block":"none",position:"fixed",inset:0,top:54,background:"#0005",zIndex:140}}/>
+    <div onClick={()=>setSideOpen(false)} style={{display:sideOpen?"block":"none",position:"fixed",inset:0,top:54,background:"#0005",zIndex:140}}/>
     <div style={{display:"flex",flex:1,minHeight:0}}>
-      <div className={"inst-sidebar"+(sideOpen?" open":"")} style={{width:190,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"14px 10px",position:"sticky",top:54,height:"calc(100vh - 54px)",overflowY:"auto",display:"flex",flexDirection:"column",gap:2}}>
+      <div className={"inst-sidebar"+(sideOpen?" open":"")} style={{"--sb-bg":C.surface,"--sb-border":C.border}}>
         {/* Student card */}
         <div style={{padding:12,background:C.bg,borderRadius:10,border:`1px solid ${C.border}`,marginBottom:10,textAlign:"center"}}>
           <Avatar name={stu.name} photo={stu.photo} color={color} size={52} style={{margin:"0 auto 8px"}}/>
@@ -527,9 +544,19 @@ function StudentPortal({db,onLogout,user,C,dark,setDark}){
           <div style={{fontSize:10,color:C.muted,fontFamily:"monospace"}}>{stu.rollNo}</div>
           <div style={{marginTop:6}}><Badge label="Student" color="purple" C={C}/></div>
         </div>
-        {STABS.map(t=><button key={t.k} onClick={()=>{setTab(t.k);setSideOpen(false);}} style={{width:"100%",textAlign:"left",padding:"8px 11px",border:"none",borderRadius:8,background:tab===t.k?C.purpleL:"transparent",color:tab===t.k?C.purple:C.text,fontWeight:tab===t.k?700:500,fontSize:11.5,display:"flex",alignItems:"center",gap:7,cursor:"pointer"}}>{t.i} {t.l}</button>)}
+        {STABS.map(t=><button key={t.k} className="tab-btn" onClick={()=>{setTab(t.k);setSideOpen(false);}}
+          style={{background:tab===t.k?C.purpleL:"transparent",color:tab===t.k?C.purple:C.text,fontWeight:tab===t.k?700:500}}>
+          <span style={{fontSize:16,flexShrink:0}}>{t.i}</span><span>{t.l}</span>
+        </button>)}
       </div>
-      <div style={{flex:1,padding:24,overflowY:"auto"}}>
+      <div className="inst-content">
+        {/* Mobile breadcrumb */}
+        <div className="breadcrumb-bar" style={{background:C.surface,border:`1px solid ${C.border}`,marginBottom:14}}>
+          <span style={{fontSize:16}}>{STABS.find(t=>t.k===tab)?.i}</span>
+          <span style={{fontWeight:700,fontSize:13,color:C.text}}>{STABS.find(t=>t.k===tab)?.l}</span>
+          <div style={{flex:1}}/>
+          <span style={{fontSize:11,color:C.muted}}>{inst?.name}</span>
+        </div>
         {/* HOME */}
         {tab==="home"&&<div style={{animation:"fadeUp 0.4s ease"}}>
           <PH title={`👋 Welcome, ${stu.name.split(" ")[0]}!`} sub={`${inst?.name} · ${stu.class||stu.course||""}`} C={C}/>
@@ -628,6 +655,210 @@ function StudentPortal({db,onLogout,user,C,dark,setDark}){
         </div>}
       </div>
     </div>
+  </div>;
+}
+
+
+// ─── Staff Tasks ──────────────────────────────────────────────────────────────
+function StaffTasks({db,saveDb,user,inst,color,isAdmin,notify,C}){
+  const PRIORITIES=[{k:"high",l:"High",c:"red"},{k:"medium",l:"Medium",c:"gold"},{k:"low",l:"Low",c:"green"}];
+  const STATUSES=[{k:"pending",l:"Pending",c:"gold"},{k:"in_progress",l:"In Progress",c:"blue"},{k:"done",l:"Done",c:"green"},{k:"cancelled",l:"Cancelled",c:"red"}];
+  const blank={title:"",description:"",assignedTo:"",priority:"medium",dueDate:"",category:""};
+  const [showAdd,setShowAdd]=useState(false);
+  const [form,setForm]=useState(blank);
+  const [filterStaff,setFilterStaff]=useState("all");
+  const [filterStatus,setFilterStatus]=useState("all");
+  const [expandId,setExpandId]=useState(null);
+
+  const instStaff=(db.users||[]).filter(u=>u.instId===inst.id&&(u.role==="staff"||u.role==="accountant"));
+  const allTasks=(db.staffTasks||[]).filter(t=>t.instId===inst.id);
+
+  // Staff sees only their own tasks; admin sees all
+  const myTasks=isAdmin
+    ? allTasks.filter(t=>(filterStaff==="all"||t.assignedTo===filterStaff)&&(filterStatus==="all"||t.status===filterStatus))
+    : allTasks.filter(t=>t.assignedTo===user.id&&(filterStatus==="all"||t.status===filterStatus));
+
+  // Summary counts
+  const pending=allTasks.filter(t=>t.status==="pending"||t.status==="in_progress").length;
+  const done=allTasks.filter(t=>t.status==="done").length;
+  const overdue=allTasks.filter(t=>t.dueDate&&t.dueDate<today()&&t.status!=="done"&&t.status!=="cancelled").length;
+
+  function addTask(){
+    if(!form.title.trim()){notify("Task title required","error");return;}
+    if(!form.assignedTo){notify("Please assign to a staff member","error");return;}
+    const staff=instStaff.find(u=>u.id===form.assignedTo);
+    const task={...form,id:uid(),instId:inst.id,assignedBy:user.id,assignedByName:user.name,
+      assignedToName:staff?.name||"",status:"pending",createdAt:new Date().toISOString(),comments:[]};
+    saveDb({staffTasks:[...(db.staffTasks||[]),task]});
+    setForm(blank);setShowAdd(false);
+    notify("✅ Task assigned to "+staff?.name);
+  }
+
+  function updateStatus(id,status){
+    saveDb({staffTasks:(db.staffTasks||[]).map(t=>t.id===id?{...t,status,updatedAt:new Date().toISOString()}:t)});
+    notify("Task updated");
+  }
+
+  function addComment(id,text){
+    if(!text.trim())return;
+    saveDb({staffTasks:(db.staffTasks||[]).map(t=>t.id===id?{...t,comments:[...(t.comments||[]),
+      {id:uid(),text,author:user.name,authorId:user.id,at:new Date().toISOString()}]}:t)});
+  }
+
+  function deleteTask(id){
+    if(!window.confirm("Delete this task?"))return;
+    saveDb({staffTasks:(db.staffTasks||[]).filter(t=>t.id!==id)});
+    notify("Task deleted","error");
+  }
+
+  const pc=(k)=>PRIORITIES.find(p=>p.k===k)||PRIORITIES[1];
+  const sc=(k)=>STATUSES.find(s=>s.k===k)||STATUSES[0];
+  const isOverdue=(t)=>t.dueDate&&t.dueDate<today()&&t.status!=="done"&&t.status!=="cancelled";
+
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    {/* Header */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+      <PH title="✅ Staff Tasks" sub={isAdmin?"Assign and track tasks for your team":"Your assigned tasks"} C={C}/>
+      {isAdmin&&<Btn onClick={()=>setShowAdd(s=>!s)} C={C} color="teal">+ Assign Task</Btn>}
+    </div>
+
+    {/* Summary chips */}
+    <div style={{display:"flex",gap:10,marginBottom:18,flexWrap:"wrap"}}>
+      {[{l:"Active",v:pending,c:C.gold,b:C.goldL},{l:"Done",v:done,c:C.green,b:C.greenL},{l:"Overdue",v:overdue,c:C.red,b:C.redL}].map(s=>
+        <div key={s.l} style={{padding:"8px 18px",borderRadius:20,background:s.b,color:s.c,fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7}}>
+          <span style={{fontSize:20,fontWeight:800}}>{s.v}</span><span style={{fontSize:11,opacity:0.85}}>{s.l}</span>
+        </div>
+      )}
+    </div>
+
+    {/* Add Task Form */}
+    {showAdd&&isAdmin&&<div style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,padding:22,marginBottom:20,boxShadow:C.shadow,animation:"fadeIn 0.25s ease"}}>
+      <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:16}}>New Task</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+        <FG label="Task Title *" C={C} span><Inp C={C} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="What needs to be done?"/></FG>
+        <FG label="Assign To *" C={C}>
+          <Sel C={C} value={form.assignedTo} onChange={e=>setForm(f=>({...f,assignedTo:e.target.value}))}>
+            <option value="">-- Select Staff --</option>
+            {instStaff.map(u=><option key={u.id} value={u.id}>{u.name} ({u.designation||u.role})</option>)}
+          </Sel>
+        </FG>
+        <FG label="Priority" C={C}>
+          <Sel C={C} value={form.priority} onChange={e=>setForm(f=>({...f,priority:e.target.value}))}>
+            {PRIORITIES.map(p=><option key={p.k} value={p.k}>{p.l}</option>)}
+          </Sel>
+        </FG>
+        <FG label="Due Date" C={C}><Inp C={C} type="date" value={form.dueDate} onChange={e=>setForm(f=>({...f,dueDate:e.target.value}))}/></FG>
+        <FG label="Category" C={C}><Inp C={C} value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))} placeholder="e.g. Admin, Academic, Event"/></FG>
+        <FG label="Description" C={C} span><Txt C={C} value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={2} placeholder="Task details, instructions..."/></FG>
+      </div>
+      <div style={{display:"flex",gap:10}}>
+        <Btn onClick={addTask} C={C} color="teal">Assign Task</Btn>
+        <Btn onClick={()=>{setShowAdd(false);setForm(blank);}} C={C} color="red" outline>Cancel</Btn>
+      </div>
+    </div>}
+
+    {/* Filters */}
+    <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+      {isAdmin&&<Sel C={C} value={filterStaff} onChange={e=>setFilterStaff(e.target.value)} style={{width:"auto",minWidth:160}}>
+        <option value="all">All Staff</option>
+        {instStaff.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
+      </Sel>}
+      <Sel C={C} value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} style={{width:"auto"}}>
+        <option value="all">All Status</option>
+        {STATUSES.map(s=><option key={s.k} value={s.k}>{s.l}</option>)}
+      </Sel>
+      <span style={{fontSize:11,color:C.muted}}>{myTasks.length} task{myTasks.length!==1?"s":""}</span>
+    </div>
+
+    {/* Task Cards */}
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {myTasks.sort((a,b)=>{
+        const po={high:0,medium:1,low:2};
+        if(a.status==="done"&&b.status!=="done")return 1;
+        if(b.status==="done"&&a.status!=="done")return -1;
+        return (po[a.priority]||1)-(po[b.priority]||1);
+      }).map(task=>{
+        const p=pc(task.priority);const s=sc(task.status);const expanded=expandId===task.id;
+        const overdue=isOverdue(task);
+        return <div key={task.id} style={{background:C.surface,borderRadius:14,border:`2px solid ${overdue?C.red:task.status==="done"?C.border:C.border}`,overflow:"hidden",boxShadow:C.shadow,opacity:task.status==="cancelled"?0.6:1}}>
+          {/* Task row */}
+          <div style={{padding:"14px 18px",display:"flex",alignItems:"flex-start",gap:12,cursor:"pointer"}} onClick={()=>setExpandId(expanded?null:task.id)}>
+            {/* Status toggle button */}
+            <button onClick={e=>{e.stopPropagation();
+              const next={pending:"in_progress",in_progress:"done",done:"pending",cancelled:"pending"}[task.status]||"pending";
+              updateStatus(task.id,next);
+            }} style={{width:26,height:26,borderRadius:"50%",border:`2px solid ${task.status==="done"?C.green:C.border}`,background:task.status==="done"?C.green:"transparent",color:"#fff",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,marginTop:1}}>
+              {task.status==="done"?"✓":""}
+            </button>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
+                <span style={{fontWeight:700,fontSize:14,color:task.status==="done"?C.muted:C.text,textDecoration:task.status==="done"?"line-through":"none"}}>{task.title}</span>
+                <Badge label={p.l} color={p.c} C={C}/>
+                <Badge label={s.l} color={s.c} C={C}/>
+                {overdue&&<Badge label="Overdue" color="red" C={C}/>}
+                {task.category&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:C.bg,border:`1px solid ${C.border}`,color:C.muted}}>{task.category}</span>}
+              </div>
+              <div style={{display:"flex",gap:14,fontSize:11,color:C.muted,flexWrap:"wrap"}}>
+                {isAdmin&&<span>👤 {task.assignedToName}</span>}
+                {!isAdmin&&<span>From: {task.assignedByName}</span>}
+                {task.dueDate&&<span style={{color:overdue?C.red:C.muted}}>📅 Due {fmt(task.dueDate)}</span>}
+                {task.createdAt&&<span>🕐 {new Date(task.createdAt).toLocaleDateString("en-IN",{day:"2-digit",month:"short"})}</span>}
+                {task.comments?.length>0&&<span>💬 {task.comments.length}</span>}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:6,flexShrink:0,alignItems:"center"}}>
+              {/* Status quick-change for staff */}
+              {!isAdmin&&task.status!=="done"&&task.status!=="cancelled"&&
+                <Btn onClick={e=>{e.stopPropagation();updateStatus(task.id,task.status==="pending"?"in_progress":"done");}} C={C} color={task.status==="pending"?"blue":"green"} size="sm">
+                  {task.status==="pending"?"Start":"Done"}
+                </Btn>}
+              {isAdmin&&<Btn onClick={e=>{e.stopPropagation();deleteTask(task.id);}} C={C} color="red" size="sm" outline>Del</Btn>}
+              <span style={{color:C.muted,fontSize:16,transform:expanded?"rotate(180deg)":"none",transition:"transform 0.2s"}}>⌄</span>
+            </div>
+          </div>
+
+          {/* Expanded detail */}
+          {expanded&&<div style={{borderTop:`1px solid ${C.border}`,background:C.bg,padding:"14px 18px"}}>
+            {task.description&&<div style={{fontSize:13,color:C.text,marginBottom:14,lineHeight:1.6,padding:"10px 14px",background:C.surface,borderRadius:9,border:`1px solid ${C.border}`}}>{task.description}</div>}
+
+            {/* Status selector */}
+            <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+              <span style={{fontSize:11,color:C.muted,alignSelf:"center",fontWeight:600}}>Status:</span>
+              {STATUSES.map(st=><button key={st.k} onClick={()=>updateStatus(task.id,st.k)}
+                style={{padding:"5px 14px",borderRadius:20,border:`1px solid ${task.status===st.k?tc(C,st.c):C.border}`,background:task.status===st.k?tb(C,st.c):"transparent",color:task.status===st.k?tc(C,st.c):C.muted,fontSize:11,fontWeight:task.status===st.k?700:500,cursor:"pointer"}}>
+                {st.l}
+              </button>)}
+            </div>
+
+            {/* Comments */}
+            <div style={{marginTop:8}}>
+              <div style={{fontWeight:700,fontSize:12,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:10}}>💬 Comments</div>
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10}}>
+                {(task.comments||[]).map(cm=><div key={cm.id} style={{padding:"8px 12px",background:C.surface,borderRadius:9,border:`1px solid ${C.border}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                    <span style={{fontWeight:700,fontSize:11,color:C.teal}}>{cm.author}</span>
+                    <span style={{fontSize:10,color:C.muted}}>{new Date(cm.at).toLocaleString("en-IN",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</span>
+                  </div>
+                  <div style={{fontSize:12,color:C.text,lineHeight:1.5}}>{cm.text}</div>
+                </div>)}
+                {!task.comments?.length&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>No comments yet</div>}
+              </div>
+              <CommentBox onSubmit={text=>addComment(task.id,text)} C={C}/>
+            </div>
+          </div>}
+        </div>;
+      })}
+      {!myTasks.length&&<Empty msg={isAdmin?"No tasks yet — assign one above":"No tasks assigned to you yet"} C={C}/>}
+    </div>
+  </div>;
+}
+
+// Comment input box helper
+function CommentBox({onSubmit,C}){
+  const [text,setText]=useState("");
+  return <div style={{display:"flex",gap:8}}>
+    <Inp C={C} value={text} onChange={e=>setText(e.target.value)} placeholder="Add a comment..." onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();if(text.trim()){onSubmit(text);setText("");}}}} style={{flex:1}}/>
+    <Btn onClick={()=>{if(text.trim()){onSubmit(text);setText("");}}} C={C} color="teal" size="sm">Send</Btn>
   </div>;
 }
 
@@ -1207,7 +1438,7 @@ function InstCourses({db,saveDb,inst,color,notify,C}){
 }
 
 // Institution Dashboard Shell
-const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"staff",i:"👨‍🏫",l:"Staff"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"accounts",i:"💼",l:"Accounts"},{k:"courses",i:"🖥",l:"Courses"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"alerts",i:"📣",l:"Alerts"},{k:"reports",i:"📊",l:"Reports"}];
+const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"staff",i:"👨‍🏫",l:"Staff"},{k:"tasks",i:"✅",l:"Tasks"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"accounts",i:"💼",l:"Accounts"},{k:"courses",i:"🖥",l:"Courses"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"alerts",i:"📣",l:"Alerts"},{k:"reports",i:"📊",l:"Reports"}];
 
 function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const [tab,setTab]=useState("home");
@@ -1256,7 +1487,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
       }
     `}</style>
     {/* CSS vars for sidebar */}
-    <style>{`:root{--sb-bg:${C.surface};--sb-border:${C.border};}`}</style>
+    <style>{`:root{--sb-bg:${C.surface};--sb-border:${C.border};}` + (dark ? ".inst-sidebar{color-scheme:dark;}" : "") + `}`}</style>
     <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={`${m.icon} ${inst.name}`} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen}/>
     {/* Overlay for mobile */}
     <div className={"inst-overlay"+(sideOpen?" open":"")} onClick={()=>setSideOpen(false)} style={{display:sideOpen?"block":"none",position:"fixed",inset:0,top:54,background:"#0005",zIndex:140}}/>
@@ -1311,6 +1542,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
         {tab==="alerts"&&<InstAlerts students={myStudents} inst={inst} color={color} notify={notify} C={C}/>}
         {tab==="accounts"&&<InstAccounts db={db} saveDb={saveDb} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
         {tab==="courses"&&inst.type==="Computer Institute"&&isAdmin&&<InstCourses db={db} saveDb={saveDb} inst={inst} color={color} notify={notify} C={C}/>}
+        {tab==="tasks"&&<StaffTasks db={db} saveDb={saveDb} user={user} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
         {tab==="staffatt"&&<StaffAttend db={db} saveDb={saveDb} user={user} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
         {tab==="reports"&&<InstReports students={myStudents} inst={inst} color={color} C={C}/>}
       </div>
