@@ -747,7 +747,7 @@ function StaffAttend({db,saveDb,user,inst,color,isAdmin,notify,C}){
 
 // ─── Inst Staff Management (Admin only) ─────────────────────────────────────
 function InstStaff({staff,inst,color,onAdd,onUpdate,onDelete,notify,C}){
-  const blank={name:"",username:"",password:"",email:"",phone:"",role:"staff",designation:""};
+  const blank={name:"",username:"",password:"",email:"",phone:"",role:"staff",designation:"",address:"",dob:"",gender:"Male",qualification:""};
   const [showAdd,setShowAdd]=useState(false);
   const [form,setForm]=useState(blank);
   const [editId,setEditId]=useState(null);
@@ -796,26 +796,7 @@ function InstStaff({staff,inst,color,onAdd,onUpdate,onDelete,notify,C}){
           {staff.map(u=>{
             const isEditing=editId===u.id;
             return <tr key={u.id} style={{borderBottom:`1px solid ${C.border}`}}>
-              {isEditing?<>
-                <td style={TD}><Inp C={C} value={editForm.name} onChange={e=>setEditForm(f=>({...f,name:e.target.value}))} style={{padding:"6px 10px",fontSize:12}}/></td>
-                <td style={TD}>
-                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                    <Inp C={C} value={editForm.username} onChange={e=>setEditForm(f=>({...f,username:e.target.value}))} placeholder="Username" style={{padding:"6px 10px",fontSize:12}}/>
-                    <Inp C={C} value={editForm.password} onChange={e=>setEditForm(f=>({...f,password:e.target.value}))} placeholder="Password" style={{padding:"6px 10px",fontSize:12}}/>
-                  </div>
-                </td>
-                <td style={TD}><Sel C={C} value={editForm.role} onChange={e=>setEditForm(f=>({...f,role:e.target.value}))} style={{padding:"6px 10px",fontSize:12}}><option value="staff">Staff</option><option value="accountant">Accountant</option></Sel></td>
-                <td style={TD}>
-                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                    <Inp C={C} value={editForm.phone||""} onChange={e=>setEditForm(f=>({...f,phone:e.target.value}))} placeholder="Phone" style={{padding:"6px 10px",fontSize:12}}/>
-                    <Inp C={C} value={editForm.designation||""} onChange={e=>setEditForm(f=>({...f,designation:e.target.value}))} placeholder="Designation" style={{padding:"6px 10px",fontSize:12}}/>
-                  </div>
-                </td>
-                <td style={TD}><div style={{display:"flex",gap:6}}>
-                  <Btn onClick={()=>saveEdit(u.id)} C={C} color="green" size="sm">Save</Btn>
-                  <Btn onClick={()=>{setEditId(null);setEditForm(null);}} C={C} color="red" size="sm" outline>Cancel</Btn>
-                </div></td>
-              </>:<>
+              {false?<></>:<>
                 <td style={TD}><div style={{display:"flex",alignItems:"center",gap:9}}>
                   <Avatar name={u.name} color={u.role==="accountant"?C.gold:color} size={32}/>
                   <div><div style={{fontWeight:600,color:C.text}}>{u.name}</div><div style={{fontSize:10,color:C.muted}}>{u.designation||"Staff"}</div></div>
@@ -824,7 +805,7 @@ function InstStaff({staff,inst,color,onAdd,onUpdate,onDelete,notify,C}){
                 <td style={TD}><Badge label={u.role} color={u.role==="accountant"?"gold":"blue"} C={C}/></td>
                 <td style={TD}><div style={{fontSize:11}}>{u.phone||"--"}</div><div style={{fontSize:10,color:C.muted}}>{u.email||""}</div></td>
                 <td style={TD}><div style={{display:"flex",gap:6}}>
-                  <Btn onClick={()=>{setEditId(u.id);setEditForm({...u});setShowAdd(false);}} C={C} color="teal" size="sm" outline>Edit</Btn>
+                  <Btn onClick={()=>{setEditId(u.id);setEditForm({...u});setShowAdd(false);}} C={C} color="teal" size="sm" outline>✏ Edit</Btn>
                   <Btn onClick={()=>{if(window.confirm("Remove "+u.name+"?"))onDelete(u.id);}} C={C} color="red" size="sm" outline>Remove</Btn>
                 </div></td>
               </>}
@@ -833,6 +814,53 @@ function InstStaff({staff,inst,color,onAdd,onUpdate,onDelete,notify,C}){
           {!staff.length&&<tr><td colSpan={5}><Empty msg="No staff yet — add one above" C={C}/></td></tr>}
         </tbody>
       </table>
+    </div>
+    {editId&&editForm&&<StaffEditModal onSaveData={(id,patch)=>{onUpdate(id,patch);setEditId(null);setEditForm(null);}} onClose={()=>{setEditId(null);setEditForm(null);}} editForm={editForm} setEditForm={setEditForm} C={C} color={color} staff={staff}/>}
+  </div>;
+}
+
+// ─── Staff Edit Modal ─────────────────────────────────────────────────────────
+function StaffEditModal({staff,onSaveData,onClose,editForm,setEditForm,C,color}){
+  const set=(k,v)=>setEditForm(f=>({...f,[k]:v}));
+  function save(){
+    if(!editForm.name?.trim()||!editForm.username?.trim()||!editForm.password?.trim()){alert("Name, username and password are required");return;}
+    onSaveData(editForm.id,editForm);
+  }
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"20px 16px"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div style={{background:C.surface,borderRadius:16,border:`1px solid ${C.border}`,width:"100%",maxWidth:600,boxShadow:"0 20px 60px #0003",animation:"fadeUp 0.3s ease"}}>
+      <div style={{padding:"18px 24px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:C.bg,borderRadius:"16px 16px 0 0"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <Avatar name={editForm.name} color={editForm.role==="accountant"?C.gold:color} size={40}/>
+          <div><div style={{fontWeight:800,fontSize:15,color:C.text}}>Edit Staff</div><div style={{fontSize:11,color:C.muted}}>{editForm.designation||editForm.role}</div></div>
+        </div>
+        <button onClick={onClose} style={{background:"none",border:"none",fontSize:24,color:C.muted,cursor:"pointer",lineHeight:1}}>×</button>
+      </div>
+      <div style={{padding:24}}>
+        <div style={{fontWeight:700,fontSize:12,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,paddingBottom:6,borderBottom:`1px solid ${C.border}`}}>👤 Personal Information</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:18}}>
+          <FG label="Full Name *" C={C}><Inp C={C} value={editForm.name||""} onChange={e=>set("name",e.target.value)} placeholder="Full name"/></FG>
+          <FG label="Designation" C={C}><Inp C={C} value={editForm.designation||""} onChange={e=>set("designation",e.target.value)} placeholder="e.g. Math Teacher"/></FG>
+          <FG label="Gender" C={C}><Sel C={C} value={editForm.gender||"Male"} onChange={e=>set("gender",e.target.value)}>{["Male","Female","Other"].map(g=><option key={g}>{g}</option>)}</Sel></FG>
+          <FG label="Date of Birth" C={C}><Inp C={C} type="date" value={editForm.dob||""} onChange={e=>set("dob",e.target.value)}/></FG>
+          <FG label="Qualification" C={C}><Inp C={C} value={editForm.qualification||""} onChange={e=>set("qualification",e.target.value)} placeholder="e.g. B.Ed, M.Sc"/></FG>
+          <FG label="Address" C={C}><Inp C={C} value={editForm.address||""} onChange={e=>set("address",e.target.value)} placeholder="Address"/></FG>
+        </div>
+        <div style={{fontWeight:700,fontSize:12,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,paddingBottom:6,borderBottom:`1px solid ${C.border}`}}>📞 Contact</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:18}}>
+          <FG label="Phone" C={C}><Inp C={C} value={editForm.phone||""} onChange={e=>set("phone",e.target.value)} placeholder="Phone number"/></FG>
+          <FG label="Email" C={C}><Inp C={C} value={editForm.email||""} onChange={e=>set("email",e.target.value)} placeholder="Email address"/></FG>
+        </div>
+        <div style={{fontWeight:700,fontSize:12,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,paddingBottom:6,borderBottom:`1px solid ${C.border}`}}>🔐 Login Credentials</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:24}}>
+          <FG label="Username *" C={C}><Inp C={C} value={editForm.username||""} onChange={e=>set("username",e.target.value)} placeholder="Login username"/></FG>
+          <FG label="Password *" C={C}><Inp C={C} value={editForm.password||""} onChange={e=>set("password",e.target.value)} placeholder="Login password"/></FG>
+          <FG label="Role" C={C}><Sel C={C} value={editForm.role||"staff"} onChange={e=>set("role",e.target.value)}><option value="staff">Staff</option><option value="accountant">Accountant</option></Sel></FG>
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end",paddingTop:16,borderTop:`1px solid ${C.border}`}}>
+          <Btn onClick={onClose} C={C} color="red" outline>Cancel</Btn>
+          <Btn onClick={save} C={C} color="teal">💾 Save Changes</Btn>
+        </div>
+      </div>
     </div>
   </div>;
 }
@@ -1328,8 +1356,9 @@ function InstHome({inst,students,color,setTab,m,C}){
 }
 
 function InstStudents({students,inst,color,onUpdate,C}){
-  const [q,setQ]=useState("");const [sel,setSel]=useState(null);const [photoFor,setPhotoFor]=useState(null);
+  const [q,setQ]=useState("");const [sel,setSel]=useState(null);const [photoFor,setPhotoFor]=useState(null);const [editId,setEditId]=useState(null);
   const fs=students.filter(s=>[s.name,s.rollNo,s.phone,s.department,s.class,s.course,s.danceStyle].some(v=>v?.toLowerCase().includes(q.toLowerCase())));
+  function handleEdit(s,e){e.stopPropagation();setSel(null);setEditId(s.id);}
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <PH title="👥 Students" sub={`${students.length} enrolled`} C={C}/>
     <Inp C={C} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, roll, phone..." style={{marginBottom:14}}/>
@@ -1338,12 +1367,18 @@ function InstStudents({students,inst,color,onUpdate,C}){
         {!fs.length&&<Empty msg="No students" C={C}/>}
         {fs.map(s=>{const pct=attPct(s.attendance);return<div key={s.id} onClick={()=>setSel(sel?.id===s.id?null:s)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:sel?.id===s.id?C.tealL:"transparent",transition:"background 0.1s"}} onMouseOver={e=>{if(sel?.id!==s.id)e.currentTarget.style.background=C.bg;}} onMouseOut={e=>{if(sel?.id!==s.id)e.currentTarget.style.background="transparent";}}>
           <div style={{display:"flex",alignItems:"center",gap:11}}><Avatar name={s.name} photo={s.photo} color={color} size={38}/><div><div style={{fontWeight:600,fontSize:13,color:C.text}}>{s.name}</div><div style={{fontSize:11,color:C.muted}}>{s.rollNo} - {s.department||s.class||s.course||s.danceStyle} {s.section?`- ${s.section}`:""}</div></div></div>
-          <div style={{display:"flex",gap:10,alignItems:"center"}}><MiniBar pct={pct} color={pct>=75?C.green:C.red} C={C}/>{s.fees?.some(f=>f.status==="Pending"||f.status==="Partial")&&<Badge label="Fee Due" color="pink" C={C}/>}<button onClick={e=>{e.stopPropagation();setPhotoFor(s.id);}} style={{fontSize:15,background:"none",border:"none",color:C.muted,padding:4,cursor:"pointer"}} title="Upload Photo">📷</button></div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <MiniBar pct={pct} color={pct>=75?C.green:C.red} C={C}/>
+            {s.fees?.some(f=>f.status==="Pending"||f.status==="Partial")&&<Badge label="Fee Due" color="pink" C={C}/>}
+            <button onClick={e=>handleEdit(s,e)} style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${C.teal}`,background:C.tealL,color:C.teal,fontSize:11,fontWeight:700,cursor:"pointer"}}>✏ Edit</button>
+            <button onClick={e=>{e.stopPropagation();setPhotoFor(s.id);}} style={{fontSize:15,background:"none",border:"none",color:C.muted,padding:4,cursor:"pointer"}} title="Upload Photo">📷</button>
+          </div>
         </div>;})}
       </div>
-      {sel&&<StuProfileCard s={students.find(x=>x.id===sel.id)||sel} color={color} onClose={()=>setSel(null)} onPhoto={()=>setPhotoFor(sel.id)} C={C}/>}
+      {sel&&<StuProfileCard s={students.find(x=>x.id===sel.id)||sel} color={color} onClose={()=>setSel(null)} onPhoto={()=>setPhotoFor(sel.id)} onEdit={(s)=>{setEditId(s.id);setSel(null);}} C={C}/>}
     </div>
     {photoFor&&<PhotoModal sid={photoFor} student={students.find(s=>s.id===photoFor)} color={color} onSave={(sid,photo)=>{onUpdate(sid,{photo});setPhotoFor(null);}} onClose={()=>setPhotoFor(null)} C={C}/>}
+    {editId&&<StuEditModal student={students.find(s=>s.id===editId)} inst={inst} color={color} onSave={(id,patch)=>{onUpdate(id,patch);setEditId(null);}} onClose={()=>setEditId(null)} C={C}/>}
   </div>;
 }
 function PhotoModal({sid,student,color,onSave,onClose,C}){
@@ -1356,6 +1391,93 @@ function PhotoModal({sid,student,color,onSave,onClose,C}){
     </div>
   </div>;
 }
+
+// ─── Student Edit Modal ───────────────────────────────────────────────────────
+function StuEditModal({student,inst,color,onSave,onClose,C}){
+  const [f,setF]=useState({...student});
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  const TYPE=inst.type;
+  function save(){
+    if(!f.name?.trim()){alert("Name is required");return;}
+    // preserve academic records intact
+    onSave(f.id,{...f});
+  }
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"20px 16px"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div style={{background:C.surface,borderRadius:16,border:`1px solid ${C.border}`,width:"100%",maxWidth:700,boxShadow:"0 20px 60px #0003",animation:"fadeUp 0.3s ease"}}>
+      {/* Header */}
+      <div style={{padding:"18px 24px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:C.bg,borderRadius:"16px 16px 0 0"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <Avatar name={f.name} photo={f.photo} color={color} size={42}/>
+          <div><div style={{fontWeight:800,fontSize:15,color:C.text}}>Edit Student</div><div style={{fontSize:11,color:C.muted}}>{student.name} · {student.rollNo}</div></div>
+        </div>
+        <button onClick={onClose} style={{background:"none",border:"none",fontSize:24,color:C.muted,cursor:"pointer",lineHeight:1}}>×</button>
+      </div>
+      <div style={{padding:24}}>
+        {/* Photo */}
+        <div style={{display:"flex",justifyContent:"center",marginBottom:20}}>
+          <div style={{textAlign:"center"}}><LBL C={C}>Photo</LBL><PhotoUpload photo={f.photo} onChange={v=>set("photo",v)} color={color} C={C} size={80}/></div>
+        </div>
+        {/* Personal Info */}
+        <div style={{fontWeight:700,fontSize:12,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,paddingBottom:6,borderBottom:`1px solid ${C.border}`}}>👤 Personal Information</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:18}}>
+          <FG label="Full Name *" C={C}><Inp C={C} value={f.name||""} onChange={e=>set("name",e.target.value)} placeholder="Full name"/></FG>
+          <FG label="Date of Birth" C={C}><Inp C={C} type="date" value={f.dob||""} onChange={e=>set("dob",e.target.value)}/></FG>
+          <FG label="Gender" C={C}><Sel C={C} value={f.gender||"Male"} onChange={e=>set("gender",e.target.value)}>{["Male","Female","Other"].map(g=><option key={g}>{g}</option>)}</Sel></FG>
+          <FG label="Blood Group" C={C}><Sel C={C} value={f.blood||"--"} onChange={e=>set("blood",e.target.value)}>{["--","A+","A-","B+","B-","AB+","AB-","O+","O-"].map(b=><option key={b}>{b}</option>)}</Sel></FG>
+          <FG label="Aadhaar" C={C}><Inp C={C} value={f.aadhaar||""} onChange={e=>set("aadhaar",e.target.value)} placeholder="12-digit" maxLength={12}/></FG>
+          <FG label="Religion" C={C}><Inp C={C} value={f.religion||""} onChange={e=>set("religion",e.target.value)} placeholder="e.g. Hindu"/></FG>
+          <FG label="Address" C={C} span><Txt C={C} value={f.address||""} onChange={e=>set("address",e.target.value)} rows={2} placeholder="Full address"/></FG>
+        </div>
+        {/* Contact */}
+        <div style={{fontWeight:700,fontSize:12,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,paddingBottom:6,borderBottom:`1px solid ${C.border}`}}>📞 Contact Information</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:18}}>
+          <FG label="Phone" C={C}><Inp C={C} value={f.phone||""} onChange={e=>set("phone",e.target.value)} placeholder="10-digit" maxLength={10}/></FG>
+          <FG label="Email" C={C}><Inp C={C} value={f.email||""} onChange={e=>set("email",e.target.value)} placeholder="email@example.com"/></FG>
+          <FG label="Parent / Guardian" C={C}><Inp C={C} value={f.parent||""} onChange={e=>set("parent",e.target.value)} placeholder="Parent name"/></FG>
+          <FG label="Parent Phone" C={C}><Inp C={C} value={f.parentPhone||""} onChange={e=>set("parentPhone",e.target.value)} placeholder="Parent mobile" maxLength={10}/></FG>
+          <FG label="Occupation" C={C}><Inp C={C} value={f.occupation||""} onChange={e=>set("occupation",e.target.value)} placeholder="e.g. Farmer"/></FG>
+          <FG label="Annual Income" C={C}><Inp C={C} value={f.income||""} onChange={e=>set("income",e.target.value)} placeholder="e.g. 1,50,000"/></FG>
+        </div>
+        {/* Academic — type-specific */}
+        <div style={{fontWeight:700,fontSize:12,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,paddingBottom:6,borderBottom:`1px solid ${C.border}`}}>🎓 Academic Information</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:18}}>
+          <FG label="Roll Number" C={C}><Inp C={C} value={f.rollNo||""} onChange={e=>set("rollNo",e.target.value)} placeholder="Roll No"/></FG>
+          <FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate||""} onChange={e=>set("admissionDate",e.target.value)}/></FG>
+          {TYPE==="College"&&<><FG label="Dept Group" C={C}><Sel C={C} value={f.deptGroup||""} onChange={e=>set("deptGroup",e.target.value)}>{Object.keys(DEPARTMENTS).map(d=><option key={d}>{d}</option>)}</Sel></FG>
+          <FG label="Department" C={C}><Sel C={C} value={f.department||""} onChange={e=>set("department",e.target.value)}><option value="">-- Select --</option>{(DEPARTMENTS[f.deptGroup]||[]).map(d=><option key={d}>{d}</option>)}</Sel></FG>
+          <FG label="Year" C={C}><Sel C={C} value={f.year||""} onChange={e=>set("year",e.target.value)}>{["1st Year","2nd Year","3rd Year","4th Year","PG 1st Year","PG 2nd Year"].map(y=><option key={y}>{y}</option>)}</Sel></FG>
+          <FG label="Section" C={C}><Sel C={C} value={f.section||""} onChange={e=>set("section",e.target.value)}>{["A","B","C","D"].map(s=><option key={s}>{s}</option>)}</Sel></FG>
+          <FG label="Hostel" C={C}><Sel C={C} value={f.hostel||"Day Scholar"} onChange={e=>set("hostel",e.target.value)}>{["Day Scholar","Hosteller"].map(h=><option key={h}>{h}</option>)}</Sel></FG>
+          <FG label="Scholarship" C={C}><Sel C={C} value={f.scholarship||"None"} onChange={e=>set("scholarship",e.target.value)}>{["None","BC/MBC","SC/ST","Merit","Sports"].map(s=><option key={s}>{s}</option>)}</Sel></FG></>}
+          {TYPE==="School"&&<><FG label="Class" C={C}><Sel C={C} value={f.class||""} onChange={e=>set("class",e.target.value)}>{SCHOOL_CLASSES.map(cl=><option key={cl}>{cl}</option>)}</Sel></FG>
+          <FG label="Section" C={C}><Sel C={C} value={f.section||""} onChange={e=>set("section",e.target.value)}>{SCHOOL_SECTIONS.map(s=><option key={s}>{s}</option>)}</Sel></FG>
+          <FG label="Medium" C={C}><Sel C={C} value={f.medium||"English Medium"} onChange={e=>set("medium",e.target.value)}>{["Tamil Medium","English Medium"].map(m=><option key={m}>{m}</option>)}</Sel></FG>
+          <FG label="Group" C={C}><Sel C={C} value={f.group||"N/A"} onChange={e=>set("group",e.target.value)}>{["N/A","Maths-Biology","Maths-CS","Commerce","Arts"].map(g=><option key={g}>{g}</option>)}</Sel></FG></>}
+          {TYPE==="Computer Institute"&&<><FG label="Course" C={C}><Sel C={C} value={f.course||""} onChange={e=>set("course",e.target.value)}>{COMP_COURSES.map(co=><option key={co}>{co}</option>)}</Sel></FG>
+          <FG label="Duration" C={C}><Sel C={C} value={f.duration||""} onChange={e=>set("duration",e.target.value)}>{["1 Month","3 Months","6 Months","1 Year"].map(d=><option key={d}>{d}</option>)}</Sel></FG>
+          <FG label="Batch" C={C}><Sel C={C} value={f.batch||"Morning"} onChange={e=>set("batch",e.target.value)}>{["Morning","Afternoon","Evening","Weekend"].map(b=><option key={b}>{b}</option>)}</Sel></FG>
+          <FG label="Timing" C={C}><Inp C={C} value={f.timing||""} onChange={e=>set("timing",e.target.value)} placeholder="9AM-11AM"/></FG></>}
+          {TYPE==="Dance School"&&<><FG label="Dance Style" C={C}><Sel C={C} value={f.danceStyle||""} onChange={e=>set("danceStyle",e.target.value)}>{["Bharatanatyam","Carnatic","Bollywood","Western","Folk","Kathak","Fusion"].map(d=><option key={d}>{d}</option>)}</Sel></FG>
+          <FG label="Level" C={C}><Sel C={C} value={f.danceLevel||"Beginner"} onChange={e=>set("danceLevel",e.target.value)}>{["Beginner","Intermediate","Advanced","Professional"].map(l=><option key={l}>{l}</option>)}</Sel></FG>
+          <FG label="Batch" C={C}><Inp C={C} value={f.danceBatch||""} onChange={e=>set("danceBatch",e.target.value)} placeholder="e.g. Evening 4-6 PM"/></FG>
+          <FG label="Goal" C={C}><Inp C={C} value={f.danceGoal||""} onChange={e=>set("danceGoal",e.target.value)} placeholder="e.g. Arangetram"/></FG></>}
+        </div>
+        {/* Login */}
+        <div style={{fontWeight:700,fontSize:12,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,paddingBottom:6,borderBottom:`1px solid ${C.border}`}}>🔐 Student Portal Login</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:24}}>
+          <FG label="Login Password" C={C}><Inp C={C} value={f.loginPass||""} onChange={e=>set("loginPass",e.target.value)} placeholder="Default: date of birth"/></FG>
+          <div style={{padding:12,background:C.bg,borderRadius:9,border:`1px solid ${C.border}`,fontSize:11,color:C.muted,display:"flex",alignItems:"center"}}>💡 Leave blank to keep DOB as password</div>
+        </div>
+        {/* Buttons */}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end",paddingTop:16,borderTop:`1px solid ${C.border}`}}>
+          <Btn onClick={onClose} C={C} color="red" outline>Cancel</Btn>
+          <Btn onClick={save} C={C} color="teal">💾 Save Changes</Btn>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
 function StuProfileCard({s,color,onClose,onPhoto,C}){
   const pct=attPct(s.attendance);const tf=s.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;const pf=s.fees?.reduce((a,f)=>a+Number(f.paid||0),0)||0;const exams=s.exams||[];const avgM=exams.length?Math.round(exams.reduce((a,e)=>a+Number(e.percentage||0),0)/exams.length):null;const hwDone=s.homeworks?.filter(h=>h.status==="Submitted").length||0;
   return <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,position:"sticky",top:24,boxShadow:C.shadow,animation:"slideIn 0.3s ease"}}>
@@ -1365,6 +1487,7 @@ function StuProfileCard({s,color,onClose,onPhoto,C}){
         <div style={{fontWeight:800,fontSize:15,color:C.text}}>{s.name}</div>
         <div style={{fontSize:11,color:C.muted}}>{s.rollNo}</div>
         <div style={{fontSize:12,color,fontWeight:600,marginTop:2}}>{s.department||s.class||s.course||s.danceStyle}</div>
+        <button onClick={()=>onEdit(s)} style={{marginTop:8,padding:"5px 16px",borderRadius:7,border:`1px solid ${color}`,background:"transparent",color,fontSize:12,fontWeight:700,cursor:"pointer"}}>✏ Edit Profile</button>
       </div>
       <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,lineHeight:1,cursor:"pointer"}}>×</button>
     </div>
