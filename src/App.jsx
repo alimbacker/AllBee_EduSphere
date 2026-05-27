@@ -130,6 +130,14 @@ function PhotoUpload({photo,onChange,color,C,size=80}){
   </div>;
 }
 
+function LBL({children,C}){return<label style={{display:"block",fontSize:11,fontWeight:600,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.05em"}}>{children}</label>;}
+function Sec({children,C}){return<div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,marginTop:4}}>{children}</div>;}
+function PH({title,sub,C}){return<div style={{marginBottom:2}}><div style={{fontWeight:800,fontSize:17,color:C.text}}>{title}</div>{sub&&<div style={{fontSize:12,color:C.muted,marginTop:1}}>{sub}</div>}</div>;}
+function MiniBar({pct,color,C}){return<div style={{display:"flex",alignItems:"center",gap:6}}><div style={{flex:1,height:6,borderRadius:99,background:C.border,overflow:"hidden"}}><div style={{width:`${Math.min(pct,100)}%`,height:"100%",background:color,borderRadius:99,transition:"width 0.3s"}}/></div><span style={{fontSize:11,fontWeight:700,color,minWidth:32,textAlign:"right"}}>{pct}%</span></div>;}
+function Empty({msg,C}){return<div style={{padding:"48px 20px",textAlign:"center",color:C.muted}}><div style={{fontSize:28,marginBottom:10,opacity:0.4}}>📭</div><div style={{fontSize:13,fontWeight:500}}>{msg}</div></div>;}
+function G2({children,style:st}){return<div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"12px 16px",...st}}>{children}</div>;}
+function FG({label,children,C,span,err}){return<div style={{gridColumn:span?"1 / -1":"",marginBottom:0}}>{label&&<LBL C={C}>{label}</LBL>}{children}{err&&<div style={{fontSize:10,color:C.red,marginTop:2}}>{err}</div>}</div>;}
+
 function TopBar({C,dark,setDark,onLogout,user,right,onMenuToggle,showMenu,onNotifClick,notifCount}){
   const roleColor=user?.role==="admin"?C.teal:user?.role==="accountant"?C.gold:user?.role==="staff"?C.blue:user?.role==="student"?C.purple:C.teal;
   const roleBg=user?.role==="admin"?C.tealL:user?.role==="accountant"?C.goldL:user?.role==="staff"?C.blueL:user?.role==="student"?C.purpleL:C.tealL;
