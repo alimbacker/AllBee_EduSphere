@@ -104,12 +104,16 @@ function seedData(){
 function Inp({C,style:st={},...p}){return <input {...p} style={{width:"100%",padding:"8px 12px",border:`1px solid ${C.border}`,borderRadius:6,background:C.inputBg||C.surface,color:C.text,fontSize:13,outline:"none",transition:"border-color 0.15s",...st}} onFocus={e=>{e.target.style.borderColor=C.teal;}} onBlur={e=>{e.target.style.borderColor=C.border;}}/>;}
 function Sel({C,children,style:st={},...p}){return <select {...p} style={{width:"100%",padding:"10px 14px",border:`1px solid ${C.border}`,borderRadius:9,background:C.surface,color:C.text,fontSize:13,...st}}>{children}</select>;}
 function Txt({C,style:st={},...p}){return<textarea style={{width:"100%",padding:"8px 12px",border:`1px solid ${C.border}`,borderRadius:6,background:C.inputBg||C.surface,color:C.text,fontSize:13,outline:"none",resize:"vertical",transition:"border-color 0.15s",...st}} onFocus={e=>{e.target.style.borderColor=C.teal;}} onBlur={e=>{e.target.style.borderColor=C.border;}} {...p}/>;}
+function Btn({onClick,children,C,color="teal",outline=false,size="md",disabled=false,style:st={}}){
+  const pad=size==="sm"?"5px 12px":size==="lg"?"12px 24px":"8px 18px";
   const fs=size==="sm"?11:size==="lg"?14:13;
   const bg=outline?"transparent":tc(C,color);
   const cl=outline?tc(C,color):"#fff";
   return <button onClick={onClick} disabled={disabled} style={{padding:pad,fontSize:fs,fontWeight:600,border:`1px solid ${tc(C,color)}`,borderRadius:6,background:bg,color:cl,opacity:disabled?0.4:1,cursor:disabled?"not-allowed":"pointer",transition:"all 0.15s",...st}} onMouseOver={e=>{if(!disabled){e.currentTarget.style.opacity="0.85";e.currentTarget.style.transform="translateY(-1px)";}}} onMouseOut={e=>{e.currentTarget.style.opacity=disabled?"0.4":"1";e.currentTarget.style.transform="translateY(0)"}}>{children}</button>;
 }
 function Badge({label,color="teal",C}){const col=tc(C,color),bg=tb(C,color);return <span style={{padding:"2px 9px",borderRadius:99,background:bg,color:col,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",whiteSpace:"nowrap",border:`1px solid ${col}22`}}>{label}</span>;}
+function Avatar({name,photo,color,size=36,style:st={},C}){
+  const ini=name?.split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase()||"?";
   if(photo)return <div style={{width:size,height:size,borderRadius:"50%",border:`2px solid ${color}44`,overflow:"hidden",flexShrink:0,...st}}><img src={photo} alt={name} style={{width:"100%",height:"100%",objectFit:"cover"}}/></div>;
   return <div style={{width:size,height:size,borderRadius:"50%",background:`${color}18`,border:`2px solid ${color}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.32,fontWeight:700,color,flexShrink:0,...st}}>{ini}</div>;
 }
