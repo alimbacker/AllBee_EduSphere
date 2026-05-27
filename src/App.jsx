@@ -503,7 +503,7 @@ function SAReports({db,C}){
 
 
 // ─── Student Portal ──────────────────────────────────────────────────────────
-function StudentPortal({db,onLogout,user,C,dark,setDark}){
+function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark}){
   const [tab,setTab]=useState("home");
   const stu=db.students.find(s=>s.id===user.studentId);
   const inst=db.institutions.find(i=>i.id===user.instId);
@@ -667,25 +667,21 @@ function StudentPortal({db,onLogout,user,C,dark,setDark}){
 
 // ─── Student Daily Updates ────────────────────────────────────────────────────
 function StuDailyUpdates({db,saveDb,stu,inst,C,notify}){
-  // Admin/staff posts updates; students can see + upload homework files
   const instUpdates=(db.dailyUpdates||[]).filter(u=>u.instId===stu.instId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  const [uploading,setUploading]=useState(false);
-  const [uploadFor,setUploadFor]=useState(null); // update id
-  const fileRef=useRef();
+  const [uploading,setUploading]=useState(null);
 
   function handleFileUpload(updateId,file){
     if(!file)return;
     if(file.size>5*1024*1024){notify("File too large (max 5MB)","error");return;}
-    setUploading(true);
+    setUploading(updateId);
     const reader=new FileReader();
     reader.onload=e=>{
-      const data64=e.target.result;
-      const submission={stuId:stu.id,stuName:stu.name,fileName:file.name,fileType:file.type,fileData:data64,submittedAt:new Date().toISOString()};
+      const submission={stuId:stu.id,stuName:stu.name,fileName:file.name,fileType:file.type,fileData:e.target.result,submittedAt:new Date().toISOString()};
       saveDb({dailyUpdates:(db.dailyUpdates||[]).map(u=>u.id===updateId?{...u,submissions:[...(u.submissions||[]),submission]}:u)});
-      setUploading(false);setUploadFor(null);
-      notify("✅ File submitted: "+file.name);
+      setUploading(null);
+      notify("✅ Submitted: "+file.name);
     };
-    reader.onerror=()=>{notify("Failed to read file","error");setUploading(false);};
+    reader.onerror=()=>{notify("Failed to read file","error");setUploading(null);};
     reader.readAsDataURL(file);
   }
 
@@ -709,6 +705,7 @@ function StuDailyUpdates({db,saveDb,stu,inst,C,notify}){
               {upd.content&&<div style={{fontSize:12,color:C.muted,lineHeight:1.6,marginBottom:8}}>{upd.content}</div>}
               <div style={{fontSize:10,color:C.muted}}>Posted by {upd.postedBy} · {fmt(upd.createdAt?.slice(0,10))}</div>
               {upd.dueDate&&<div style={{fontSize:11,color:C.red,fontWeight:600,marginTop:4}}>📅 Due: {fmt(upd.dueDate)}</div>}
+              {upd.meetingLink&&<a href={upd.meetingLink} target="_blank" rel="noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:8,padding:"7px 14px",borderRadius:9,background:C.blueL,color:C.blue,fontSize:12,fontWeight:700,textDecoration:"none",border:`1px solid ${C.blue}44`}}>🔗 Join Class / Meeting</a>}
             </div>
           </div>
           {/* Homework file upload */}
@@ -722,11 +719,10 @@ function StuDailyUpdates({db,saveDb,stu,inst,C,notify}){
               <a href={mine.fileData} download={mine.fileName} style={{padding:"5px 12px",borderRadius:8,background:C.green,color:"#fff",fontSize:11,fontWeight:700,textDecoration:"none"}}>Download</a>
             </div>:<div>
               <div style={{fontSize:11,color:C.purple,marginBottom:8,fontWeight:600}}>📎 Upload your homework (PDF, Image, Doc — max 5MB)</div>
-              <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" style={{display:"none"}} onChange={e=>handleFileUpload(upd.id,e.target.files[0])}/>
-              <button onClick={()=>{setUploadFor(upd.id);fileRef.current?.click();}} disabled={uploading}
-                style={{padding:"8px 18px",borderRadius:9,border:`2px solid ${C.purple}`,background:C.purpleL,color:C.purple,fontSize:12,fontWeight:700,cursor:"pointer"}}>
-                {uploading&&uploadFor===upd.id?"Uploading…":"📎 Upload Homework"}
-              </button>
+              <label style={{display:"inline-block",padding:"8px 18px",borderRadius:9,border:`2px solid ${C.purple}`,background:C.purpleL,color:C.purple,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                {uploading===upd.id?"⏳ Uploading…":"📎 Upload Homework"}
+                <input type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" style={{display:"none"}} disabled={uploading===upd.id} onChange={e=>{if(e.target.files[0])handleFileUpload(upd.id,e.target.files[0]);}}/>
+              </label>
             </div>}
           </div>}
         </div>;
@@ -805,7 +801,7 @@ function StuSettings({db,saveDb,stu,user,C,notify}){
 
 // ─── Institution Daily Updates (Admin posts) ─────────────────────────────────
 function InstUpdates({db,saveDb,user,inst,color,notify,C}){
-  const blank={title:"",content:"",type:"notice",dueDate:""};
+  const blank={title:"",content:"",type:"notice",dueDate:"",meetingLink:""};
   const [form,setForm]=useState(blank);
   const [showAdd,setShowAdd]=useState(false);
   const updates=(db.dailyUpdates||[]).filter(u=>u.instId===inst.id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
@@ -833,6 +829,7 @@ function InstUpdates({db,saveDb,user,inst,color,notify,C}){
         </Sel></FG>
         <FG label="Title *" C={C}><Inp C={C} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="Update title"/></FG>
         {form.type==="homework"&&<FG label="Due Date" C={C}><Inp C={C} type="date" value={form.dueDate} onChange={e=>setForm(f=>({...f,dueDate:e.target.value}))}/></FG>}
+        {(form.type==="event"||form.type==="notice")&&<FG label="Meeting / Class Link" C={C} span><Inp C={C} value={form.meetingLink||""} onChange={e=>setForm(f=>({...f,meetingLink:e.target.value}))} placeholder="https://meet.google.com/... or Zoom link"/></FG>}
         <FG label="Content / Details" C={C} span><Txt C={C} value={form.content} onChange={e=>setForm(f=>({...f,content:e.target.value}))} rows={3} placeholder="Details, instructions..."/></FG>
       </div>
       <div style={{display:"flex",gap:10}}>
@@ -858,6 +855,7 @@ function InstUpdates({db,saveDb,user,inst,color,notify,C}){
                 <span>{fmt(upd.createdAt?.slice(0,10))}</span>
                 {upd.dueDate&&<span style={{color:C.red,fontWeight:600}}>Due: {fmt(upd.dueDate)}</span>}
                 {upd.type==="homework"&&<span style={{color:C.purple,fontWeight:600}}>📎 {subCount} submission{subCount!==1?"s":""}</span>}
+                {upd.meetingLink&&<a href={upd.meetingLink} target="_blank" rel="noreferrer" style={{color:C.blue,fontWeight:600,fontSize:10}}>🔗 Meeting Link</a>}
               </div>
             </div>
             <Btn onClick={()=>del(upd.id)} C={C} color="red" size="sm" outline>Del</Btn>
