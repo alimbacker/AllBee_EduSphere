@@ -61,6 +61,7 @@ function seedData(){
     accounts:[],
     courses:[],
     staffTasks:[],
+    dailyUpdates:[],
   };
 }
 
@@ -249,21 +250,22 @@ export default function App(){
   </div>;
 }
 
-// Login Page — 3 Portals (responsive)
+// Login Page — Student first, Admin/Staff hidden
 function LoginPage({onLogin,db,C,dark,setDark}){
-  const PORTALS=[
-    {key:"admin",icon:"🛡",label:"Admin",color:"teal",sub:"Admin & Accountant",userLabel:"Username",passLabel:"Password"},
-    {key:"staff",icon:"👨‍🏫",label:"Staff",color:"blue",sub:"Staff & Teacher",userLabel:"Username",passLabel:"Password"},
-    {key:"student",icon:"🎓",label:"Student",color:"purple",sub:"Student Portal",userLabel:"Roll Number",passLabel:"Date of Birth"},
-  ];
-  const [portal,setPortal]=useState("admin");
+  const [showStaff,setShowStaff]=useState(false);
+  const [portal,setPortal]=useState("student");
   const [u,setU]=useState("");
   const [p,setP]=useState("");
   const [err,setErr]=useState("");
   const [show,setShow]=useState(false);
-  const PT=PORTALS.find(x=>x.key===portal);
-  const pColor=PT.color==="teal"?C.teal:PT.color==="blue"?C.blue:C.purple;
-  const pBg=PT.color==="teal"?C.tealL:PT.color==="blue"?C.blueL:C.purpleL;
+  const STAFF_PORTALS=[
+    {key:"admin",icon:"🛡",label:"Admin",color:"teal",sub:"Admin & Accountant"},
+    {key:"staff",icon:"👨‍🏫",label:"Staff",color:"blue",sub:"Staff & Teacher"},
+  ];
+  const pColor=portal==="admin"?C.teal:portal==="staff"?C.blue:C.purple;
+  const pBg=portal==="admin"?C.tealL:portal==="staff"?C.blueL:C.purpleL;
+  const userLabel=portal==="student"?"Roll Number":"Username";
+  const passLabel=portal==="student"?"Date of Birth (YYYY-MM-DD)":"Password";
   function go(){const e=onLogin(u,p,portal);if(e)setErr(e);else setErr("");}
   function sw(k){setPortal(k);setU("");setP("");setErr("");}
   return(
@@ -307,63 +309,62 @@ function LoginPage({onLogin,db,C,dark,setDark}){
 
           {/* Logo block */}
           <div style={{textAlign:"center",marginBottom:20}}>
-            <img src={LOGO_SRC} alt="AllBee EduSphere" style={{width:72,height:72,objectFit:"contain",margin:"0 auto 8px",display:"block",filter:"drop-shadow(0 0 14px #00bcd4bb)",mixBlendMode:"normal"}}/>
+            <img src={LOGO_SRC} alt="AllBee EduSphere" style={{width:72,height:72,objectFit:"contain",margin:"0 auto 8px",display:"block",filter:"drop-shadow(0 0 14px #00bcd4bb)"}}/> 
             <div style={{fontSize:18,fontWeight:800,color:C.text}}>AllBee EduSphere</div>
-            <div style={{fontSize:11,color:C.muted,marginTop:3}}>Choose your portal to sign in</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:3}}>{portal==="student"?"Student Portal — Sign in below":"Staff Portal"}</div>
           </div>
 
-          {/* Portal selector */}
-          <div className="portal-grid">
-            {PORTALS.map(pt=>{
-              const pc=pt.color==="teal"?C.teal:pt.color==="blue"?C.blue:C.purple;
-              const pb=pt.color==="teal"?C.tealL:pt.color==="blue"?C.blueL:C.purpleL;
-              const active=portal===pt.key;
-              return(
-                <button key={pt.key} className="portal-btn" onClick={()=>sw(pt.key)}
-                  style={{borderColor:active?pc:C.border,background:active?pb:C.surface,color:active?pc:C.muted}}>
-                  <span className="portal-icon">{pt.icon}</span>
-                  <span className="portal-label">{pt.label}</span>
-                  <span className="portal-sub">{pt.sub}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Login card */}
-          <div className="login-card" style={{background:C.surface,border:`2px solid ${pColor}33`,boxShadow:C.shadowL}}>
-            {/* Portal header strip */}
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,padding:"9px 13px",background:pBg,borderRadius:9}}>
-              <span style={{fontSize:20}}>{PT.icon}</span>
-              <div>
-                <div style={{fontWeight:800,fontSize:13,color:pColor}}>{PT.label} Portal</div>
-                <div style={{fontSize:10,color:C.muted}}>{PT.sub}</div>
-              </div>
+          {/* Student login card — default */}
+          {portal==="student"&&<div className="login-card" style={{background:C.surface,border:`2px solid ${C.purple}33`,boxShadow:C.shadowL}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,padding:"9px 13px",background:C.purpleL,borderRadius:9}}>
+              <span style={{fontSize:20}}>🎓</span>
+              <div><div style={{fontWeight:800,fontSize:13,color:C.purple}}>Student Portal</div><div style={{fontSize:10,color:C.muted}}>Sign in with your Roll Number</div></div>
             </div>
-
-            {/* Fields */}
             <div style={{marginBottom:12}}>
-              <LBL C={C}>{PT.userLabel}</LBL>
-              <Inp C={C} value={u} onChange={e=>setU(e.target.value)}
-                placeholder={PT.key==="student"?"Enter roll number":"Enter username"}
-                onKeyDown={e=>e.key==="Enter"&&go()}/>
+              <LBL C={C}>Roll Number</LBL>
+              <Inp C={C} value={u} onChange={e=>setU(e.target.value)} placeholder="Enter your roll number" onKeyDown={e=>e.key==="Enter"&&go()} autoComplete="off"/>
             </div>
             <div style={{marginBottom:16}}>
-              <LBL C={C}>{PT.passLabel}</LBL>
+              <LBL C={C}>Password</LBL>
               <div style={{position:"relative"}}>
-                <Inp C={C} type={show?"text":"password"} value={p} onChange={e=>setP(e.target.value)}
-                  placeholder={PT.key==="student"?"YYYY-MM-DD":"Enter password"}
-                  onKeyDown={e=>e.key==="Enter"&&go()} style={{paddingRight:40}}/>
+                <Inp C={C} type={show?"text":"password"} value={p} onChange={e=>setP(e.target.value)} placeholder="Date of birth (YYYY-MM-DD)" onKeyDown={e=>e.key==="Enter"&&go()} style={{paddingRight:40}} autoComplete="new-password"/>
                 <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,fontSize:14,padding:4}}>{show?"🙈":"👁"}</button>
               </div>
-              {PT.key==="student"&&<div style={{fontSize:10,color:C.muted,marginTop:4}}>💡 Default password is your date of birth, e.g. 2005-03-14</div>}
+              <div style={{fontSize:10,color:C.muted,marginTop:4}}>💡 Default password is your date of birth, e.g. 2005-03-14</div>
             </div>
-
             {err&&<div style={{background:C.redL,border:`1px solid ${C.red}44`,borderRadius:8,padding:"9px 13px",fontSize:12,color:C.red,marginBottom:14}}>⚠ {err}</div>}
+            <button className="sign-btn" onClick={go} style={{background:`linear-gradient(135deg,${C.purple},${C.purple}cc)`,color:"#fff",boxShadow:`0 4px 12px ${C.purple}44`}}>Sign In →</button>
+          </div>}
 
-            <button className="sign-btn" onClick={go}
-              style={{background:`linear-gradient(135deg,${pColor},${pColor}cc)`,color:"#fff",boxShadow:`0 4px 12px ${pColor}44`}}>
-              Sign In to {PT.label} Portal →
-            </button>
+          {/* Staff/Admin panel — shown when expanded */}
+          {portal!=="student"&&<div className="login-card" style={{background:C.surface,border:`2px solid ${pColor}33`,boxShadow:C.shadowL}}>
+            <div style={{display:"flex",gap:8,marginBottom:16}}>
+              {STAFF_PORTALS.map(pt=>{const pc=pt.color==="teal"?C.teal:C.blue;const pb=pt.color==="teal"?C.tealL:C.blueL;const active=portal===pt.key;return(
+                <button key={pt.key} onClick={()=>sw(pt.key)} style={{flex:1,padding:"10px 6px",borderRadius:10,border:`2px solid ${active?pc:C.border}`,background:active?pb:C.surface,color:active?pc:C.muted,fontWeight:active?700:500,fontSize:12,display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer"}}>
+                  <span style={{fontSize:18}}>{pt.icon}</span><span>{pt.label}</span><span style={{fontSize:9,opacity:0.75}}>{pt.sub}</span>
+                </button>);})}
+            </div>
+            <div style={{marginBottom:12}}>
+              <LBL C={C}>Username</LBL>
+              <Inp C={C} value={u} onChange={e=>setU(e.target.value)} placeholder="Enter username" onKeyDown={e=>e.key==="Enter"&&go()} autoComplete="off"/>
+            </div>
+            <div style={{marginBottom:16}}>
+              <LBL C={C}>Password</LBL>
+              <div style={{position:"relative"}}>
+                <Inp C={C} type={show?"text":"password"} value={p} onChange={e=>setP(e.target.value)} placeholder="Enter password" onKeyDown={e=>e.key==="Enter"&&go()} style={{paddingRight:40}} autoComplete="new-password"/>
+                <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,fontSize:14,padding:4}}>{show?"🙈":"👁"}</button>
+              </div>
+            </div>
+            {err&&<div style={{background:C.redL,border:`1px solid ${C.red}44`,borderRadius:8,padding:"9px 13px",fontSize:12,color:C.red,marginBottom:14}}>⚠ {err}</div>}
+            <button className="sign-btn" onClick={go} style={{background:`linear-gradient(135deg,${pColor},${pColor}cc)`,color:"#fff",boxShadow:`0 4px 12px ${pColor}44`}}>Sign In →</button>
+          </div>}
+
+          {/* Small staff toggle link */}
+          <div style={{textAlign:"center",marginTop:12}}>
+            {portal==="student"
+              ? <button onClick={()=>{setShowStaff(true);sw("admin");}} style={{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",textDecoration:"underline",opacity:0.7}}>Staff / Admin Login</button>
+              : <button onClick={()=>{setShowStaff(false);sw("student");}} style={{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",textDecoration:"underline",opacity:0.7}}>← Back to Student Login</button>
+            }
           </div>
 
           <div style={{textAlign:"center",marginTop:14,fontSize:10,color:C.muted}}>🐝 Powered by AllBee Solutions</div>
@@ -512,7 +513,7 @@ function StudentPortal({db,onLogout,user,C,dark,setDark}){
   const totalFee=stu.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;
   const paidFee=stu.fees?.reduce((a,f)=>a+Number(f.paid||0),0)||0;
   const dueFee=totalFee-paidFee;
-  const STABS=[{k:"home",i:"🏠",l:"Home"},{k:"attendance",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"marks",i:"📝",l:"Exam Marks"},{k:"homework",i:"📚",l:"Homework"},{k:"assignments",i:"📋",l:"Assignments"}];
+  const STABS=[{k:"home",i:"🏠",l:"Home"},{k:"attendance",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"marks",i:"📝",l:"Exam Marks"},{k:"homework",i:"📚",l:"Homework"},{k:"assignments",i:"📋",l:"Assignments"},{k:"updates",i:"📰",l:"Daily Updates"},{k:"settings",i:"⚙️",l:"Settings"}];
   const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid ${C.border}`,background:C.bg};
   const TD={padding:"10px 14px",fontSize:12,color:C.text,borderBottom:`1px solid ${C.border}`};
   const [sideOpen,setSideOpen]=useState(false);
@@ -653,11 +654,235 @@ function StudentPortal({db,onLogout,user,C,dark,setDark}){
             {!stu.assignments?.length&&<Empty msg="No assignments yet" C={C}/>}
           </div>
         </div>}
+
+        {/* DAILY UPDATES */}
+        {tab==="updates"&&<StuDailyUpdates db={db} saveDb={saveDb} stu={stu} inst={inst} C={C} notify={notify}/>}
+
+        {/* SETTINGS / CHANGE PASSWORD */}
+        {tab==="settings"&&<StuSettings db={db} saveDb={saveDb} stu={stu} user={user} C={C} notify={notify}/>}
       </div>
     </div>
   </div>;
 }
 
+// ─── Student Daily Updates ────────────────────────────────────────────────────
+function StuDailyUpdates({db,saveDb,stu,inst,C,notify}){
+  // Admin/staff posts updates; students can see + upload homework files
+  const instUpdates=(db.dailyUpdates||[]).filter(u=>u.instId===stu.instId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const [uploading,setUploading]=useState(false);
+  const [uploadFor,setUploadFor]=useState(null); // update id
+  const fileRef=useRef();
+
+  function handleFileUpload(updateId,file){
+    if(!file)return;
+    if(file.size>5*1024*1024){notify("File too large (max 5MB)","error");return;}
+    setUploading(true);
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const data64=e.target.result;
+      const submission={stuId:stu.id,stuName:stu.name,fileName:file.name,fileType:file.type,fileData:data64,submittedAt:new Date().toISOString()};
+      saveDb({dailyUpdates:(db.dailyUpdates||[]).map(u=>u.id===updateId?{...u,submissions:[...(u.submissions||[]),submission]}:u)});
+      setUploading(false);setUploadFor(null);
+      notify("✅ File submitted: "+file.name);
+    };
+    reader.onerror=()=>{notify("Failed to read file","error");setUploading(false);};
+    reader.readAsDataURL(file);
+  }
+
+  const mySubmission=(update)=>(update.submissions||[]).find(s=>s.stuId===stu.id);
+
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    <PH title="📰 Daily Updates" sub="Updates and notices from your institution" C={C}/>
+    {!instUpdates.length&&<Empty msg="No updates posted yet" C={C}/>}
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      {instUpdates.map(upd=>{
+        const mine=mySubmission(upd);
+        const isHomework=upd.type==="homework";
+        return <div key={upd.id} style={{background:C.surface,borderRadius:14,border:`1px solid ${upd.type==="urgent"?C.red:upd.type==="homework"?C.purple:C.border}`,padding:18,boxShadow:C.shadow}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:10}}>
+            <div style={{flex:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                <span style={{fontSize:16}}>{upd.type==="urgent"?"🚨":upd.type==="homework"?"📚":upd.type==="event"?"🎉":"📢"}</span>
+                <span style={{fontWeight:800,fontSize:14,color:C.text}}>{upd.title}</span>
+                <Badge label={upd.type||"Notice"} color={upd.type==="urgent"?"red":upd.type==="homework"?"purple":upd.type==="event"?"gold":"teal"} C={C}/>
+              </div>
+              {upd.content&&<div style={{fontSize:12,color:C.muted,lineHeight:1.6,marginBottom:8}}>{upd.content}</div>}
+              <div style={{fontSize:10,color:C.muted}}>Posted by {upd.postedBy} · {fmt(upd.createdAt?.slice(0,10))}</div>
+              {upd.dueDate&&<div style={{fontSize:11,color:C.red,fontWeight:600,marginTop:4}}>📅 Due: {fmt(upd.dueDate)}</div>}
+            </div>
+          </div>
+          {/* Homework file upload */}
+          {isHomework&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:12,marginTop:4}}>
+            {mine?<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:C.greenL,borderRadius:10,border:`1px solid ${C.green}44`}}>
+              <span style={{fontSize:18}}>✅</span>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:12,color:C.green}}>Submitted</div>
+                <div style={{fontSize:11,color:C.muted}}>{mine.fileName} · {new Date(mine.submittedAt).toLocaleDateString("en-IN")}</div>
+              </div>
+              <a href={mine.fileData} download={mine.fileName} style={{padding:"5px 12px",borderRadius:8,background:C.green,color:"#fff",fontSize:11,fontWeight:700,textDecoration:"none"}}>Download</a>
+            </div>:<div>
+              <div style={{fontSize:11,color:C.purple,marginBottom:8,fontWeight:600}}>📎 Upload your homework (PDF, Image, Doc — max 5MB)</div>
+              <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" style={{display:"none"}} onChange={e=>handleFileUpload(upd.id,e.target.files[0])}/>
+              <button onClick={()=>{setUploadFor(upd.id);fileRef.current?.click();}} disabled={uploading}
+                style={{padding:"8px 18px",borderRadius:9,border:`2px solid ${C.purple}`,background:C.purpleL,color:C.purple,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                {uploading&&uploadFor===upd.id?"Uploading…":"📎 Upload Homework"}
+              </button>
+            </div>}
+          </div>}
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
+// ─── Student Settings / Change Password ───────────────────────────────────────
+function StuSettings({db,saveDb,stu,user,C,notify}){
+  const [curPass,setCurPass]=useState("");
+  const [newPass,setNewPass]=useState("");
+  const [confirmPass,setConfirmPass]=useState("");
+  const [showCur,setShowCur]=useState(false);
+  const [showNew,setShowNew]=useState(false);
+  const [saving,setSaving]=useState(false);
+
+  function changePassword(){
+    const currentPass=stu.loginPass||stu.dob;
+    if(!curPass){notify("Enter your current password","error");return;}
+    if(curPass!==currentPass){notify("Current password is incorrect","error");return;}
+    if(!newPass||newPass.length<6){notify("New password must be at least 6 characters","error");return;}
+    if(newPass!==confirmPass){notify("Passwords do not match","error");return;}
+    if(newPass===currentPass){notify("New password must be different from current","error");return;}
+    setSaving(true);
+    saveDb({students:db.students.map(s=>s.id===stu.id?{...s,loginPass:newPass}:s)});
+    setCurPass("");setNewPass("");setConfirmPass("");
+    setSaving(false);
+    notify("🔐 Password changed successfully!");
+  }
+
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    <PH title="⚙️ Settings" sub="Manage your account" C={C}/>
+    {/* Change Password Card */}
+    <div style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,padding:24,maxWidth:480,boxShadow:C.shadow}}>
+      <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>🔐 Change Password</div>
+      <div style={{fontSize:11,color:C.muted,marginBottom:20}}>After changing, use your new password next time you sign in.</div>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <FG label="Current Password" C={C}>
+          <div style={{position:"relative"}}>
+            <Inp C={C} type={showCur?"text":"password"} value={curPass} onChange={e=>setCurPass(e.target.value)} placeholder="Enter current password" style={{paddingRight:40}} autoComplete="current-password"/>
+            <button onClick={()=>setShowCur(s=>!s)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,fontSize:14}}>{showCur?"🙈":"👁"}</button>
+          </div>
+        </FG>
+        <FG label="New Password" C={C}>
+          <div style={{position:"relative"}}>
+            <Inp C={C} type={showNew?"text":"password"} value={newPass} onChange={e=>setNewPass(e.target.value)} placeholder="Min 6 characters" style={{paddingRight:40}} autoComplete="new-password"/>
+            <button onClick={()=>setShowNew(s=>!s)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,fontSize:14}}>{showNew?"🙈":"👁"}</button>
+          </div>
+        </FG>
+        <FG label="Confirm New Password" C={C}>
+          <Inp C={C} type="password" value={confirmPass} onChange={e=>setConfirmPass(e.target.value)} placeholder="Re-enter new password" autoComplete="new-password"
+            onKeyDown={e=>e.key==="Enter"&&changePassword()}/>
+          {confirmPass&&newPass&&<div style={{fontSize:10,marginTop:4,color:newPass===confirmPass?C.green:C.red,fontWeight:600}}>{newPass===confirmPass?"✓ Passwords match":"✗ Passwords don't match"}</div>}
+        </FG>
+        <button onClick={changePassword} disabled={saving} style={{padding:"11px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.purple},${C.purple}cc)`,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:`0 4px 12px ${C.purple}33`}}>
+          {saving?"Saving…":"Change Password"}
+        </button>
+      </div>
+    </div>
+    {/* Profile info */}
+    <div style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,padding:20,marginTop:16,boxShadow:C.shadow}}>
+      <div style={{fontWeight:700,fontSize:13,color:C.text,marginBottom:12}}>👤 My Info</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        {[["Name",stu.name],["Roll No",stu.rollNo],["Course/Class",stu.course||stu.class||stu.department||"--"],["Phone",stu.phone||"--"]].map(([l,v])=>
+          <div key={l} style={{padding:"8px 12px",background:C.bg,borderRadius:8,border:`1px solid ${C.border}`}}>
+            <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",fontWeight:700,marginBottom:2}}>{l}</div>
+            <div style={{fontWeight:600,fontSize:12,color:C.text}}>{v}</div>
+          </div>)}
+      </div>
+    </div>
+  </div>;
+}
+
+
+
+// ─── Institution Daily Updates (Admin posts) ─────────────────────────────────
+function InstUpdates({db,saveDb,user,inst,color,notify,C}){
+  const blank={title:"",content:"",type:"notice",dueDate:""};
+  const [form,setForm]=useState(blank);
+  const [showAdd,setShowAdd]=useState(false);
+  const updates=(db.dailyUpdates||[]).filter(u=>u.instId===inst.id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const TYPES=[{k:"notice",l:"Notice",i:"📢",c:"teal"},{k:"homework",l:"Homework",i:"📚",c:"purple"},{k:"event",l:"Event",i:"🎉",c:"gold"},{k:"urgent",l:"Urgent",i:"🚨",c:"red"}];
+
+  function post(){
+    if(!form.title.trim()){notify("Title required","error");return;}
+    const upd={...form,id:uid(),instId:inst.id,postedBy:user.name,createdAt:new Date().toISOString(),submissions:[]};
+    saveDb({dailyUpdates:[...(db.dailyUpdates||[]),upd]});
+    setForm(blank);setShowAdd(false);
+    notify("📰 Update posted!");
+  }
+  function del(id){if(!window.confirm("Delete this update?"))return;saveDb({dailyUpdates:(db.dailyUpdates||[]).filter(u=>u.id!==id)});notify("Deleted","error");}
+
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+      <PH title="📰 Daily Updates" sub="Post notices, homework & events for students" C={C}/>
+      <Btn onClick={()=>setShowAdd(s=>!s)} C={C} color="teal">+ Post Update</Btn>
+    </div>
+    {showAdd&&<div style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,padding:22,marginBottom:20,boxShadow:C.shadow,animation:"fadeIn 0.25s ease"}}>
+      <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>New Update</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+        <FG label="Type" C={C}><Sel C={C} value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>
+          {TYPES.map(t=><option key={t.k} value={t.k}>{t.i} {t.l}</option>)}
+        </Sel></FG>
+        <FG label="Title *" C={C}><Inp C={C} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="Update title"/></FG>
+        {form.type==="homework"&&<FG label="Due Date" C={C}><Inp C={C} type="date" value={form.dueDate} onChange={e=>setForm(f=>({...f,dueDate:e.target.value}))}/></FG>}
+        <FG label="Content / Details" C={C} span><Txt C={C} value={form.content} onChange={e=>setForm(f=>({...f,content:e.target.value}))} rows={3} placeholder="Details, instructions..."/></FG>
+      </div>
+      <div style={{display:"flex",gap:10}}>
+        <Btn onClick={post} C={C} color="teal">Post</Btn>
+        <Btn onClick={()=>{setShowAdd(false);setForm(blank);}} C={C} color="red" outline>Cancel</Btn>
+      </div>
+    </div>}
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {updates.map(upd=>{
+        const t=TYPES.find(t=>t.k===upd.type)||TYPES[0];
+        const subCount=(upd.submissions||[]).length;
+        return <div key={upd.id} style={{background:C.surface,borderRadius:14,border:`1px solid ${upd.type==="urgent"?C.red:upd.type==="homework"?C.purple:C.border}`,padding:18,boxShadow:C.shadow}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+            <div style={{flex:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+                <span style={{fontSize:18}}>{t.i}</span>
+                <span style={{fontWeight:800,fontSize:14,color:C.text}}>{upd.title}</span>
+                <Badge label={t.l} color={t.c} C={C}/>
+              </div>
+              {upd.content&&<div style={{fontSize:12,color:C.muted,lineHeight:1.6,marginBottom:6}}>{upd.content}</div>}
+              <div style={{display:"flex",gap:12,fontSize:10,color:C.muted,flexWrap:"wrap"}}>
+                <span>By {upd.postedBy}</span>
+                <span>{fmt(upd.createdAt?.slice(0,10))}</span>
+                {upd.dueDate&&<span style={{color:C.red,fontWeight:600}}>Due: {fmt(upd.dueDate)}</span>}
+                {upd.type==="homework"&&<span style={{color:C.purple,fontWeight:600}}>📎 {subCount} submission{subCount!==1?"s":""}</span>}
+              </div>
+            </div>
+            <Btn onClick={()=>del(upd.id)} C={C} color="red" size="sm" outline>Del</Btn>
+          </div>
+          {/* Homework submissions */}
+          {upd.type==="homework"&&subCount>0&&<div style={{marginTop:12,borderTop:`1px solid ${C.border}`,paddingTop:12}}>
+            <div style={{fontWeight:700,fontSize:11,color:C.muted,textTransform:"uppercase",marginBottom:8}}>📎 Submissions ({subCount})</div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {(upd.submissions||[]).map((s,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:C.bg,borderRadius:9,border:`1px solid ${C.border}`}}>
+                <span style={{fontSize:16}}>{s.fileType?.includes("pdf")?"📄":s.fileType?.includes("image")?"🖼":"📎"}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:600,fontSize:12,color:C.text}}>{s.stuName}</div>
+                  <div style={{fontSize:10,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.fileName}</div>
+                </div>
+                <div style={{fontSize:10,color:C.muted,flexShrink:0}}>{new Date(s.submittedAt).toLocaleDateString("en-IN")}</div>
+                <a href={s.fileData} download={s.fileName} style={{padding:"4px 10px",borderRadius:7,background:C.teal,color:"#fff",fontSize:11,fontWeight:700,textDecoration:"none",flexShrink:0}}>⬇</a>
+              </div>)}
+            </div>
+          </div>}
+        </div>;
+      })}
+      {!updates.length&&<Empty msg="No updates posted yet — post one above" C={C}/>}
+    </div>
+  </div>;
+}
 
 // ─── Staff Tasks ──────────────────────────────────────────────────────────────
 function StaffTasks({db,saveDb,user,inst,color,isAdmin,notify,C}){
@@ -1438,7 +1663,7 @@ function InstCourses({db,saveDb,inst,color,notify,C}){
 }
 
 // Institution Dashboard Shell
-const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"staff",i:"👨‍🏫",l:"Staff"},{k:"tasks",i:"✅",l:"Tasks"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"accounts",i:"💼",l:"Accounts"},{k:"courses",i:"🖥",l:"Courses"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"alerts",i:"📣",l:"Alerts"},{k:"reports",i:"📊",l:"Reports"}];
+const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"staff",i:"👨‍🏫",l:"Staff"},{k:"tasks",i:"✅",l:"Tasks"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"accounts",i:"💼",l:"Accounts"},{k:"courses",i:"🖥",l:"Courses"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"updates",i:"📰",l:"Updates"},{k:"alerts",i:"📣",l:"Alerts"},{k:"reports",i:"📊",l:"Reports"}];
 
 function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const [tab,setTab]=useState("home");
@@ -1539,6 +1764,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
         {tab==="timetable"&&<InstTimetable inst={inst} color={color} notify={notify} C={C}/>}
         {tab==="idcard"&&<InstIDCards students={myStudents} inst={inst} color={color} C={C}/>}
         {tab==="receipt"&&<InstReceipts students={myStudents} inst={inst} color={color} C={C}/>}
+        {tab==="updates"&&<InstUpdates db={db} saveDb={saveDb} user={user} inst={inst} color={color} notify={notify} C={C}/>}
         {tab==="alerts"&&<InstAlerts students={myStudents} inst={inst} color={color} notify={notify} C={C}/>}
         {tab==="accounts"&&<InstAccounts db={db} saveDb={saveDb} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
         {tab==="courses"&&inst.type==="Computer Institute"&&isAdmin&&<InstCourses db={db} saveDb={saveDb} inst={inst} color={color} notify={notify} C={C}/>}
