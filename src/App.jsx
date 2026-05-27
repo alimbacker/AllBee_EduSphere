@@ -62,6 +62,7 @@ function seedData(){
     courses:[],
     staffTasks:[],
     dailyUpdates:[],
+    notifications:[],
   };
 }
 
@@ -115,7 +116,7 @@ function PhotoUpload({photo,onChange,color,C,size=80}){
   </div>;
 }
 
-function TopBar({C,dark,setDark,onLogout,user,right,onMenuToggle,showMenu}){
+function TopBar({C,dark,setDark,onLogout,user,right,onMenuToggle,showMenu,onNotifClick,notifCount}){
   const roleColor=user?.role==="admin"?C.teal:user?.role==="accountant"?C.gold:user?.role==="staff"?C.blue:user?.role==="student"?C.purple:C.teal;
   const roleBg=user?.role==="admin"?C.tealL:user?.role==="accountant"?C.goldL:user?.role==="staff"?C.blueL:user?.role==="student"?C.purpleL:C.tealL;
   return <>
@@ -148,6 +149,9 @@ function TopBar({C,dark,setDark,onLogout,user,right,onMenuToggle,showMenu}){
       <div className="tb-right-desktop" style={{display:"flex",alignItems:"center",gap:8}}>
         <button onClick={()=>setDark(d=>!d)} style={{padding:"5px 10px",border:`1px solid ${C.border}`,borderRadius:20,background:"transparent",color:C.muted,fontSize:11,cursor:"pointer",whiteSpace:"nowrap"}}>{dark?"☀":"🌙"}</button>
         {user&&<>
+          {onNotifClick&&<button onClick={onNotifClick} title="Notifications" style={{position:"relative",padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:9,background:"transparent",color:C.muted,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center"}}>
+            🔔{notifCount>0&&<span style={{position:"absolute",top:-4,right:-4,minWidth:16,height:16,borderRadius:99,background:C.red,color:"#fff",fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>{notifCount}</span>}
+          </button>}
           <div className="tb-username" style={{textAlign:"right"}}>
             <div style={{fontWeight:700,fontSize:11,color:C.text,whiteSpace:"nowrap"}}>{user.name}</div>
             <div style={{fontSize:9,padding:"1px 7px",borderRadius:20,background:roleBg,color:roleColor,fontWeight:700,textTransform:"uppercase",display:"inline-block"}}>{user.role}</div>
@@ -507,13 +511,18 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark}){
   const [tab,setTab]=useState("home");
   const stu=db.students.find(s=>s.id===user.studentId);
   const inst=db.institutions.find(i=>i.id===user.instId);
-  if(!stu)return <div style={{padding:40,textAlign:"center",color:C.muted}}>Student record not found.</div>;
+  if(!stu)return <div style={{padding:40,textAlign:"center",color:C.muted}}>Student record not found.</div>
+  const myNotifs=(db.notifications||[]).filter(n=>n.instId===user.instId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const unread=myNotifs.filter(n=>!(n.readBy||[]).includes(user.id)).length;
+  function markAllRead(){saveDb({notifications:(db.notifications||[]).map(n=>n.instId===user.instId&&!(n.readBy||[]).includes(user.id)?{...n,readBy:[...(n.readBy||[]),user.id]}:n)});}
+  function clearNotif(id){saveDb({notifications:(db.notifications||[]).filter(n=>n.id!==id)});}
+  function clearAllNotifs(){if(!window.confirm("Clear all notifications?"))return;saveDb({notifications:(db.notifications||[]).filter(n=>n.instId!==user.instId)});};
   const color=inst?.color||C.teal;
   const att=attPct(stu.attendance||[]);
   const totalFee=stu.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;
   const paidFee=stu.fees?.reduce((a,f)=>a+Number(f.paid||0),0)||0;
   const dueFee=totalFee-paidFee;
-  const STABS=[{k:"home",i:"🏠",l:"Home"},{k:"attendance",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"marks",i:"📝",l:"Exam Marks"},{k:"homework",i:"📚",l:"Homework"},{k:"assignments",i:"📋",l:"Assignments"},{k:"updates",i:"📰",l:"Daily Updates"},{k:"settings",i:"⚙️",l:"Settings"}];
+  const STABS=[{k:"home",i:"🏠",l:"Home"},{k:"notifs",i:"🔔",l:"Notifications"},{k:"attendance",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"marks",i:"📝",l:"Exam Marks"},{k:"homework",i:"📚",l:"Homework"},{k:"assignments",i:"📋",l:"Assignments"},{k:"updates",i:"📰",l:"Daily Updates"},{k:"settings",i:"⚙️",l:"Settings"}];
   const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid ${C.border}`,background:C.bg};
   const TD={padding:"10px 14px",fontSize:12,color:C.text,borderBottom:`1px solid ${C.border}`};
   const [sideOpen,setSideOpen]=useState(false);
@@ -534,7 +543,7 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark}){
       }
     `}</style>
     <style>{`:root{--sb-bg:${C.surface};--sb-border:${C.border};}`}</style>
-    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={inst?.name||""} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen}/>
+    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={inst?.name||""} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen} onNotifClick={()=>{setTab("notifs");setSideOpen(false);markAllRead();}} notifCount={unread}/>
     <div onClick={()=>setSideOpen(false)} style={{display:sideOpen?"block":"none",position:"fixed",inset:0,top:54,background:"#0005",zIndex:140}}/>
     <div style={{display:"flex",flex:1,minHeight:0}}>
       <div className={"inst-sidebar"+(sideOpen?" open":"")} style={{"--sb-bg":C.surface,"--sb-border":C.border}}>
@@ -545,9 +554,11 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark}){
           <div style={{fontSize:10,color:C.muted,fontFamily:"monospace"}}>{stu.rollNo}</div>
           <div style={{marginTop:6}}><Badge label="Student" color="purple" C={C}/></div>
         </div>
-        {STABS.map(t=><button key={t.k} className="tab-btn" onClick={()=>{setTab(t.k);setSideOpen(false);}}
+        {STABS.map(t=><button key={t.k} className="tab-btn" onClick={()=>{setTab(t.k);setSideOpen(false);if(t.k==="notifs")markAllRead();}}
           style={{background:tab===t.k?C.purpleL:"transparent",color:tab===t.k?C.purple:C.text,fontWeight:tab===t.k?700:500}}>
-          <span style={{fontSize:16,flexShrink:0}}>{t.i}</span><span>{t.l}</span>
+          <span style={{fontSize:16,flexShrink:0}}>{t.i}</span>
+          <span style={{flex:1}}>{t.l}</span>
+          {t.k==="notifs"&&unread>0&&<span style={{minWidth:18,height:18,borderRadius:99,background:C.red,color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 5px"}}>{unread}</span>}
         </button>)}
       </div>
       <div className="inst-content">
@@ -655,12 +666,67 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark}){
           </div>
         </div>}
 
+        {/* NOTIFICATIONS */}
+        {tab==="notifs"&&<StuNotifications notifs={myNotifs} unread={unread} onClear={clearNotif} onClearAll={clearAllNotifs} onMarkRead={markAllRead} user={user} C={C}/>}
         {/* DAILY UPDATES */}
         {tab==="updates"&&<StuDailyUpdates db={db} saveDb={saveDb} stu={stu} inst={inst} C={C} notify={notify}/>}
 
         {/* SETTINGS / CHANGE PASSWORD */}
         {tab==="settings"&&<StuSettings db={db} saveDb={saveDb} stu={stu} user={user} C={C} notify={notify}/>}
       </div>
+    </div>
+  </div>;
+}
+
+
+// ─── Student Notifications ────────────────────────────────────────────────────
+function StuNotifications({notifs,unread,onClear,onClearAll,onMarkRead,user,C}){
+  const TYPE_META_N={notice:{i:"📢",c:"teal",l:"Notice"},homework:{i:"📚",c:"purple",l:"Homework"},
+    event:{i:"🎉",c:"gold",l:"Event"},urgent:{i:"🚨",c:"red",l:"Urgent"}};
+
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+      <PH title="🔔 Notifications" sub={unread>0?`${unread} unread`:"All caught up!"} C={C}/>
+      <div style={{display:"flex",gap:8}}>
+        {unread>0&&<Btn onClick={onMarkRead} C={C} color="teal" size="sm" outline>Mark all read</Btn>}
+        {notifs.length>0&&<Btn onClick={onClearAll} C={C} color="red" size="sm" outline>🗑 Clear All</Btn>}
+      </div>
+    </div>
+
+    {!notifs.length&&<div style={{textAlign:"center",padding:"48px 20px"}}>
+      <div style={{fontSize:48,marginBottom:12}}>🔔</div>
+      <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No notifications yet</div>
+      <div style={{fontSize:12,color:C.muted}}>You'll see updates from your institution here</div>
+    </div>}
+
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {notifs.map(n=>{
+        const isRead=(n.readBy||[]).includes(user.id);
+        const meta=TYPE_META_N[n.type]||TYPE_META_N.notice;
+        const color=n.type==="urgent"?C.red:n.type==="homework"?C.purple:n.type==="event"?C.gold:C.teal;
+        const bg=n.type==="urgent"?C.redL:n.type==="homework"?C.purpleL:n.type==="event"?C.goldL:C.tealL;
+        return <div key={n.id} style={{background:C.surface,borderRadius:12,border:`1px solid ${isRead?C.border:color}`,padding:"14px 16px",boxShadow:isRead?"none":C.shadow,opacity:isRead?0.75:1,transition:"all 0.2s",position:"relative"}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+            {/* Icon */}
+            <div style={{width:38,height:38,borderRadius:10,background:bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+              {meta.i}
+            </div>
+            {/* Content */}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
+                <span style={{fontWeight:isRead?600:800,fontSize:13,color:C.text}}>{n.title}</span>
+                <Badge label={meta.l} color={meta.c} C={C}/>
+                {!isRead&&<span style={{width:7,height:7,borderRadius:"50%",background:C.red,display:"inline-block",flexShrink:0}}/>}
+              </div>
+              <div style={{fontSize:11,color:C.muted}}>
+                Posted by <span style={{fontWeight:600,color:C.text}}>{n.postedBy}</span> · {new Date(n.createdAt).toLocaleString("en-IN",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
+              </div>
+            </div>
+            {/* Delete button */}
+            <button onClick={()=>onClear(n.id)} title="Dismiss" style={{background:"none",border:"none",color:C.muted,fontSize:18,lineHeight:1,cursor:"pointer",padding:"0 2px",flexShrink:0,opacity:0.6}} onMouseOver={e=>e.currentTarget.style.opacity=1} onMouseOut={e=>e.currentTarget.style.opacity=0.6}>×</button>
+          </div>
+        </div>;
+      })}
     </div>
   </div>;
 }
@@ -809,12 +875,15 @@ function InstUpdates({db,saveDb,user,inst,color,notify,C}){
 
   function post(){
     if(!form.title.trim()){notify("Title required","error");return;}
-    const upd={...form,id:uid(),instId:inst.id,postedBy:user.name,createdAt:new Date().toISOString(),submissions:[]};
-    saveDb({dailyUpdates:[...(db.dailyUpdates||[]),upd]});
+    const updId=uid();
+    const upd={...form,id:updId,instId:inst.id,postedBy:user.name,createdAt:new Date().toISOString(),submissions:[]};
+    const notif={id:uid(),instId:inst.id,updateId:updId,title:form.title,type:form.type,postedBy:user.name,
+      createdAt:new Date().toISOString(),readBy:[]};
+    saveDb({dailyUpdates:[...(db.dailyUpdates||[]),upd],notifications:[...(db.notifications||[]),notif]});
     setForm(blank);setShowAdd(false);
-    notify("📰 Update posted!");
+    notify("📰 Update posted & students notified!");
   }
-  function del(id){if(!window.confirm("Delete this update?"))return;saveDb({dailyUpdates:(db.dailyUpdates||[]).filter(u=>u.id!==id)});notify("Deleted","error");}
+  function del(id){if(!window.confirm("Delete this update?"))return;saveDb({dailyUpdates:(db.dailyUpdates||[]).filter(u=>u.id!==id),notifications:(db.notifications||[]).filter(n=>n.updateId!==id)});notify("Deleted","error");}
 
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
