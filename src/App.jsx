@@ -63,6 +63,7 @@ function seedData(){
     staffTasks:[],
     dailyUpdates:[],
     notifications:[],
+    classLinks:[],
   };
 }
 
@@ -522,7 +523,7 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark}){
   const totalFee=stu.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;
   const paidFee=stu.fees?.reduce((a,f)=>a+Number(f.paid||0),0)||0;
   const dueFee=totalFee-paidFee;
-  const STABS=[{k:"home",i:"🏠",l:"Home"},{k:"notifs",i:"🔔",l:"Notifications"},{k:"attendance",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"marks",i:"📝",l:"Exam Marks"},{k:"homework",i:"📚",l:"Homework"},{k:"assignments",i:"📋",l:"Assignments"},{k:"updates",i:"📰",l:"Daily Updates"},{k:"settings",i:"⚙️",l:"Settings"}];
+  const STABS=[{k:"home",i:"🏠",l:"Home"},{k:"notifs",i:"🔔",l:"Notifications"},{k:"attendance",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"marks",i:"📝",l:"Exam Marks"},{k:"homework",i:"📚",l:"Homework"},{k:"assignments",i:"📋",l:"Assignments"},{k:"updates",i:"📰",l:"Daily Updates"},{k:"classlinks",i:"🎥",l:"Class Links"},{k:"settings",i:"⚙️",l:"Settings"}];
   const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:`1px solid ${C.border}`,background:C.bg};
   const TD={padding:"10px 14px",fontSize:12,color:C.text,borderBottom:`1px solid ${C.border}`};
   const [sideOpen,setSideOpen]=useState(false);
@@ -668,6 +669,8 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark}){
 
         {/* NOTIFICATIONS */}
         {tab==="notifs"&&<StuNotifications notifs={myNotifs} unread={unread} onClear={clearNotif} onClearAll={clearAllNotifs} onMarkRead={markAllRead} user={user} C={C}/>}
+        {/* CLASS LINKS */}
+        {tab==="classlinks"&&<StuClassLinks db={db} stu={stu} C={C}/>}
         {/* DAILY UPDATES */}
         {tab==="updates"&&<StuDailyUpdates db={db} saveDb={saveDb} stu={stu} inst={inst} C={C} notify={notify}/>}
 
@@ -678,6 +681,148 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark}){
   </div>;
 }
 
+
+
+// ─── Class Links (Admin) ──────────────────────────────────────────────────────
+function InstClassLinks({db,saveDb,user,inst,color,isAdmin,notify,C}){
+  const blank={title:"",subject:"",link:"",platform:"Google Meet",schedule:"",batch:"",description:""};
+  const [form,setForm]=useState(blank);
+  const [showAdd,setShowAdd]=useState(false);
+  const [editId,setEditId]=useState(null);
+  const [editForm,setEditForm]=useState(null);
+  const links=(db.classLinks||[]).filter(l=>l.instId===inst.id);
+  const PLATFORMS=["Google Meet","Zoom","Microsoft Teams","YouTube Live","Other"];
+
+  function save(){
+    if(!form.title.trim()||!form.link.trim()){notify("Title and link required","error");return;}
+    if(!form.link.startsWith("http")){notify("Enter a valid URL starting with http","error");return;}
+    saveDb({classLinks:[...(db.classLinks||[]),{...form,id:uid(),instId:inst.id,createdBy:user.name,createdAt:new Date().toISOString()}]});
+    setForm(blank);setShowAdd(false);notify("🎥 Class link added!");
+  }
+  function saveEdit(id){
+    if(!editForm.title.trim()||!editForm.link.trim()){notify("Title and link required","error");return;}
+    saveDb({classLinks:(db.classLinks||[]).map(l=>l.id===id?{...l,...editForm}:l)});
+    setEditId(null);setEditForm(null);notify("Updated!");
+  }
+  function del(id){
+    if(!window.confirm("Delete this class link?"))return;
+    saveDb({classLinks:(db.classLinks||[]).filter(l=>l.id!==id)});
+    notify("Deleted","error");
+  }
+
+  const platformIcon=(p)=>p==="Google Meet"?"🟢":p==="Zoom"?"🔵":p==="Microsoft Teams"?"🟣":p==="YouTube Live"?"🔴":"🔗";
+
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+      <PH title="🎥 Class Links" sub="Manage online class and meeting links for students" C={C}/>
+      {isAdmin&&<Btn onClick={()=>{setShowAdd(s=>!s);setEditId(null);}} C={C} color="blue">+ Add Class Link</Btn>}
+    </div>
+
+    {/* Add Form */}
+    {showAdd&&isAdmin&&<div style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,padding:22,marginBottom:20,boxShadow:C.shadow,animation:"fadeIn 0.25s ease"}}>
+      <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>New Class Link</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+        <FG label="Title *" C={C}><Inp C={C} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Math Online Class"/></FG>
+        <FG label="Subject / Course" C={C}><Inp C={C} value={form.subject} onChange={e=>setForm(f=>({...f,subject:e.target.value}))} placeholder="e.g. Mathematics, Python"/></FG>
+        <FG label="Platform" C={C}><Sel C={C} value={form.platform} onChange={e=>setForm(f=>({...f,platform:e.target.value}))}>
+          {PLATFORMS.map(p=><option key={p}>{p}</option>)}
+        </Sel></FG>
+        <FG label="Batch / Class" C={C}><Inp C={C} value={form.batch} onChange={e=>setForm(f=>({...f,batch:e.target.value}))} placeholder="e.g. Class 10, Morning Batch"/></FG>
+        <FG label="Schedule" C={C}><Inp C={C} value={form.schedule} onChange={e=>setForm(f=>({...f,schedule:e.target.value}))} placeholder="e.g. Mon-Fri 9:00 AM"/></FG>
+        <FG label="Description" C={C}><Inp C={C} value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Extra notes..."/></FG>
+        <FG label="🔗 Meet / Zoom Link *" C={C} span><Inp C={C} value={form.link} onChange={e=>setForm(f=>({...f,link:e.target.value}))} placeholder="https://meet.google.com/xxx-xxxx-xxx"/></FG>
+      </div>
+      <div style={{display:"flex",gap:10}}>
+        <Btn onClick={save} C={C} color="blue">Save Link</Btn>
+        <Btn onClick={()=>{setShowAdd(false);setForm(blank);}} C={C} color="red" outline>Cancel</Btn>
+      </div>
+    </div>}
+
+    {/* Links Grid */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:16}}>
+      {links.map(l=>{
+        const isEditing=editId===l.id;
+        return <div key={l.id} style={{background:C.surface,borderRadius:14,border:`2px solid ${C.blue}22`,padding:20,boxShadow:C.shadow,borderTop:`3px solid ${C.blue}`,display:"flex",flexDirection:"column",gap:10}}>
+          {isEditing?<div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+              <FG label="Title" C={C} span><Inp C={C} value={editForm.title} onChange={e=>setEditForm(f=>({...f,title:e.target.value}))}/></FG>
+              <FG label="Subject" C={C}><Inp C={C} value={editForm.subject||""} onChange={e=>setEditForm(f=>({...f,subject:e.target.value}))} placeholder="Subject"/></FG>
+              <FG label="Platform" C={C}><Sel C={C} value={editForm.platform||"Google Meet"} onChange={e=>setEditForm(f=>({...f,platform:e.target.value}))}>{PLATFORMS.map(p=><option key={p}>{p}</option>)}</Sel></FG>
+              <FG label="Batch" C={C}><Inp C={C} value={editForm.batch||""} onChange={e=>setEditForm(f=>({...f,batch:e.target.value}))} placeholder="Batch"/></FG>
+              <FG label="Schedule" C={C}><Inp C={C} value={editForm.schedule||""} onChange={e=>setEditForm(f=>({...f,schedule:e.target.value}))} placeholder="Schedule"/></FG>
+              <FG label="Link" C={C} span><Inp C={C} value={editForm.link} onChange={e=>setEditForm(f=>({...f,link:e.target.value}))}/></FG>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <Btn onClick={()=>saveEdit(l.id)} C={C} color="green" size="sm">Save</Btn>
+              <Btn onClick={()=>{setEditId(null);setEditForm(null);}} C={C} color="red" size="sm" outline>Cancel</Btn>
+            </div>
+          </div>:<>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                  <span style={{fontSize:20}}>{platformIcon(l.platform)}</span>
+                  <span style={{fontWeight:800,fontSize:14,color:C.text}}>{l.title}</span>
+                </div>
+                {l.subject&&<div style={{fontSize:11,color:C.muted,marginBottom:2}}>📘 {l.subject}</div>}
+                {l.batch&&<div style={{fontSize:11,color:C.muted,marginBottom:2}}>👥 {l.batch}</div>}
+                {l.schedule&&<div style={{fontSize:11,color:C.teal,fontWeight:600,marginBottom:2}}>🕐 {l.schedule}</div>}
+                {l.description&&<div style={{fontSize:11,color:C.muted,marginTop:4,lineHeight:1.5}}>{l.description}</div>}
+                <div style={{fontSize:9,color:C.muted,marginTop:6}}>Added by {l.createdBy} · {fmt(l.createdAt?.slice(0,10))}</div>
+              </div>
+              {isAdmin&&<div style={{display:"flex",gap:5,flexShrink:0}}>
+                <Btn onClick={()=>{setEditId(l.id);setEditForm({...l});setShowAdd(false);}} C={C} color="teal" size="sm" outline>✏</Btn>
+                <Btn onClick={()=>del(l.id)} C={C} color="red" size="sm" outline>🗑</Btn>
+              </div>}
+            </div>
+            {/* Big Join Button */}
+            <a href={l.link} target="_blank" rel="noreferrer"
+              style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"11px",borderRadius:10,
+                background:`linear-gradient(135deg,${C.blue},${C.blue}cc)`,color:"#fff",fontSize:13,fontWeight:700,
+                textDecoration:"none",boxShadow:`0 4px 12px ${C.blue}44`,marginTop:4}}>
+              {platformIcon(l.platform)} Join {l.platform} Class →
+            </a>
+          </>}
+        </div>;
+      })}
+      {!links.length&&<div style={{gridColumn:"1/-1"}}><Empty msg="No class links yet — add one above" C={C}/></div>}
+    </div>
+  </div>;
+}
+
+// ─── Class Links (Student view) ───────────────────────────────────────────────
+function StuClassLinks({db,stu,C}){
+  const links=(db.classLinks||[]).filter(l=>l.instId===stu.instId);
+  const platformIcon=(p)=>p==="Google Meet"?"🟢":p==="Zoom"?"🔵":p==="Microsoft Teams"?"🟣":p==="YouTube Live"?"🔴":"🔗";
+
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    <PH title="🎥 Class Links" sub="Join your online classes" C={C}/>
+    {!links.length&&<div style={{textAlign:"center",padding:"48px 20px"}}>
+      <div style={{fontSize:48,marginBottom:12}}>🎥</div>
+      <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No class links yet</div>
+      <div style={{fontSize:12,color:C.muted}}>Your admin will add online class links here</div>
+    </div>}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16}}>
+      {links.map(l=><div key={l.id} style={{background:C.surface,borderRadius:14,border:`2px solid ${C.blue}22`,padding:20,boxShadow:C.shadow,borderTop:`3px solid ${C.blue}`,display:"flex",flexDirection:"column",gap:10}}>
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+            <span style={{fontSize:22}}>{platformIcon(l.platform)}</span>
+            <span style={{fontWeight:800,fontSize:15,color:C.text}}>{l.title}</span>
+          </div>
+          {l.subject&&<div style={{fontSize:12,color:C.muted,marginBottom:2}}>📘 {l.subject}</div>}
+          {l.batch&&<div style={{fontSize:12,color:C.muted,marginBottom:2}}>👥 {l.batch}</div>}
+          {l.schedule&&<div style={{fontSize:12,color:C.teal,fontWeight:700,marginBottom:2}}>🕐 {l.schedule}</div>}
+          {l.description&&<div style={{fontSize:11,color:C.muted,lineHeight:1.5,marginTop:4}}>{l.description}</div>}
+        </div>
+        <a href={l.link} target="_blank" rel="noreferrer"
+          style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"12px",borderRadius:10,
+            background:`linear-gradient(135deg,${C.blue},${C.blue}cc)`,color:"#fff",fontSize:14,fontWeight:700,
+            textDecoration:"none",boxShadow:`0 4px 14px ${C.blue}44`}}>
+          {platformIcon(l.platform)} Join Class →
+        </a>
+      </div>)}
+    </div>
+  </div>;
+}
 
 // ─── Student Notifications ────────────────────────────────────────────────────
 function StuNotifications({notifs,unread,onClear,onClearAll,onMarkRead,user,C}){
@@ -898,7 +1043,7 @@ function InstUpdates({db,saveDb,user,inst,color,notify,C}){
         </Sel></FG>
         <FG label="Title *" C={C}><Inp C={C} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="Update title"/></FG>
         {form.type==="homework"&&<FG label="Due Date" C={C}><Inp C={C} type="date" value={form.dueDate} onChange={e=>setForm(f=>({...f,dueDate:e.target.value}))}/></FG>}
-        {(form.type==="event"||form.type==="notice")&&<FG label="Meeting / Class Link" C={C} span><Inp C={C} value={form.meetingLink||""} onChange={e=>setForm(f=>({...f,meetingLink:e.target.value}))} placeholder="https://meet.google.com/... or Zoom link"/></FG>}
+        <FG label="🔗 Google Meet / Class Link (optional)" C={C} span><Inp C={C} value={form.meetingLink||""} onChange={e=>setForm(f=>({...f,meetingLink:e.target.value}))} placeholder="https://meet.google.com/xxx-xxxx-xxx"/></FG>
         <FG label="Content / Details" C={C} span><Txt C={C} value={form.content} onChange={e=>setForm(f=>({...f,content:e.target.value}))} rows={3} placeholder="Details, instructions..."/></FG>
       </div>
       <div style={{display:"flex",gap:10}}>
@@ -1730,7 +1875,7 @@ function InstCourses({db,saveDb,inst,color,notify,C}){
 }
 
 // Institution Dashboard Shell
-const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"staff",i:"👨‍🏫",l:"Staff"},{k:"tasks",i:"✅",l:"Tasks"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"accounts",i:"💼",l:"Accounts"},{k:"courses",i:"🖥",l:"Courses"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"updates",i:"📰",l:"Updates"},{k:"alerts",i:"📣",l:"Alerts"},{k:"reports",i:"📊",l:"Reports"}];
+const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"staff",i:"👨‍🏫",l:"Staff"},{k:"tasks",i:"✅",l:"Tasks"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"accounts",i:"💼",l:"Accounts"},{k:"courses",i:"🖥",l:"Courses"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"updates",i:"📰",l:"Updates"},{k:"classlinks",i:"🎥",l:"Class Links"},{k:"alerts",i:"📣",l:"Alerts"},{k:"reports",i:"📊",l:"Reports"}];
 
 function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const [tab,setTab]=useState("home");
@@ -1832,6 +1977,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
         {tab==="idcard"&&<InstIDCards students={myStudents} inst={inst} color={color} C={C}/>}
         {tab==="receipt"&&<InstReceipts students={myStudents} inst={inst} color={color} C={C}/>}
         {tab==="updates"&&<InstUpdates db={db} saveDb={saveDb} user={user} inst={inst} color={color} notify={notify} C={C}/>}
+        {tab==="classlinks"&&<InstClassLinks db={db} saveDb={saveDb} user={user} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
         {tab==="alerts"&&<InstAlerts students={myStudents} inst={inst} color={color} notify={notify} C={C}/>}
         {tab==="accounts"&&<InstAccounts db={db} saveDb={saveDb} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
         {tab==="courses"&&inst.type==="Computer Institute"&&isAdmin&&<InstCourses db={db} saveDb={saveDb} inst={inst} color={color} notify={notify} C={C}/>}
