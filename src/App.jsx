@@ -1990,7 +1990,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
         </div>
         {tab==="home"&&<InstHome inst={inst} students={myStudents} color={color} setTab={goTab} m={m} C={C}/>}
         {tab==="staff"&&isAdmin&&<InstStaff staff={myStaff} inst={inst} color={color} onAdd={addStaff} onUpdate={updStaff} onDelete={delStaff} notify={notify} C={C}/>}
-        {tab==="students"&&<InstStudents students={myStudents} inst={inst} color={color} onUpdate={updStudent} C={C}/>}
+        {tab==="students"&&<InstStudents students={myStudents} inst={inst} color={color} onUpdate={updStudent} onDelete={id=>{if(window.confirm("Permanently delete student?"))saveDb({students:db.students.filter(s=>s.id!==id)});notify("Student deleted","error");}} C={C}/>}
         {tab==="register"&&isAdmin&&<InstRegister inst={inst} onSave={addStudent} color={color} m={m} C={C}/>}
         {tab==="attend"&&<InstAttend students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
         {tab==="fees"&&<InstFees students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
@@ -2060,7 +2060,7 @@ function InstHome({inst,students,color,setTab,m,C}){
   </div>;
 }
 
-function InstStudents({students,inst,color,onUpdate,C}){
+function InstStudents({students,inst,color,onUpdate,onDelete,C}){
   const [q,setQ]=useState("");const [sel,setSel]=useState(null);const [photoFor,setPhotoFor]=useState(null);const [editId,setEditId]=useState(null);
   const fs=students.filter(s=>[s.name,s.rollNo,s.phone,s.department,s.class,s.course,s.danceStyle].some(v=>v?.toLowerCase().includes(q.toLowerCase())));
   function handleEdit(s,e){e.stopPropagation();setSel(null);setEditId(s.id);}
@@ -3053,13 +3053,14 @@ function StuAIChat({stu,inst,C}){
   </div>;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+
 // PHASE 2 FEATURES
-// ══════════════════════════════════════════════════════════════════════════════
+
+// PHASE 2 FEATURES
 
 // ─── LIBRARY MANAGEMENT ───────────────────────────────────────────────────────
 function InstLibrary({db,saveDb,inst,color,isAdmin,notify,C}){
-  const KEY=`lib_${inst.id}`;
+  const KEY="lib_"+inst.id;
   const [books,setBooks]=useState(()=>lsGet(KEY,[]));
   const [subTab,setSubTab]=useState("catalog");
   const [showAdd,setShowAdd]=useState(false);
@@ -3071,32 +3072,21 @@ function InstLibrary({db,saveDb,inst,color,isAdmin,notify,C}){
   const myStudents=(db.students||[]).filter(s=>s.instId===inst.id);
   const CATS=["Mathematics","Science","English","History","Computer","Fiction","Reference","Other"];
   function saveBooks(b){setBooks(b);lsSet(KEY,b);}
-  function addBook(){if(!form.title||!form.author)return;saveBooks([...books,{...form,id:uid(),totalCopies:Number(form.totalCopies)||1,available:Number(form.totalCopies)||1,issues:[],addedAt:today()}]);setForm(blank);setShowAdd(false);notify("📚 Book added!");}
+  function addBook(){if(!form.title||!form.author)return;saveBooks([...books,{...form,id:uid(),totalCopies:Number(form.totalCopies)||1,available:Number(form.totalCopies)||1,issues:[],addedAt:today()}]);setForm(blank);setShowAdd(false);notify("Book added!");}
   function delBook(id){if(!window.confirm("Delete book?"))return;saveBooks(books.filter(b=>b.id!==id));notify("Deleted","error");}
-  function issueBook(bookId){
-    const stu=myStudents.find(s=>s.id===issueStudent);
-    if(!stu){notify("Select a student","error");return;}
-    const book=books.find(b=>b.id===bookId);
-    if(!book||book.available<1){notify("No copies available","error");return;}
-    const issue={id:uid(),studentId:stu.id,studentName:stu.name,rollNo:stu.rollNo,issuedAt:today(),dueDate:new Date(Date.now()+14*86400000).toISOString().slice(0,10),returned:false};
-    saveBooks(books.map(b=>b.id===bookId?{...b,available:b.available-1,issues:[...(b.issues||[]),issue]}:b));
-    setIssueFor(null);setIssueStudent("");notify(`📖 Issued to ${stu.name}!`);
-  }
-  function returnBook(bookId,issueId){
-    saveBooks(books.map(b=>b.id===bookId?{...b,available:b.available+1,issues:b.issues.map(i=>i.id===issueId?{...i,returned:true,returnedAt:today()}:i)}:b));
-    notify("✅ Book returned!");
-  }
-  const filtered=books.filter(b=>[b.title,b.author,b.isbn,b.category].some(v=>v?.toLowerCase().includes(search.toLowerCase())));
+  function issueBook(bookId){const stu=myStudents.find(s=>s.id===issueStudent);if(!stu){notify("Select a student","error");return;}const book=books.find(b=>b.id===bookId);if(!book||book.available<1){notify("No copies available","error");return;}const due=new Date(Date.now()+14*86400000).toISOString().slice(0,10);const issue={id:uid(),studentId:stu.id,studentName:stu.name,rollNo:stu.rollNo,issuedAt:today(),dueDate:due,returned:false};saveBooks(books.map(b=>b.id===bookId?{...b,available:b.available-1,issues:[...(b.issues||[]),issue]}:b));setIssueFor(null);setIssueStudent("");notify("Issued to "+stu.name+"!");}
+  function returnBook(bookId,issueId){saveBooks(books.map(b=>b.id===bookId?{...b,available:b.available+1,issues:b.issues.map(i=>i.id===issueId?{...i,returned:true,returnedAt:today()}:i)}:b));notify("Book returned!");}
+  const filtered=books.filter(b=>[b.title,b.author,b.isbn,b.category].some(v=>v&&v.toLowerCase().includes(search.toLowerCase())));
   const overdue=books.flatMap(b=>(b.issues||[]).filter(i=>!i.returned&&i.dueDate<today()).map(i=>({...i,bookTitle:b.title,bookId:b.id})));
-  const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",borderBottom:`1px solid ${C.border}`,background:C.bg};
-  const TD={padding:"10px 14px",fontSize:12,color:C.text,borderBottom:`1px solid ${C.border}`};
-  const SUB=[{k:"catalog",l:"📚 Catalog"},{k:"issued",l:"📖 Issued"},{k:"overdue",l:`⚠ Overdue${overdue.length?` (${overdue.length})`:""`}]};
+  const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",borderBottom:"1px solid "+C.border,background:C.bg};
+  const TD={padding:"10px 14px",fontSize:12,color:C.text,borderBottom:"1px solid "+C.border};
+  const SUB=[{k:"catalog",l:"Catalog"},{k:"issued",l:"Issued"},{k:"overdue",l:"Overdue"+(overdue.length?" ("+overdue.length+")":"")}];
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
-      <PH title="📚 Library Management" sub={`${books.length} books · ${books.reduce((a,b)=>a+b.available,0)} available`} C={C}/>
+      <PH title="Library Management" sub={books.length+" books, "+books.reduce((a,b)=>a+b.available,0)+" available"} C={C}/>
       {isAdmin&&<Btn onClick={()=>setShowAdd(s=>!s)} C={C} color="teal">+ Add Book</Btn>}
     </div>
-    {showAdd&&isAdmin&&<div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:20,marginBottom:18,boxShadow:C.shadow,animation:"fadeIn 0.25s ease"}}>
+    {showAdd&&isAdmin&&<div style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:20,marginBottom:18,boxShadow:C.shadow}}>
       <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>New Book</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
         <FG label="Title *" C={C} span><Inp C={C} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="Book title"/></FG>
@@ -3108,20 +3098,20 @@ function InstLibrary({db,saveDb,inst,color,isAdmin,notify,C}){
       <div style={{display:"flex",gap:10}}><Btn onClick={addBook} C={C} color="green">Add Book</Btn><Btn onClick={()=>setShowAdd(false)} C={C} color="red" outline>Cancel</Btn></div>
     </div>}
     <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-      {SUB.map(t=><button key={t.k} onClick={()=>setSubTab(t.k)} style={{padding:"7px 16px",borderRadius:20,border:`1px solid ${subTab===t.k?color:C.border}`,background:subTab===t.k?color:"transparent",color:subTab===t.k?"#fff":C.muted,fontWeight:700,fontSize:12,cursor:"pointer"}}>{t.l}</button>)}
+      {SUB.map(t=><button key={t.k} onClick={()=>setSubTab(t.k)} style={{padding:"7px 16px",borderRadius:20,border:"1px solid "+(subTab===t.k?color:C.border),background:subTab===t.k?color:"transparent",color:subTab===t.k?"#fff":C.muted,fontWeight:700,fontSize:12,cursor:"pointer"}}>{t.l}</button>)}
       {subTab==="catalog"&&<Inp C={C} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search books..." style={{flex:1,minWidth:160,marginBottom:0}}/>}
     </div>
     {subTab==="catalog"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {filtered.map(book=><div key={book.id} style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:"14px 18px",boxShadow:C.shadow}}>
+      {filtered.map(book=><div key={book.id} style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:"14px 18px",boxShadow:C.shadow}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
-          <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13,color:C.text}}>{book.title}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>by {book.author}{book.isbn&&` · ISBN: ${book.isbn}`}{book.category&&` · ${book.category}`}</div></div>
+          <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13,color:C.text}}>{book.title}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>by {book.author}{book.isbn?" · ISBN: "+book.isbn:""}{book.category?" · "+book.category:""}</div></div>
           <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
-            <div style={{textAlign:"center",padding:"5px 12px",background:book.available>0?C.greenL:C.redL,borderRadius:8,border:`1px solid ${book.available>0?C.green:C.red}44`}}><div style={{fontWeight:800,fontSize:14,color:book.available>0?C.green:C.red}}>{book.available}/{book.totalCopies}</div><div style={{fontSize:9,color:C.muted}}>Available</div></div>
+            <div style={{textAlign:"center",padding:"5px 12px",background:book.available>0?C.greenL:C.redL,borderRadius:8}}><div style={{fontWeight:800,fontSize:14,color:book.available>0?C.green:C.red}}>{book.available}/{book.totalCopies}</div><div style={{fontSize:9,color:C.muted}}>Available</div></div>
             {isAdmin&&<Btn onClick={()=>{setIssueFor(book.id);setIssueStudent("");}} C={C} color="blue" size="sm" disabled={book.available<1}>Issue</Btn>}
             {isAdmin&&<Btn onClick={()=>delBook(book.id)} C={C} color="red" size="sm" outline>Del</Btn>}
           </div>
         </div>
-        {issueFor===book.id&&<div style={{marginTop:12,padding:12,background:C.bg,borderRadius:8,border:`1px solid ${C.border}`,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+        {issueFor===book.id&&<div style={{marginTop:12,padding:12,background:C.bg,borderRadius:8,border:"1px solid "+C.border,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
           <Sel C={C} value={issueStudent} onChange={e=>setIssueStudent(e.target.value)} style={{flex:1,minWidth:160,marginBottom:0}}><option value="">-- Select Student --</option>{myStudents.map(s=><option key={s.id} value={s.id}>{s.name} ({s.rollNo||"No Roll"})</option>)}</Sel>
           <Btn onClick={()=>issueBook(book.id)} C={C} color="green" size="sm" disabled={!issueStudent}>Confirm Issue</Btn>
           <Btn onClick={()=>setIssueFor(null)} C={C} color="red" size="sm" outline>Cancel</Btn>
@@ -3129,20 +3119,20 @@ function InstLibrary({db,saveDb,inst,color,isAdmin,notify,C}){
       </div>)}
       {!filtered.length&&<Empty msg={books.length?"No books match search":"No books added yet"} C={C}/>}
     </div>}
-    {subTab==="issued"&&<div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,overflow:"auto",boxShadow:C.shadow}}>
+    {subTab==="issued"&&<div style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,overflow:"auto",boxShadow:C.shadow}}>
       <table style={{width:"100%",borderCollapse:"collapse",minWidth:500}}>
         <thead><tr>{["Book","Student","Issued","Due","Status","Action"].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
         <tbody>
-          {books.flatMap(b=>(b.issues||[]).filter(i=>!i.returned).map(i=>{const overdue=i.dueDate<today();return<tr key={i.id}><td style={TD}><div style={{fontWeight:600}}>{b.title}</div></td><td style={TD}><div>{i.studentName}</div><div style={{fontSize:10,color:C.muted}}>{i.rollNo}</div></td><td style={TD}>{fmt(i.issuedAt)}</td><td style={{...TD,color:overdue?C.red:C.text,fontWeight:overdue?700:400}}>{fmt(i.dueDate)}{overdue&&" ⚠"}</td><td style={TD}><Badge label={overdue?"Overdue":"Active"} color={overdue?"red":"green"} C={C}/></td><td style={TD}><Btn onClick={()=>returnBook(b.id,i.id)} C={C} color="teal" size="sm">Return</Btn></td></tr>;}))
+          {books.flatMap(b=>(b.issues||[]).filter(i=>!i.returned).map(i=>{const od=i.dueDate<today();return<tr key={i.id}><td style={TD}><div style={{fontWeight:600}}>{b.title}</div></td><td style={TD}><div>{i.studentName}</div><div style={{fontSize:10,color:C.muted}}>{i.rollNo}</div></td><td style={TD}>{fmt(i.issuedAt)}</td><td style={{...TD,color:od?C.red:C.text,fontWeight:od?700:400}}>{fmt(i.dueDate)}{od?" !":""}</td><td style={TD}><Badge label={od?"Overdue":"Active"} color={od?"red":"green"} C={C}/></td><td style={TD}><Btn onClick={()=>returnBook(b.id,i.id)} C={C} color="teal" size="sm">Return</Btn></td></tr>;}))
           }
           {!books.flatMap(b=>(b.issues||[]).filter(i=>!i.returned)).length&&<tr><td colSpan={6}><Empty msg="No active issues" C={C}/></td></tr>}
         </tbody>
       </table>
     </div>}
     {subTab==="overdue"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {overdue.map(i=><div key={i.id} style={{background:C.surface,borderRadius:10,border:`1px solid ${C.red}44`,padding:"14px 18px",boxShadow:C.shadow,borderLeft:`4px solid ${C.red}`}}>
+      {overdue.map(i=><div key={i.id} style={{background:C.surface,borderRadius:10,border:"1px solid "+C.red+"44",padding:"14px 18px",boxShadow:C.shadow,borderLeft:"4px solid "+C.red}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-          <div><div style={{fontWeight:700,fontSize:13,color:C.text}}>{i.bookTitle}</div><div style={{fontSize:12,color:C.muted}}>{i.studentName} · {i.rollNo}</div><div style={{fontSize:11,color:C.red,marginTop:4}}>Due: {fmt(i.dueDate)} · {Math.round((Date.now()-new Date(i.dueDate))/86400000)} days overdue</div></div>
+          <div><div style={{fontWeight:700,fontSize:13,color:C.text}}>{i.bookTitle}</div><div style={{fontSize:12,color:C.muted}}>{i.studentName} - {i.rollNo}</div><div style={{fontSize:11,color:C.red,marginTop:4}}>Due: {fmt(i.dueDate)} - {Math.round((Date.now()-new Date(i.dueDate))/86400000)} days overdue</div></div>
           <Btn onClick={()=>returnBook(i.bookId,i.id)} C={C} color="teal" size="sm">Mark Returned</Btn>
         </div>
       </div>)}
@@ -3153,9 +3143,8 @@ function InstLibrary({db,saveDb,inst,color,isAdmin,notify,C}){
 
 // ─── HR & PAYROLL ─────────────────────────────────────────────────────────────
 function InstPayroll({db,saveDb,inst,color,notify,C}){
-  const KEY=`payroll_${inst.id}`;
+  const KEY="payroll_"+inst.id;
   const [records,setRecords]=useState(()=>lsGet(KEY,[]));
-  const [subTab,setSubTab]=useState("salaries");
   const [showAdd,setShowAdd]=useState(false);
   const [month,setMonth]=useState(new Date().toISOString().slice(0,7));
   const staff=(db.users||[]).filter(u=>u.instId===inst.id&&u.role!=="admin"&&u.role!=="accountant");
@@ -3169,18 +3158,17 @@ function InstPayroll({db,saveDb,inst,color,notify,C}){
     const gross=Number(payForm.baseSalary)+payForm.allowances.reduce((a,x)=>a+Number(x.amount||0),0);
     const deduct=payForm.deductions.reduce((a,x)=>a+Number(x.amount||0),0);
     const net=gross-deduct;
-    const rec={id:uid(),staffId:payForm.staffId,staffName:s?.name,role:s?.role,month,baseSalary:Number(payForm.baseSalary),allowances:payForm.allowances,deductions:payForm.deductions,gross,net,note:payForm.note,paidAt:today(),status:"Paid"};
-    saveRecords([...records,rec]);
+    saveRecords([...records,{id:uid(),staffId:payForm.staffId,staffName:s&&s.name,role:s&&s.role,month,baseSalary:Number(payForm.baseSalary),allowances:payForm.allowances,deductions:payForm.deductions,gross,net,note:payForm.note,paidAt:today(),status:"Paid"}]);
     setPayForm({staffId:"",baseSalary:"",allowances:[],deductions:[],note:""});
-    setShowAdd(false);notify(`✅ Salary recorded for ${s?.name}`);
+    setShowAdd(false);notify("Salary recorded for "+(s&&s.name));
   }
   const monthRecords=records.filter(r=>r.month===month);
   const totalPaid=monthRecords.reduce((a,r)=>a+r.net,0);
-  const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",borderBottom:`1px solid ${C.border}`,background:C.bg};
-  const TD={padding:"10px 14px",fontSize:12,color:C.text,borderBottom:`1px solid ${C.border}`};
+  const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",borderBottom:"1px solid "+C.border,background:C.bg};
+  const TD={padding:"10px 14px",fontSize:12,color:C.text,borderBottom:"1px solid "+C.border};
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
-      <PH title="💵 HR & Payroll" sub={`${staff.length} staff members`} C={C}/>
+      <PH title="HR & Payroll" sub={staff.length+" staff members"} C={C}/>
       <div style={{display:"flex",gap:10,alignItems:"center"}}>
         <Inp C={C} type="month" value={month} onChange={e=>setMonth(e.target.value)} style={{width:"auto",marginBottom:0}}/>
         <Btn onClick={()=>setShowAdd(s=>!s)} C={C} color="green">+ Add Salary</Btn>
@@ -3189,43 +3177,43 @@ function InstPayroll({db,saveDb,inst,color,notify,C}){
     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:20}}>
       <StatCard icon="👨‍🏫" label="Total Staff" value={staff.length} color="teal" C={C}/>
       <StatCard icon="💵" label="Paid This Month" value={monthRecords.length} color="green" C={C}/>
-      <StatCard icon="💰" label="Total Payroll" value={`₹${totalPaid.toLocaleString()}`} color="gold" C={C}/>
+      <StatCard icon="💰" label="Total Payroll" value={"Rs "+totalPaid.toLocaleString()} color="gold" C={C}/>
     </div>
-    {showAdd&&<div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:20,marginBottom:18,boxShadow:C.shadow,animation:"fadeIn 0.25s ease"}}>
-      <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Record Salary Payment — {month}</div>
+    {showAdd&&<div style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:20,marginBottom:18,boxShadow:C.shadow}}>
+      <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Record Salary Payment - {month}</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
         <FG label="Staff Member *" C={C}><Sel C={C} value={payForm.staffId} onChange={e=>setPayForm(f=>({...f,staffId:e.target.value}))}><option value="">-- Select Staff --</option>{staff.map(s=><option key={s.id} value={s.id}>{s.name} ({s.role})</option>)}</Sel></FG>
-        <FG label="Base Salary (₹) *" C={C}><Inp C={C} type="number" value={payForm.baseSalary} onChange={e=>setPayForm(f=>({...f,baseSalary:e.target.value}))} placeholder="Monthly salary"/></FG>
+        <FG label="Base Salary (Rs) *" C={C}><Inp C={C} type="number" value={payForm.baseSalary} onChange={e=>setPayForm(f=>({...f,baseSalary:e.target.value}))} placeholder="Monthly salary"/></FG>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:12}}>
-        <div><div style={{fontWeight:600,fontSize:12,color:C.text,marginBottom:8}}>➕ Allowances</div>
-          {payForm.allowances.map((a,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:6}}><Sel C={C} value={a.type} onChange={e=>setPayForm(f=>({...f,allowances:f.allowances.map((x,j)=>j===i?{...x,type:e.target.value}:x)}))} style={{flex:1,marginBottom:0}}>{ALLOWANCES.map(t=><option key={t}>{t}</option>)}</Sel><Inp C={C} type="number" value={a.amount} onChange={e=>setPayForm(f=>({...f,allowances:f.allowances.map((x,j)=>j===i?{...x,amount:e.target.value}:x)}))} placeholder="₹" style={{width:90,marginBottom:0}}/><Btn onClick={()=>setPayForm(f=>({...f,allowances:f.allowances.filter((_,j)=>j!==i)}))} C={C} color="red" size="sm" outline>✕</Btn></div>)}
+        <div><div style={{fontWeight:600,fontSize:12,color:C.text,marginBottom:8}}>Allowances (+)</div>
+          {payForm.allowances.map((a,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:6}}><Sel C={C} value={a.type} onChange={e=>setPayForm(f=>({...f,allowances:f.allowances.map((x,j)=>j===i?{...x,type:e.target.value}:x)}))} style={{flex:1,marginBottom:0}}>{ALLOWANCES.map(t=><option key={t}>{t}</option>)}</Sel><Inp C={C} type="number" value={a.amount} onChange={e=>setPayForm(f=>({...f,allowances:f.allowances.map((x,j)=>j===i?{...x,amount:e.target.value}:x)}))} placeholder="Rs" style={{width:90,marginBottom:0}}/><Btn onClick={()=>setPayForm(f=>({...f,allowances:f.allowances.filter((_,j)=>j!==i)}))} C={C} color="red" size="sm" outline>X</Btn></div>)}
           <Btn onClick={()=>setPayForm(f=>({...f,allowances:[...f.allowances,{type:"HRA",amount:""}]}))} C={C} color="green" size="sm" outline>+ Add</Btn>
         </div>
-        <div><div style={{fontWeight:600,fontSize:12,color:C.text,marginBottom:8}}>➖ Deductions</div>
-          {payForm.deductions.map((d,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:6}}><Sel C={C} value={d.type} onChange={e=>setPayForm(f=>({...f,deductions:f.deductions.map((x,j)=>j===i?{...x,type:e.target.value}:x)}))} style={{flex:1,marginBottom:0}}>{DEDUCTIONS.map(t=><option key={t}>{t}</option>)}</Sel><Inp C={C} type="number" value={d.amount} onChange={e=>setPayForm(f=>({...f,deductions:f.deductions.map((x,j)=>j===i?{...x,amount:e.target.value}:x)}))} placeholder="₹" style={{width:90,marginBottom:0}}/><Btn onClick={()=>setPayForm(f=>({...f,deductions:f.deductions.filter((_,j)=>j!==i)}))} C={C} color="red" size="sm" outline>✕</Btn></div>)}
+        <div><div style={{fontWeight:600,fontSize:12,color:C.text,marginBottom:8}}>Deductions (-)</div>
+          {payForm.deductions.map((d,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:6}}><Sel C={C} value={d.type} onChange={e=>setPayForm(f=>({...f,deductions:f.deductions.map((x,j)=>j===i?{...x,type:e.target.value}:x)}))} style={{flex:1,marginBottom:0}}>{DEDUCTIONS.map(t=><option key={t}>{t}</option>)}</Sel><Inp C={C} type="number" value={d.amount} onChange={e=>setPayForm(f=>({...f,deductions:f.deductions.map((x,j)=>j===i?{...x,amount:e.target.value}:x)}))} placeholder="Rs" style={{width:90,marginBottom:0}}/><Btn onClick={()=>setPayForm(f=>({...f,deductions:f.deductions.filter((_,j)=>j!==i)}))} C={C} color="red" size="sm" outline>X</Btn></div>)}
           <Btn onClick={()=>setPayForm(f=>({...f,deductions:[...f.deductions,{type:"PF",amount:""}]}))} C={C} color="red" size="sm" outline>+ Add</Btn>
         </div>
       </div>
-      {payForm.baseSalary&&<div style={{padding:"10px 14px",background:C.greenL,borderRadius:8,marginBottom:12,fontSize:12,color:C.green,fontWeight:700}}>Net Pay: ₹{(Number(payForm.baseSalary)+payForm.allowances.reduce((a,x)=>a+Number(x.amount||0),0)-payForm.deductions.reduce((a,x)=>a+Number(x.amount||0),0)).toLocaleString()}</div>}
+      {payForm.baseSalary&&<div style={{padding:"10px 14px",background:C.greenL,borderRadius:8,marginBottom:12,fontSize:12,color:C.green,fontWeight:700}}>Net Pay: Rs {(Number(payForm.baseSalary)+payForm.allowances.reduce((a,x)=>a+Number(x.amount||0),0)-payForm.deductions.reduce((a,x)=>a+Number(x.amount||0),0)).toLocaleString()}</div>}
       <FG label="Note" C={C}><Inp C={C} value={payForm.note} onChange={e=>setPayForm(f=>({...f,note:e.target.value}))} placeholder="Optional note"/></FG>
       <div style={{display:"flex",gap:10,marginTop:10}}><Btn onClick={addRecord} C={C} color="green">Save Payment</Btn><Btn onClick={()=>setShowAdd(false)} C={C} color="red" outline>Cancel</Btn></div>
     </div>}
-    <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,overflow:"auto",boxShadow:C.shadow}}>
+    <div style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,overflow:"auto",boxShadow:C.shadow}}>
       <table style={{width:"100%",borderCollapse:"collapse",minWidth:600}}>
-        <thead><tr>{["Staff","Role","Base","Allowances","Deductions","Net Pay","Paid On","Actions"].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
+        <thead><tr>{["Staff","Role","Base","Allowances","Deductions","Net Pay","Paid On","Action"].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
         <tbody>
           {monthRecords.map(r=><tr key={r.id}>
             <td style={TD}><div style={{fontWeight:600}}>{r.staffName}</div></td>
             <td style={TD}><Badge label={r.role} color="teal" C={C}/></td>
-            <td style={TD}>₹{r.baseSalary?.toLocaleString()}</td>
-            <td style={{...TD,color:C.green}}>+₹{r.allowances?.reduce((a,x)=>a+Number(x.amount||0),0).toLocaleString()}</td>
-            <td style={{...TD,color:C.red}}>-₹{r.deductions?.reduce((a,x)=>a+Number(x.amount||0),0).toLocaleString()}</td>
-            <td style={{...TD,fontWeight:800,color:C.teal}}>₹{r.net?.toLocaleString()}</td>
+            <td style={TD}>Rs {r.baseSalary&&r.baseSalary.toLocaleString()}</td>
+            <td style={{...TD,color:C.green}}>+Rs {r.allowances&&r.allowances.reduce((a,x)=>a+Number(x.amount||0),0).toLocaleString()}</td>
+            <td style={{...TD,color:C.red}}>-Rs {r.deductions&&r.deductions.reduce((a,x)=>a+Number(x.amount||0),0).toLocaleString()}</td>
+            <td style={{...TD,fontWeight:800,color:C.teal}}>Rs {r.net&&r.net.toLocaleString()}</td>
             <td style={TD}>{fmt(r.paidAt)}</td>
-            <td style={TD}><Btn onClick={()=>{if(window.confirm("Delete record?"))saveRecords(records.filter(x=>x.id!==r.id));}} C={C} color="red" size="sm" outline>Del</Btn></td>
+            <td style={TD}><Btn onClick={()=>{if(window.confirm("Delete?"))saveRecords(records.filter(x=>x.id!==r.id));}} C={C} color="red" size="sm" outline>Del</Btn></td>
           </tr>)}
-          {!monthRecords.length&&<tr><td colSpan={8}><Empty msg={`No salary records for ${month}`} C={C}/></td></tr>}
+          {!monthRecords.length&&<tr><td colSpan={8}><Empty msg={"No salary records for "+month} C={C}/></td></tr>}
         </tbody>
       </table>
     </div>
@@ -3234,32 +3222,26 @@ function InstPayroll({db,saveDb,inst,color,notify,C}){
 
 // ─── LEAVE MANAGEMENT ─────────────────────────────────────────────────────────
 function InstLeave({db,saveDb,user,inst,color,isAdmin,notify,C}){
-  const KEY=`leave_${inst.id}`;
+  const KEY="leave_"+inst.id;
   const [leaves,setLeaves]=useState(()=>lsGet(KEY,[]));
   const [subTab,setSubTab]=useState(isAdmin?"all":"apply");
   const [form,setForm]=useState({type:"Sick Leave",from:"",to:"",reason:""});
   const TYPES=["Sick Leave","Casual Leave","Emergency Leave","Medical Leave","Personal Leave"];
   function saveLeaves(l){setLeaves(l);lsSet(KEY,l);}
-  function applyLeave(){
-    if(!form.from||!form.to||!form.reason.trim())return;
-    const days=Math.round((new Date(form.to)-new Date(form.from))/86400000)+1;
-    saveLeaves([...leaves,{...form,id:uid(),applicantId:user.id,applicantName:user.name,role:user.role,days,status:"Pending",appliedAt:today()}]);
-    setForm({type:"Sick Leave",from:"",to:"",reason:""});notify("✅ Leave applied!");
-  }
-  function approve(id){saveLeaves(leaves.map(l=>l.id===id?{...l,status:"Approved",reviewedAt:today(),reviewedBy:user.name}:l));notify("✅ Leave approved!");}
+  function applyLeave(){if(!form.from||!form.to||!form.reason.trim())return;const days=Math.round((new Date(form.to)-new Date(form.from))/86400000)+1;saveLeaves([...leaves,{...form,id:uid(),applicantId:user.id,applicantName:user.name,role:user.role,days,status:"Pending",appliedAt:today()}]);setForm({type:"Sick Leave",from:"",to:"",reason:""});notify("Leave applied!");}
+  function approve(id){saveLeaves(leaves.map(l=>l.id===id?{...l,status:"Approved",reviewedAt:today(),reviewedBy:user.name}:l));notify("Leave approved!");}
   function reject(id){saveLeaves(leaves.map(l=>l.id===id?{...l,status:"Rejected",reviewedAt:today(),reviewedBy:user.name}:l));notify("Leave rejected","error");}
-  function del(id){saveLeaves(leaves.filter(l=>l.id!==id));}
-  const myLeaves=leaves.filter(l=>l.applicantId===user.id);
-  const allLeaves=leaves.sort((a,b)=>b.appliedAt.localeCompare(a.appliedAt));
+  const allLeaves=leaves.slice().sort((a,b)=>b.appliedAt.localeCompare(a.appliedAt));
   const pending=allLeaves.filter(l=>l.status==="Pending");
+  const myLeaves=leaves.filter(l=>l.applicantId===user.id);
   const statusColor=s=>s==="Approved"?C.green:s==="Rejected"?C.red:C.gold;
-  const SUB=isAdmin?[{k:"all",l:"📋 All Leaves"},{k:"pending",l:`⏳ Pending${pending.length?" ("+pending.length+")":""}`},{k:"apply",l:"+ Apply Leave"}]:[{k:"apply",l:"+ Apply Leave"},{k:"my",l:"My Leaves"}];
+  const SUB=isAdmin?[{k:"all",l:"All Leaves"},{k:"pending",l:"Pending"+(pending.length?" ("+pending.length+")":"")},{k:"apply",l:"+ Apply"}]:[{k:"apply",l:"+ Apply Leave"},{k:"my",l:"My Leaves"}];
   return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <PH title="🏖 Leave Management" sub={`${pending.length} pending approval`} C={C}/>
+    <PH title="Leave Management" sub={pending.length+" pending approval"} C={C}/>
     <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
-      {SUB.map(t=><button key={t.k} onClick={()=>setSubTab(t.k)} style={{padding:"7px 16px",borderRadius:20,border:`1px solid ${subTab===t.k?color:C.border}`,background:subTab===t.k?color:"transparent",color:subTab===t.k?"#fff":C.muted,fontWeight:700,fontSize:12,cursor:"pointer"}}>{t.l}</button>)}
+      {SUB.map(t=><button key={t.k} onClick={()=>setSubTab(t.k)} style={{padding:"7px 16px",borderRadius:20,border:"1px solid "+(subTab===t.k?color:C.border),background:subTab===t.k?color:"transparent",color:subTab===t.k?"#fff":C.muted,fontWeight:700,fontSize:12,cursor:"pointer"}}>{t.l}</button>)}
     </div>
-    {subTab==="apply"&&<div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:22,maxWidth:520,boxShadow:C.shadow}}>
+    {subTab==="apply"&&<div style={{background:C.surface,borderRadius:12,border:"1px solid "+C.border,padding:22,maxWidth:520,boxShadow:C.shadow}}>
       <div style={{fontWeight:700,fontSize:13,marginBottom:16,color:C.text}}>Apply for Leave</div>
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         <FG label="Leave Type" C={C}><Sel C={C} value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>{TYPES.map(t=><option key={t}>{t}</option>)}</Sel></FG>
@@ -3267,19 +3249,19 @@ function InstLeave({db,saveDb,user,inst,color,isAdmin,notify,C}){
           <FG label="From Date" C={C}><Inp C={C} type="date" value={form.from} onChange={e=>setForm(f=>({...f,from:e.target.value}))}/></FG>
           <FG label="To Date" C={C}><Inp C={C} type="date" value={form.to} onChange={e=>setForm(f=>({...f,to:e.target.value}))}/></FG>
         </div>
-        {form.from&&form.to&&form.to>=form.from&&<div style={{padding:"8px 12px",background:C.blueL,borderRadius:8,fontSize:12,color:C.blue,fontWeight:700}}>{Math.round((new Date(form.to)-new Date(form.from))/86400000)+1} day(s) leave</div>}
+        {form.from&&form.to&&form.to>=form.from&&<div style={{padding:"8px 12px",background:C.blueL||C.tealL,borderRadius:8,fontSize:12,color:C.blue||C.teal,fontWeight:700}}>{Math.round((new Date(form.to)-new Date(form.from))/86400000)+1} day(s) leave</div>}
         <FG label="Reason *" C={C}><Txt C={C} value={form.reason} onChange={e=>setForm(f=>({...f,reason:e.target.value}))} placeholder="Reason for leave..." rows={3}/></FG>
         <Btn onClick={applyLeave} C={C} color="teal">Submit Leave Application</Btn>
       </div>
     </div>}
     {(subTab==="all"||subTab==="pending")&&isAdmin&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {(subTab==="pending"?pending:allLeaves).map(l=><div key={l.id} style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:"14px 18px",boxShadow:C.shadow,borderLeft:`4px solid ${statusColor(l.status)}`}}>
+      {(subTab==="pending"?pending:allLeaves).map(l=><div key={l.id} style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:"14px 18px",boxShadow:C.shadow,borderLeft:"4px solid "+statusColor(l.status)}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
-          <div><div style={{fontWeight:700,fontSize:13,color:C.text}}>{l.applicantName} <Badge label={l.role} color="teal" C={C}/></div><div style={{fontSize:12,color:C.muted,marginTop:3}}>{l.type} · {fmt(l.from)} to {fmt(l.to)} · <b style={{color:C.text}}>{l.days} day(s)</b></div><div style={{fontSize:11,color:C.muted,marginTop:2,fontStyle:"italic"}}>{l.reason}</div></div>
+          <div><div style={{fontWeight:700,fontSize:13,color:C.text}}>{l.applicantName} <Badge label={l.role} color="teal" C={C}/></div><div style={{fontSize:12,color:C.muted,marginTop:3}}>{l.type} - {fmt(l.from)} to {fmt(l.to)} - {l.days} day(s)</div><div style={{fontSize:11,color:C.muted,marginTop:2,fontStyle:"italic"}}>{l.reason}</div></div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <Badge label={l.status} color={l.status==="Approved"?"green":l.status==="Rejected"?"red":"gold"} C={C}/>
             {l.status==="Pending"&&<><Btn onClick={()=>approve(l.id)} C={C} color="green" size="sm">Approve</Btn><Btn onClick={()=>reject(l.id)} C={C} color="red" size="sm" outline>Reject</Btn></>}
-            <Btn onClick={()=>del(l.id)} C={C} color="red" size="sm" outline>Del</Btn>
+            <Btn onClick={()=>saveLeaves(leaves.filter(x=>x.id!==l.id))} C={C} color="red" size="sm" outline>Del</Btn>
           </div>
         </div>
         {l.reviewedBy&&<div style={{fontSize:10,color:C.muted,marginTop:8}}>Reviewed by {l.reviewedBy} on {fmt(l.reviewedAt)}</div>}
@@ -3287,9 +3269,9 @@ function InstLeave({db,saveDb,user,inst,color,isAdmin,notify,C}){
       {!(subTab==="pending"?pending:allLeaves).length&&<Empty msg={subTab==="pending"?"No pending leaves":"No leave records"} C={C}/>}
     </div>}
     {subTab==="my"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {myLeaves.map(l=><div key={l.id} style={{background:C.surface,borderRadius:10,border:`1px solid ${statusColor(l.status)}44`,padding:"14px 18px",boxShadow:C.shadow}}>
+      {myLeaves.map(l=><div key={l.id} style={{background:C.surface,borderRadius:10,border:"1px solid "+statusColor(l.status)+"44",padding:"14px 18px",boxShadow:C.shadow}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-          <div><div style={{fontWeight:700,fontSize:13,color:C.text}}>{l.type}</div><div style={{fontSize:11,color:C.muted}}>{fmt(l.from)} — {fmt(l.to)} · {l.days} day(s)</div><div style={{fontSize:11,color:C.muted,fontStyle:"italic",marginTop:2}}>{l.reason}</div></div>
+          <div><div style={{fontWeight:700,fontSize:13,color:C.text}}>{l.type}</div><div style={{fontSize:11,color:C.muted}}>{fmt(l.from)} to {fmt(l.to)} - {l.days} day(s)</div><div style={{fontSize:11,color:C.muted,fontStyle:"italic",marginTop:2}}>{l.reason}</div></div>
           <Badge label={l.status} color={l.status==="Approved"?"green":l.status==="Rejected"?"red":"gold"} C={C}/>
         </div>
       </div>)}
@@ -3299,22 +3281,17 @@ function InstLeave({db,saveDb,user,inst,color,isAdmin,notify,C}){
 }
 
 function StuLeaveView({db,saveDb,stu,inst,C,notify}){
-  const KEY=`leave_stu_${inst.id}`;
+  const KEY="leave_stu_"+inst.id;
   const [leaves,setLeaves]=useState(()=>lsGet(KEY,[]));
   const [form,setForm]=useState({type:"Sick Leave",from:"",to:"",reason:""});
   const TYPES=["Sick Leave","Casual Leave","Emergency Leave","Medical Leave","Other"];
   function saveLeaves(l){setLeaves(l);lsSet(KEY,l);}
-  function apply(){
-    if(!form.from||!form.to||!form.reason.trim())return;
-    const days=Math.round((new Date(form.to)-new Date(form.from))/86400000)+1;
-    saveLeaves([...leaves,{...form,id:uid(),studentId:stu.id,studentName:stu.name,rollNo:stu.rollNo,days,status:"Pending",appliedAt:today()}]);
-    setForm({type:"Sick Leave",from:"",to:"",reason:""});notify("✅ Leave application submitted!");
-  }
-  const myLeaves=leaves.filter(l=>l.studentId===stu.id).sort((a,b)=>b.appliedAt.localeCompare(a.appliedAt));
+  function apply(){if(!form.from||!form.to||!form.reason.trim())return;const days=Math.round((new Date(form.to)-new Date(form.from))/86400000)+1;saveLeaves([...leaves,{...form,id:uid(),studentId:stu.id,studentName:stu.name,rollNo:stu.rollNo,days,status:"Pending",appliedAt:today()}]);setForm({type:"Sick Leave",from:"",to:"",reason:""});notify("Leave application submitted!");}
+  const myLeaves=leaves.filter(l=>l.studentId===stu.id).slice().sort((a,b)=>b.appliedAt.localeCompare(a.appliedAt));
   return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <PH title="🏖 Leave Application" sub="Apply and track your leave requests" C={C}/>
+    <PH title="Leave Application" sub="Apply and track your leave requests" C={C}/>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
+      <div style={{background:C.surface,borderRadius:12,border:"1px solid "+C.border,padding:20,boxShadow:C.shadow}}>
         <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Apply for Leave</div>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
           <FG label="Type" C={C}><Sel C={C} value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>{TYPES.map(t=><option key={t}>{t}</option>)}</Sel></FG>
@@ -3324,11 +3301,11 @@ function StuLeaveView({db,saveDb,stu,inst,C,notify}){
           <Btn onClick={apply} C={C} color="teal">Submit Application</Btn>
         </div>
       </div>
-      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
+      <div style={{background:C.surface,borderRadius:12,border:"1px solid "+C.border,padding:20,boxShadow:C.shadow}}>
         <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>My Applications</div>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {myLeaves.map(l=><div key={l.id} style={{padding:"10px 14px",background:C.bg,borderRadius:9,border:`1px solid ${C.border}`}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:600,fontSize:12,color:C.text}}>{l.type}</div><div style={{fontSize:10,color:C.muted}}>{fmt(l.from)}–{fmt(l.to)} · {l.days}d</div></div><Badge label={l.status} color={l.status==="Approved"?"green":l.status==="Rejected"?"red":"gold"} C={C}/></div>
+          {myLeaves.map(l=><div key={l.id} style={{padding:"10px 14px",background:C.bg,borderRadius:9,border:"1px solid "+C.border}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:600,fontSize:12,color:C.text}}>{l.type}</div><div style={{fontSize:10,color:C.muted}}>{fmt(l.from)} to {fmt(l.to)} - {l.days}d</div></div><Badge label={l.status} color={l.status==="Approved"?"green":l.status==="Rejected"?"red":"gold"} C={C}/></div>
           </div>)}
           {!myLeaves.length&&<Empty msg="No applications yet" C={C}/>}
         </div>
@@ -3339,7 +3316,7 @@ function StuLeaveView({db,saveDb,stu,inst,C,notify}){
 
 // ─── DOCUMENT MANAGEMENT ─────────────────────────────────────────────────────
 function InstDocs({db,saveDb,inst,color,isAdmin,notify,C}){
-  const KEY=`docs_${inst.id}`;
+  const KEY="docs_"+inst.id;
   const [docs,setDocs]=useState(()=>lsGet(KEY,[]));
   const [showAdd,setShowAdd]=useState(false);
   const [form,setForm]=useState({title:"",category:"",description:"",url:"",studentId:""});
@@ -3348,26 +3325,21 @@ function InstDocs({db,saveDb,inst,color,isAdmin,notify,C}){
   const CATS=["TC","Marksheet","Aadhaar","Birth Certificate","Character Certificate","Fee Receipt","Bonafide","Other"];
   const myStudents=(db.students||[]).filter(s=>s.instId===inst.id);
   function saveDocs(d){setDocs(d);lsSet(KEY,d);}
-  function addDoc(){
-    if(!form.title||!form.category)return;
-    saveDocs([...docs,{...form,id:uid(),uploadedBy:db.users?.find(u=>u.instId===inst.id)?.name||"Admin",uploadedAt:today()}]);
-    setForm({title:"",category:"",description:"",url:"",studentId:""});setShowAdd(false);notify("📁 Document added!");
-  }
+  function addDoc(){if(!form.title||!form.category)return;saveDocs([...docs,{...form,id:uid(),uploadedAt:today()}]);setForm({title:"",category:"",description:"",url:"",studentId:""});setShowAdd(false);notify("Document added!");}
   function delDoc(id){if(!window.confirm("Delete document?"))return;saveDocs(docs.filter(d=>d.id!==id));notify("Deleted","error");}
-  const filtered=docs.filter(d=>{const matchCat=filter==="all"||d.category===filter;const matchQ=[d.title,d.description,d.category].some(v=>v?.toLowerCase().includes(search.toLowerCase()));return matchCat&&matchQ;});
-  const byStudent=(sid)=>docs.filter(d=>d.studentId===sid);
+  const filtered=docs.filter(d=>{const matchCat=filter==="all"||d.category===filter;const matchQ=[d.title,d.description,d.category].some(v=>v&&v.toLowerCase().includes(search.toLowerCase()));return matchCat&&matchQ;});
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
-      <PH title="📁 Document Management" sub={`${docs.length} documents stored`} C={C}/>
+      <PH title="Document Management" sub={docs.length+" documents stored"} C={C}/>
       {isAdmin&&<Btn onClick={()=>setShowAdd(s=>!s)} C={C} color="teal">+ Upload Document</Btn>}
     </div>
-    {showAdd&&<div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:20,marginBottom:18,boxShadow:C.shadow,animation:"fadeIn 0.25s ease"}}>
+    {showAdd&&<div style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:20,marginBottom:18,boxShadow:C.shadow}}>
       <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Add Document</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-        <FG label="Document Title *" C={C}><Inp C={C} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Aadhaar Card - Rahul Kumar"/></FG>
+        <FG label="Document Title *" C={C}><Inp C={C} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Aadhaar Card - Rahul"/></FG>
         <FG label="Category *" C={C}><Sel C={C} value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}><option value="">-- Select --</option>{CATS.map(c=><option key={c}>{c}</option>)}</Sel></FG>
         <FG label="Link to Student (optional)" C={C}><Sel C={C} value={form.studentId} onChange={e=>setForm(f=>({...f,studentId:e.target.value}))}><option value="">-- General Document --</option>{myStudents.map(s=><option key={s.id} value={s.id}>{s.name} ({s.rollNo})</option>)}</Sel></FG>
-        <FG label="File URL (Google Drive / Dropbox link)" C={C}><Inp C={C} value={form.url} onChange={e=>setForm(f=>({...f,url:e.target.value}))} placeholder="https://drive.google.com/..."/></FG>
+        <FG label="File URL (Google Drive link)" C={C}><Inp C={C} value={form.url} onChange={e=>setForm(f=>({...f,url:e.target.value}))} placeholder="https://drive.google.com/..."/></FG>
         <FG label="Notes" C={C} span><Inp C={C} value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Optional notes..."/></FG>
       </div>
       <div style={{display:"flex",gap:10}}><Btn onClick={addDoc} C={C} color="green">Save</Btn><Btn onClick={()=>setShowAdd(false)} C={C} color="red" outline>Cancel</Btn></div>
@@ -3377,17 +3349,16 @@ function InstDocs({db,saveDb,inst,color,isAdmin,notify,C}){
       <Sel C={C} value={filter} onChange={e=>setFilter(e.target.value)} style={{width:"auto",marginBottom:0}}><option value="all">All Categories</option>{CATS.map(c=><option key={c}>{c}</option>)}</Sel>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
-      {filtered.map(doc=>{const stu=myStudents.find(s=>s.id===doc.studentId);return<div key={doc.id} style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:16,boxShadow:C.shadow}}>
+      {filtered.map(doc=>{const stu=myStudents.find(s=>s.id===doc.studentId);return<div key={doc.id} style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:16,boxShadow:C.shadow}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-          <div style={{fontSize:26}}>📄</div>
-          <Badge label={doc.category} color="blue" C={C}/>
+          <div style={{fontSize:26}}>📄</div><Badge label={doc.category} color="blue" C={C}/>
         </div>
         <div style={{fontWeight:700,fontSize:13,color:C.text,marginBottom:4}}>{doc.title}</div>
-        {stu&&<div style={{fontSize:11,color:C.muted,marginBottom:4}}>👤 {stu.name} · {stu.rollNo}</div>}
+        {stu&&<div style={{fontSize:11,color:C.muted,marginBottom:4}}>{stu.name} - {stu.rollNo}</div>}
         {doc.description&&<div style={{fontSize:11,color:C.muted,marginBottom:8}}>{doc.description}</div>}
         <div style={{fontSize:10,color:C.muted,marginBottom:10}}>Added: {fmt(doc.uploadedAt)}</div>
         <div style={{display:"flex",gap:8}}>
-          {doc.url&&<a href={doc.url} target="_blank" rel="noreferrer" style={{flex:1,padding:"6px 12px",borderRadius:7,background:color,color:"#fff",fontSize:11,fontWeight:700,textAlign:"center",textDecoration:"none"}}>🔗 Open</a>}
+          {doc.url&&<a href={doc.url} target="_blank" rel="noreferrer" style={{flex:1,padding:"6px 12px",borderRadius:7,background:color,color:"#fff",fontSize:11,fontWeight:700,textAlign:"center",textDecoration:"none"}}>Open File</a>}
           {isAdmin&&<Btn onClick={()=>delDoc(doc.id)} C={C} color="red" size="sm" outline>Del</Btn>}
         </div>
       </div>;})}
@@ -3398,35 +3369,31 @@ function InstDocs({db,saveDb,inst,color,isAdmin,notify,C}){
 
 // ─── ADMISSION CRM ────────────────────────────────────────────────────────────
 function InstCRM({db,saveDb,inst,color,notify,C}){
-  const KEY=`crm_${inst.id}`;
+  const KEY="crm_"+inst.id;
   const [leads,setLeads]=useState(()=>lsGet(KEY,[]));
   const [showAdd,setShowAdd]=useState(false);
   const [subTab,setSubTab]=useState("board");
   const blank={name:"",phone:"",email:"",course:"",source:"Walk-in",notes:"",status:"New Inquiry"};
   const [form,setForm]=useState(blank);
-  const [editId,setEditId]=useState(null);
   const STATUSES=["New Inquiry","Contacted","Follow-up","Demo Scheduled","Enrolled","Not Interested","Lost"];
   const SOURCES=["Walk-in","Phone Call","WhatsApp","Reference","Social Media","Website","Other"];
-  const STATUS_COLOR={
-    "New Inquiry":"teal","Contacted":"blue","Follow-up":"gold",
-    "Demo Scheduled":"purple","Enrolled":"green","Not Interested":"red","Lost":"red"
-  };
+  const SCOL={"New Inquiry":"teal","Contacted":"blue","Follow-up":"gold","Demo Scheduled":"purple","Enrolled":"green","Not Interested":"red","Lost":"red"};
   function saveLeads(l){setLeads(l);lsSet(KEY,l);}
-  function addLead(){if(!form.name||!form.phone)return;saveLeads([...leads,{...form,id:uid(),createdAt:today(),updatedAt:today()}]);setForm(blank);setShowAdd(false);notify("✅ Lead added!");}
-  function updateStatus(id,status){saveLeads(leads.map(l=>l.id===id?{...l,status,updatedAt:today()}:l));notify(`Status → ${status}`);}
-  function addNote(id,note){saveLeads(leads.map(l=>l.id===id?{...l,notes:(l.notes?l.notes+"\n":"")+`[${today()}] ${note}`,updatedAt:today()}:l));}
+  function addLead(){if(!form.name||!form.phone)return;saveLeads([...leads,{...form,id:uid(),createdAt:today(),updatedAt:today()}]);setForm(blank);setShowAdd(false);notify("Lead added!");}
+  function updateStatus(id,status){saveLeads(leads.map(l=>l.id===id?{...l,status,updatedAt:today()}:l));}
+  function addNote(id,note){saveLeads(leads.map(l=>l.id===id?{...l,notes:(l.notes?l.notes+"\n":"")+today()+": "+note,updatedAt:today()}:l));}
   function delLead(id){if(!window.confirm("Delete lead?"))return;saveLeads(leads.filter(l=>l.id!==id));notify("Deleted","error");}
-  const byStatus=(s)=>leads.filter(l=>l.status===s);
-  const convRate=leads.length?Math.round(byStatus("Enrolled").length/leads.length*100):0;
+  const convRate=leads.length?Math.round(leads.filter(l=>l.status==="Enrolled").length/leads.length*100):0;
+  const week=new Date(Date.now()-7*86400000).toISOString().slice(0,10);
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
-      <PH title="🎯 Admission CRM" sub={`${leads.length} leads · ${convRate}% conversion`} C={C}/>
+      <PH title="Admission CRM" sub={leads.length+" leads - "+convRate+"% conversion"} C={C}/>
       <Btn onClick={()=>setShowAdd(s=>!s)} C={C} color="teal">+ Add Lead</Btn>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
-      {[{l:"Total Leads",v:leads.length,c:"teal"},{l:"This Week",v:leads.filter(l=>l.createdAt>=new Date(Date.now()-7*86400000).toISOString().slice(0,10)).length,c:"blue"},{l:"Enrolled",v:byStatus("Enrolled").length,c:"green"},{l:"Conversion",v:convRate+"%",c:"gold"}].map(x=><div key={x.l} style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:14,textAlign:"center",boxShadow:C.shadow}}><div style={{fontSize:20,fontWeight:800,color:tc(C,x.c)}}>{x.v}</div><div style={{fontSize:10,color:C.muted}}>{x.l}</div></div>)}
+      {[{l:"Total Leads",v:leads.length,c:"teal"},{l:"This Week",v:leads.filter(l=>l.createdAt>=week).length,c:"blue"},{l:"Enrolled",v:leads.filter(l=>l.status==="Enrolled").length,c:"green"},{l:"Conversion",v:convRate+"%",c:"gold"}].map(x=><div key={x.l} style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:14,textAlign:"center",boxShadow:C.shadow}}><div style={{fontSize:20,fontWeight:800,color:tc(C,x.c)}}>{x.v}</div><div style={{fontSize:10,color:C.muted}}>{x.l}</div></div>)}
     </div>
-    {showAdd&&<div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:20,marginBottom:18,boxShadow:C.shadow,animation:"fadeIn 0.25s ease"}}>
+    {showAdd&&<div style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:20,marginBottom:18,boxShadow:C.shadow}}>
       <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>New Inquiry / Lead</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
         <FG label="Name *" C={C}><Inp C={C} value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Prospect name"/></FG>
@@ -3434,46 +3401,42 @@ function InstCRM({db,saveDb,inst,color,notify,C}){
         <FG label="Email" C={C}><Inp C={C} value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="Email (optional)"/></FG>
         <FG label="Course Interest" C={C}><Inp C={C} value={form.course} onChange={e=>setForm(f=>({...f,course:e.target.value}))} placeholder="e.g. Python, Class 6"/></FG>
         <FG label="Source" C={C}><Sel C={C} value={form.source} onChange={e=>setForm(f=>({...f,source:e.target.value}))}>{SOURCES.map(s=><option key={s}>{s}</option>)}</Sel></FG>
-        <FG label="Initial Status" C={C}><Sel C={C} value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>{STATUSES.map(s=><option key={s}>{s}</option>)}</Sel></FG>
+        <FG label="Status" C={C}><Sel C={C} value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>{STATUSES.map(s=><option key={s}>{s}</option>)}</Sel></FG>
         <FG label="Notes" C={C} span><Inp C={C} value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Initial notes..."/></FG>
       </div>
       <div style={{display:"flex",gap:10}}><Btn onClick={addLead} C={C} color="green">Save Lead</Btn><Btn onClick={()=>setShowAdd(false)} C={C} color="red" outline>Cancel</Btn></div>
     </div>}
     <div style={{display:"flex",gap:8,marginBottom:18}}>
-      {["board","list"].map(v=><button key={v} onClick={()=>setSubTab(v)} style={{padding:"7px 16px",borderRadius:20,border:`1px solid ${subTab===v?color:C.border}`,background:subTab===v?color:"transparent",color:subTab===v?"#fff":C.muted,fontWeight:700,fontSize:12,cursor:"pointer"}}>{v==="board"?"📋 Kanban Board":"📄 List View"}</button>)}
+      {["board","list"].map(v=><button key={v} onClick={()=>setSubTab(v)} style={{padding:"7px 16px",borderRadius:20,border:"1px solid "+(subTab===v?color:C.border),background:subTab===v?color:"transparent",color:subTab===v?"#fff":C.muted,fontWeight:700,fontSize:12,cursor:"pointer"}}>{v==="board"?"Kanban Board":"List View"}</button>)}
     </div>
     {subTab==="board"&&<div style={{display:"flex",gap:12,overflowX:"auto",paddingBottom:8}}>
-      {STATUSES.map(status=>{const col=tc(C,STATUS_COLOR[status]);const bg=tb(C,STATUS_COLOR[status]);const items=byStatus(status);return<div key={status} style={{minWidth:200,background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:12,flexShrink:0}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <div style={{fontWeight:700,fontSize:11,color:col,textTransform:"uppercase"}}>{status}</div>
-          <span style={{background:bg,color:col,borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:700}}>{items.length}</span>
-        </div>
-        {items.map(lead=><LeadCard key={lead.id} lead={lead} STATUSES={STATUSES} onStatusChange={updateStatus} onDelete={delLead} onNote={addNote} color={col} C={C}/>)}
+      {STATUSES.map(status=>{const col=tc(C,SCOL[status]||"teal");const bg=tb(C,SCOL[status]||"teal");const items=leads.filter(l=>l.status===status);return<div key={status} style={{minWidth:200,background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:12,flexShrink:0}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:col,textTransform:"uppercase"}}>{status}</div><span style={{background:bg,color:col,borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:700}}>{items.length}</span></div>
+        {items.map(lead=><LeadCard key={lead.id} lead={lead} STATUSES={STATUSES} SCOL={SCOL} onStatusChange={updateStatus} onDelete={delLead} onNote={addNote} C={C}/>)}
         {!items.length&&<div style={{textAlign:"center",padding:"12px 0",color:C.muted,fontSize:11,opacity:0.6}}>Empty</div>}
       </div>;})}
     </div>}
     {subTab==="list"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {leads.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(lead=><LeadCard key={lead.id} lead={lead} STATUSES={STATUSES} onStatusChange={updateStatus} onDelete={delLead} onNote={addNote} color={color} C={C} full/>)}
+      {leads.slice().sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(lead=><LeadCard key={lead.id} lead={lead} STATUSES={STATUSES} SCOL={SCOL} onStatusChange={updateStatus} onDelete={delLead} onNote={addNote} C={C} full/>)}
       {!leads.length&&<Empty msg="No leads yet. Add your first inquiry above." C={C}/>}
     </div>}
   </div>;
 }
 
-function LeadCard({lead,STATUSES,onStatusChange,onDelete,onNote,color,C,full}){
+function LeadCard({lead,STATUSES,SCOL,onStatusChange,onDelete,onNote,C,full}){
   const [showNotes,setShowNotes]=useState(false);const [newNote,setNewNote]=useState("");
-  const STATUS_COLOR={"New Inquiry":"teal","Contacted":"blue","Follow-up":"gold","Demo Scheduled":"purple","Enrolled":"green","Not Interested":"red","Lost":"red"};
-  const col=tc(C,STATUS_COLOR[lead.status]||"teal");
-  return <div style={{background:C.bg,borderRadius:9,border:`1px solid ${C.border}`,padding:"12px",marginBottom:8}}>
+  const col=tc(C,SCOL[lead.status]||"teal");
+  return <div style={{background:C.bg,borderRadius:9,border:"1px solid "+C.border,padding:12,marginBottom:8}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-      <div style={{flex:1}}><div style={{fontWeight:700,fontSize:12,color:C.text}}>{lead.name}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>📞 {lead.phone}{lead.course&&` · ${lead.course}`}</div>{lead.source&&<div style={{fontSize:9,color:C.muted,marginTop:1}}>via {lead.source}</div>}</div>
+      <div style={{flex:1}}><div style={{fontWeight:700,fontSize:12,color:C.text}}>{lead.name}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{lead.phone}{lead.course?" - "+lead.course:""}</div>{lead.source&&<div style={{fontSize:9,color:C.muted,marginTop:1}}>via {lead.source}</div>}</div>
       <div style={{display:"flex",gap:4,flexShrink:0}}>
         <button onClick={()=>setShowNotes(s=>!s)} style={{background:"none",border:"none",fontSize:13,cursor:"pointer",padding:"2px 4px"}} title="Notes">📝</button>
         <button onClick={()=>onDelete(lead.id)} style={{background:"none",border:"none",fontSize:12,cursor:"pointer",padding:"2px 4px",color:C.red}}>✕</button>
       </div>
     </div>
     {full&&<div style={{marginTop:8}}><Sel C={C} value={lead.status} onChange={e=>onStatusChange(lead.id,e.target.value)} style={{fontSize:11,padding:"4px 8px",marginBottom:0}}>{STATUSES.map(s=><option key={s}>{s}</option>)}</Sel></div>}
-    {!full&&<div style={{display:"flex",gap:4,marginTop:8,flexWrap:"wrap"}}>{STATUSES.slice(0,4).map(s=><button key={s} onClick={()=>onStatusChange(lead.id,s)} style={{fontSize:9,padding:"2px 6px",borderRadius:20,border:`1px solid ${tc(C,STATUS_COLOR[s]||"teal")}44`,background:lead.status===s?tc(C,STATUS_COLOR[s]||"teal"):C.surface,color:lead.status===s?"#fff":tc(C,STATUS_COLOR[s]||"teal"),cursor:"pointer"}}>{s}</button>)}</div>}
-    {showNotes&&<div style={{marginTop:10,borderTop:`1px solid ${C.border}`,paddingTop:10}}>
+    {!full&&<div style={{display:"flex",gap:4,marginTop:8,flexWrap:"wrap"}}>{STATUSES.slice(0,4).map(s=><button key={s} onClick={()=>onStatusChange(lead.id,s)} style={{fontSize:9,padding:"2px 6px",borderRadius:20,border:"1px solid "+tc(C,SCOL[s]||"teal")+"44",background:lead.status===s?tc(C,SCOL[s]||"teal"):C.surface,color:lead.status===s?"#fff":tc(C,SCOL[s]||"teal"),cursor:"pointer"}}>{s}</button>)}</div>}
+    {showNotes&&<div style={{marginTop:10,borderTop:"1px solid "+C.border,paddingTop:10}}>
       {lead.notes&&<pre style={{fontSize:10,color:C.muted,whiteSpace:"pre-wrap",marginBottom:8,maxHeight:80,overflowY:"auto"}}>{lead.notes}</pre>}
       <div style={{display:"flex",gap:6}}><Inp C={C} value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="Add note..." style={{flex:1,fontSize:11,marginBottom:0}}/><Btn onClick={()=>{if(newNote.trim()){onNote(lead.id,newNote);setNewNote("");}}} C={C} color="teal" size="sm">Add</Btn></div>
     </div>}
@@ -3484,45 +3447,31 @@ function LeadCard({lead,STATUSES,onStatusChange,onDelete,onNote,color,C,full}){
 function InstGamification({students,inst,color,onUpdate,notify,C}){
   const BADGES=[
     {id:"perfect_att",icon:"🌟",name:"Perfect Attendance",desc:"100% attendance",check:s=>attPct(s.attendance||[])===100},
-    {id:"good_att",icon:"✅",name:"Good Attendance",desc:"≥90% attendance",check:s=>attPct(s.attendance||[])>=90},
-    {id:"top_scorer",icon:"🏆",name:"Top Scorer",desc:"≥90% avg marks",check:s=>{const e=s.exams||[];return e.length>=2&&Math.round(e.reduce((a,x)=>a+(x.maxMarks>0?x.marks/x.maxMarks*100:0),0)/e.length)>=90;}},
+    {id:"good_att",icon:"✅",name:"Good Attendance",desc:">=90% attendance",check:s=>attPct(s.attendance||[])>=90},
+    {id:"top_scorer",icon:"🏆",name:"Top Scorer",desc:">=90% avg marks",check:s=>{const e=s.exams||[];return e.length>=2&&Math.round(e.reduce((a,x)=>a+(x.maxMarks>0?x.marks/x.maxMarks*100:0),0)/e.length)>=90;}},
     {id:"hw_champion",icon:"📚",name:"HW Champion",desc:"All homework submitted",check:s=>{const h=s.homeworks||[];return h.length>=3&&h.every(x=>x.status==="Submitted");}},
     {id:"fast_learner",icon:"⚡",name:"Fast Learner",desc:"5+ exams completed",check:s=>(s.exams||[]).length>=5},
-    {id:"scholar",icon:"🎓",name:"Scholar",desc:"≥75% in 3+ exams",check:s=>{const e=s.exams||[];return e.length>=3&&e.filter(x=>x.maxMarks>0&&x.marks/x.maxMarks>=0.75).length>=3;}},
+    {id:"scholar",icon:"🎓",name:"Scholar",desc:">=75% in 3+ exams",check:s=>{const e=s.exams||[];return e.length>=3&&e.filter(x=>x.maxMarks>0&&x.marks/x.maxMarks>=0.75).length>=3;}},
   ];
-  function getPoints(s){
-    let pts=0;
-    pts+=Math.min(attPct(s.attendance||[]),100);
-    const exams=s.exams||[];if(exams.length)pts+=Math.round(exams.reduce((a,e)=>a+(e.maxMarks>0?e.marks/e.maxMarks*100:0),0)/exams.length);
-    const hw=s.homeworks||[];if(hw.length)pts+=Math.round(hw.filter(h=>h.status==="Submitted").length/hw.length*100);
-    pts+=BADGES.filter(b=>b.check(s)).length*50;
-    return pts;
-  }
-  function awardBadge(sid,badgeId){
-    const stu=students.find(s=>s.id===sid);
-    if(!stu)return;
-    const current=stu.badges||[];
-    if(current.includes(badgeId)){onUpdate(sid,{badges:current.filter(b=>b!==badgeId)});notify("Badge removed");}
-    else{onUpdate(sid,{badges:[...current,badgeId]});notify("🏅 Badge awarded!");}
-  }
-  const ranked=[...students].map(s=>({...s,points:getPoints(s),earnedBadges:BADGES.filter(b=>b.check(s))})).sort((a,b)=>b.points-a.points);
+  function getPoints(s){let pts=0;pts+=Math.min(attPct(s.attendance||[]),100);const e=s.exams||[];if(e.length)pts+=Math.round(e.reduce((a,x)=>a+(x.maxMarks>0?x.marks/x.maxMarks*100:0),0)/e.length);const h=s.homeworks||[];if(h.length)pts+=Math.round(h.filter(x=>x.status==="Submitted").length/h.length*100);pts+=BADGES.filter(b=>b.check(s)).length*50;return pts;}
+  function awardBadge(sid,badgeId){const stu=students.find(s=>s.id===sid);if(!stu)return;const cur=stu.badges||[];if(cur.includes(badgeId)){onUpdate(sid,{badges:cur.filter(b=>b!==badgeId)});notify("Badge removed");}else{onUpdate(sid,{badges:[...cur,badgeId]});notify("Badge awarded!");}}
+  const ranked=students.map(s=>({...s,points:getPoints(s),earnedBadges:BADGES.filter(b=>b.check(s))})).sort((a,b)=>b.points-a.points);
+  const MEDAL=["🥇","🥈","🥉"];
   return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <PH title="🏅 Gamification" sub="Points, badges, and leaderboard" C={C}/>
+    <PH title="Gamification" sub="Points, badges and leaderboard" C={C}/>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20}}>
-      {/* Badge legend */}
-      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
-        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>🏅 Available Badges</div>
-        {BADGES.map(b=><div key={b.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"8px 10px",background:C.bg,borderRadius:9,border:`1px solid ${C.border}`}}>
+      <div style={{background:C.surface,borderRadius:12,border:"1px solid "+C.border,padding:20,boxShadow:C.shadow}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Available Badges</div>
+        {BADGES.map(b=><div key={b.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"8px 10px",background:C.bg,borderRadius:9,border:"1px solid "+C.border}}>
           <div style={{fontSize:22,flexShrink:0}}>{b.icon}</div>
-          <div><div style={{fontWeight:700,fontSize:12,color:C.text}}>{b.name}</div><div style={{fontSize:10,color:C.muted}}>{b.desc}</div></div>
-          <div style={{marginLeft:"auto",fontWeight:800,fontSize:12,color}}>{students.filter(s=>b.check(s)).length} earned</div>
+          <div style={{flex:1}}><div style={{fontWeight:700,fontSize:12,color:C.text}}>{b.name}</div><div style={{fontSize:10,color:C.muted}}>{b.desc}</div></div>
+          <div style={{fontWeight:800,fontSize:12,color}}>{students.filter(s=>b.check(s)).length} earned</div>
         </div>)}
       </div>
-      {/* Leaderboard */}
-      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
-        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>🏆 Leaderboard</div>
-        {ranked.slice(0,10).map((s,i)=><div key={s.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"10px 12px",background:i===0?C.goldL:i===1?"#f0f0f088":i===2?"#f5ede888":C.bg,borderRadius:10,border:`1px solid ${i<3?C.gold:C.border}`}}>
-          <div style={{width:26,height:26,borderRadius:"50%",background:i===0?C.gold:i===1?C.muted:i===2?color:C.border,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,color:"#fff",flexShrink:0}}>{i+1}</div>
+      <div style={{background:C.surface,borderRadius:12,border:"1px solid "+C.border,padding:20,boxShadow:C.shadow}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Leaderboard</div>
+        {ranked.slice(0,10).map((s,i)=><div key={s.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"10px 12px",background:i<3?C.goldL:C.bg,borderRadius:10,border:"1px solid "+(i<3?C.gold:C.border)}}>
+          <div style={{width:26,height:26,borderRadius:"50%",background:i<3?C.gold:C.border,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,color:"#fff",flexShrink:0}}>{i<3?MEDAL[i]:i+1}</div>
           <Avatar name={s.name} photo={s.photo} color={color} size={30} C={C}/>
           <div style={{flex:1}}><div style={{fontWeight:700,fontSize:12,color:C.text}}>{s.name}</div><div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:2}}>{s.earnedBadges.map(b=><span key={b.id} title={b.name} style={{fontSize:13}}>{b.icon}</span>)}</div></div>
           <div style={{textAlign:"right"}}><div style={{fontWeight:900,fontSize:16,color}}>{s.points}</div><div style={{fontSize:9,color:C.muted}}>pts</div></div>
@@ -3530,16 +3479,15 @@ function InstGamification({students,inst,color,onUpdate,notify,C}){
         {!ranked.length&&<Empty msg="No students yet" C={C}/>}
       </div>
     </div>
-    {/* Per-student badge management */}
-    <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
+    <div style={{background:C.surface,borderRadius:12,border:"1px solid "+C.border,padding:20,boxShadow:C.shadow}}>
       <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Student Badge Details</div>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {ranked.map(s=><div key={s.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:C.bg,borderRadius:10,border:`1px solid ${C.border}`,flexWrap:"wrap"}}>
+        {ranked.map(s=><div key={s.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:C.bg,borderRadius:10,border:"1px solid "+C.border,flexWrap:"wrap"}}>
           <Avatar name={s.name} photo={s.photo} color={color} size={34} C={C}/>
           <div style={{flex:1,minWidth:120}}><div style={{fontWeight:700,fontSize:12,color:C.text}}>{s.name}</div><div style={{fontSize:10,color:C.muted}}>{s.rollNo}</div></div>
           <div style={{fontWeight:800,fontSize:15,color,minWidth:50,textAlign:"center"}}>{s.points}pts</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {BADGES.map(b=>{const has=b.check(s)||s.badges?.includes(b.id);return<button key={b.id} onClick={()=>awardBadge(s.id,b.id)} title={b.name} style={{width:32,height:32,borderRadius:9,border:`2px solid ${has?color:C.border}`,background:has?tb(C,"teal"):C.surface,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",opacity:has?1:0.35}}>{b.icon}</button>;})}
+            {BADGES.map(b=>{const has=b.check(s)||(s.badges||[]).includes(b.id);return<button key={b.id} onClick={()=>awardBadge(s.id,b.id)} title={b.name} style={{width:32,height:32,borderRadius:9,border:"2px solid "+(has?color:C.border),background:has?tb(C,"teal"):C.surface,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",opacity:has?1:0.35}}>{b.icon}</button>;})}
           </div>
         </div>)}
         {!ranked.length&&<Empty msg="No students" C={C}/>}
