@@ -402,7 +402,7 @@ function LoginPage({onLogin,db,C,dark,setDark}){
 }
 
 // Super Admin
-const SA_TABS=[{k:"overview",i:"📊",l:"Overview"},{k:"institutions",i:"🏛",l:"Institutions"},{k:"users",i:"👤",l:"Users"},{k:"students",i:"👥",l:"Students"},{k:"reports",i:"📋",l:"Reports"}];
+const SA_TABS=[{k:"overview",i:"📊",l:"Overview"},{k:"institutions",i:"🏛",l:"Institutions"},{k:"users",i:"👤",l:"Users"},{k:"students",i:"👥",l:"Students"},{k:"whitelabel",i:"🎨",l:"White Label"},{k:"billing",i:"💳",l:"SaaS Billing"},{k:"reports",i:"📋",l:"Reports"}];
 function SuperAdmin({db,saveDb,onLogout,notify,user,C,dark,setDark}){
   const [tab,setTab]=useState("overview");
   function addInst(d){saveDb({institutions:[...db.institutions,{...d,id:uid(),createdAt:today(),active:true}]});notify("Institution added!");}
@@ -423,6 +423,8 @@ function SuperAdmin({db,saveDb,onLogout,notify,user,C,dark,setDark}){
         {tab==="institutions"&&<SAInst db={db} onAdd={addInst} onUpdate={updInst} onDelete={delInst} C={C}/>}
         {tab==="users"&&<SAUsers db={db} onAdd={addUser} onDelete={delUser} onUpdate={updUser} C={C}/>}
         {tab==="students"&&<SAStudents db={db} C={C}/>}
+        {tab==="whitelabel"&&<SAWhiteLabel db={db} onUpdate={updInst} C={C}/>}
+        {tab==="billing"&&<SABilling db={db} saveDb={saveDb} notify={notify} C={C}/>}
         {tab==="reports"&&<SAReports db={db} C={C}/>}
       </div>
     </div>
@@ -518,6 +520,125 @@ function SAStudents({db,C}){
     </div>
   </div>;
 }
+// ─── WHITE LABEL ────────────────────────────────────────────────────────────
+function SAWhiteLabel({db,onUpdate,C}){
+  const [sel,setSel]=useState(db.institutions[0]?.id||"");
+  const inst=db.institutions.find(i=>i.id===sel);
+  const [f,setF]=useState({});
+  useEffect(()=>{if(inst)setF({brandName:inst.brandName||inst.name||"",tagline:inst.tagline||"Smart Student Management",logoText:inst.logoText||(inst.name||"").slice(0,2).toUpperCase(),logoUrl:inst.logoUrl||"",color:inst.color||INST_COLORS[0]});},[sel]);
+  if(!db.institutions.length)return <div style={{animation:"fadeUp 0.4s ease"}}><PH title="🎨 White Label" sub="Brand each institution" C={C}/><Empty msg="Add an institution first" C={C}/></div>;
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  function save(){onUpdate(sel,{brandName:f.brandName,tagline:f.tagline,logoText:f.logoText,logoUrl:f.logoUrl,color:f.color});}
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    <PH title="🎨 White Label" sub="Customise branding per institution — logo, name, colours" C={C}/>
+    <FG label="Institution" C={C} style={{marginBottom:16,maxWidth:340}}>
+      <Sel C={C} value={sel} onChange={e=>setSel(e.target.value)}>{db.institutions.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</Sel>
+    </FG>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,alignItems:"start"}}>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Branding</div>
+        <FG label="Brand / Display Name" C={C} style={{marginBottom:10}}><Inp C={C} value={f.brandName||""} onChange={e=>set("brandName",e.target.value)} placeholder="e.g. AllBee Solutions"/></FG>
+        <FG label="Tagline" C={C} style={{marginBottom:10}}><Inp C={C} value={f.tagline||""} onChange={e=>set("tagline",e.target.value)} placeholder="Smart Student Management"/></FG>
+        <FG label="Logo Initials (fallback)" C={C} style={{marginBottom:10}}><Inp C={C} value={f.logoText||""} onChange={e=>set("logoText",e.target.value.slice(0,3))} placeholder="AB" maxLength={3}/></FG>
+        <FG label="Logo Image URL (optional)" C={C} style={{marginBottom:10}}><Inp C={C} value={f.logoUrl||""} onChange={e=>set("logoUrl",e.target.value)} placeholder="https://.../logo.png"/></FG>
+        <FG label="Primary Colour" C={C}><div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:4}}>{INST_COLORS.map(c=><button key={c} onClick={()=>set("color",c)} style={{width:28,height:28,borderRadius:7,background:c,border:f.color===c?"3px solid #333":"3px solid transparent",cursor:"pointer"}}/>)}</div></FG>
+        <div style={{marginTop:18}}><Btn onClick={save} C={C} color="teal">💾 Save Branding</Btn></div>
+      </div>
+      <div>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:C.text}}>Live Preview</div>
+        <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,boxShadow:C.shadow,overflow:"hidden"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 18px",borderBottom:`1px solid ${C.border}`}}>
+            {f.logoUrl?<img src={f.logoUrl} alt="logo" style={{width:40,height:40,borderRadius:9,objectFit:"cover"}}/>:<div style={{width:40,height:40,borderRadius:9,background:f.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:16}}>{f.logoText||"AB"}</div>}
+            <div><div style={{fontWeight:800,fontSize:15,color:f.color}}>{f.brandName||"Brand Name"}</div><div style={{fontSize:10,color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase"}}>{f.tagline}</div></div>
+          </div>
+          <div style={{padding:18}}>
+            <div style={{height:8,width:"60%",background:f.color,borderRadius:99,marginBottom:10}}/>
+            <div style={{height:8,width:"85%",background:C.border,borderRadius:99,marginBottom:10}}/>
+            <div style={{height:8,width:"40%",background:C.border,borderRadius:99}}/>
+            <div style={{marginTop:16,display:"inline-block",padding:"8px 18px",borderRadius:8,background:f.color,color:"#fff",fontSize:12,fontWeight:700}}>Primary Button</div>
+          </div>
+        </div>
+        <div style={{fontSize:11,color:C.muted,marginTop:8}}>Saved branding applies to this institution's login and dashboard accent colour.</div>
+      </div>
+    </div>
+  </div>;
+}
+
+// ─── SaaS BILLING ───────────────────────────────────────────────────────────
+const PLANS=[
+  {k:"trial",l:"Free Trial",price:0,cap:"Up to 25 students · 14 days",color:"gold"},
+  {k:"starter",l:"Starter",price:1499,cap:"Up to 150 students",color:"blue"},
+  {k:"pro",l:"Professional",price:3999,cap:"Up to 750 students · all modules",color:"teal"},
+  {k:"enterprise",l:"Enterprise",price:8999,cap:"Unlimited students · priority support",color:"purple"},
+];
+function SABilling({db,saveDb,notify,C}){
+  const billing=db.billing||[];
+  const recFor=id=>billing.find(b=>b.instId===id);
+  const planMeta=k=>PLANS.find(p=>p.k===k)||PLANS[0];
+  function nextMonth(){const d=new Date();d.setMonth(d.getMonth()+1);return d.toISOString().slice(0,10);}
+  function setPlan(instId,planK){
+    const p=planMeta(planK);
+    const others=billing.filter(b=>b.instId!==instId);
+    const existing=recFor(instId);
+    const rec={id:existing?.id||uid(),instId,plan:planK,price:p.price,cycle:"monthly",status:p.price===0?"Trial":"Active",startedAt:existing?.startedAt||today(),nextDue:nextMonth(),invoices:existing?.invoices||[]};
+    saveDb({billing:[...others,rec]});notify(`Plan set to ${p.l}`);
+  }
+  function markPaid(instId){
+    const r=recFor(instId);if(!r)return;
+    const inv={id:uid(),date:today(),amount:r.price,plan:r.plan,status:"Paid"};
+    const others=billing.filter(b=>b.instId!==instId);
+    saveDb({billing:[...others,{...r,status:"Active",nextDue:nextMonth(),invoices:[...(r.invoices||[]),inv]}]});notify("✅ Payment recorded — invoice generated");
+  }
+  function setStatus(instId,status){
+    const r=recFor(instId);if(!r)return;
+    const others=billing.filter(b=>b.instId!==instId);
+    saveDb({billing:[...others,{...r,status}]});notify("Status updated: "+status);
+  }
+  const active=billing.filter(b=>b.status==="Active");
+  const mrr=active.reduce((a,b)=>a+Number(b.price||0),0);
+  const overdue=billing.filter(b=>b.status==="Overdue").length;
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    <PH title="💳 SaaS Billing" sub="Subscription plans, invoices & revenue across institutions" C={C}/>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:20}}>
+      <StatCard icon="💰" label="MRR" value={`₹${mrr.toLocaleString()}`} color="green" C={C} sub="Monthly recurring"/>
+      <StatCard icon="✅" label="Active" value={active.length} color="teal" C={C} sub="Paid subscriptions"/>
+      <StatCard icon="🏛" label="Institutions" value={db.institutions.length} color="blue" C={C} sub="Total accounts"/>
+      <StatCard icon="⚠" label="Overdue" value={overdue} color={overdue?"red":"green"} C={C} sub="Need follow-up"/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12,marginBottom:22}}>
+      {PLANS.map(p=><div key={p.k} style={{background:C.surface,borderRadius:12,border:`1px solid ${tc(C,p.color)}44`,padding:16,boxShadow:C.shadow,borderTop:`3px solid ${tc(C,p.color)}`}}>
+        <div style={{fontWeight:800,fontSize:14,color:C.text}}>{p.l}</div>
+        <div style={{fontSize:22,fontWeight:900,color:tc(C,p.color),margin:"4px 0"}}>₹{p.price.toLocaleString()}<span style={{fontSize:11,color:C.muted,fontWeight:600}}>/mo</span></div>
+        <div style={{fontSize:11,color:C.muted}}>{p.cap}</div>
+      </div>)}
+    </div>
+    <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:C.text}}>Institution Subscriptions</div>
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {db.institutions.map(inst=>{const r=recFor(inst.id);const p=r?planMeta(r.plan):null;const sc=db.students.filter(s=>s.instId===inst.id).length;return<div key={inst.id} style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:"15px 18px",boxShadow:C.shadow,borderLeft:`4px solid ${inst.color}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+          <div style={{flex:1,minWidth:160}}>
+            <div style={{fontWeight:700,fontSize:14,color:C.text}}>{inst.brandName||inst.name}</div>
+            <div style={{fontSize:11,color:C.muted}}>{sc} students · {r?`Next due ${fmt(r.nextDue)}`:"No plan assigned"}</div>
+          </div>
+          {r&&<Badge label={r.status} color={r.status==="Active"?"green":r.status==="Trial"?"gold":r.status==="Overdue"?"red":"muted"} C={C}/>}
+          {p&&<div style={{textAlign:"center",padding:"5px 12px",background:C.bg,borderRadius:8,minWidth:90}}><div style={{fontWeight:800,fontSize:13,color:tc(C,p.color)}}>₹{p.price.toLocaleString()}</div><div style={{fontSize:9,color:C.muted}}>{p.l}</div></div>}
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <Sel C={C} value={r?.plan||""} onChange={e=>setPlan(inst.id,e.target.value)} style={{width:"auto",padding:"6px 10px",fontSize:12}}><option value="" disabled>Set plan…</option>{PLANS.map(pl=><option key={pl.k} value={pl.k}>{pl.l}</option>)}</Sel>
+            {r&&<Btn onClick={()=>markPaid(inst.id)} C={C} color="green" size="sm">Mark Paid</Btn>}
+            {r&&r.status!=="Suspended"&&<Btn onClick={()=>setStatus(inst.id,"Suspended")} C={C} color="red" size="sm" outline>Suspend</Btn>}
+            {r&&r.status==="Suspended"&&<Btn onClick={()=>setStatus(inst.id,"Active")} C={C} color="green" size="sm" outline>Reactivate</Btn>}
+          </div>
+        </div>
+        {r&&(r.invoices||[]).length>0&&<div style={{marginTop:12,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Invoices</div>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>{(r.invoices||[]).slice().reverse().slice(0,5).map(iv=><div key={iv.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted}}><span>{fmt(iv.date)} · {planMeta(iv.plan).l}</span><span style={{fontWeight:700,color:C.green}}>₹{Number(iv.amount).toLocaleString()} · {iv.status}</span></div>)}</div>
+        </div>}
+      </div>;})}
+      {!db.institutions.length&&<Empty msg="No institutions to bill yet" C={C}/>}
+    </div>
+  </div>;
+}
+
 function SAReports({db,C}){
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <PH title="📋 Reports" sub="Cross-institution analytics" C={C}/>
@@ -1331,6 +1452,10 @@ function StaffAttend({db,saveDb,user,inst,color,isAdmin,notify,C}){
   const myTodayRec=myRecords.find(r=>r.userId===user.id&&r.date===todayStr);
   const [filterDate,setFilterDate]=useState(todayStr);
   const [filterUser,setFilterUser]=useState("all");
+  const [clock,setClock]=useState(new Date());
+  useEffect(()=>{const t=setInterval(()=>setClock(new Date()),1000);return()=>clearInterval(t);},[]);
+  const clockTime=clock.toLocaleTimeString("en-IN",{hour12:true});
+  const clockDate=clock.toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"short",year:"numeric"});
 
   function checkIn(){
     if(myTodayRec?.inTime){notify("Already checked in today","gold");return;}
@@ -1382,6 +1507,11 @@ function StaffAttend({db,saveDb,user,inst,color,isAdmin,notify,C}){
         </div>
       </div>
       <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{textAlign:"center",padding:"12px 22px",background:`linear-gradient(135deg,${color},${color}cc)`,borderRadius:12,minWidth:160,boxShadow:C.shadow}}>
+          <div style={{fontSize:10,color:"#ffffffcc",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:3}}>🕐 Live Time</div>
+          <div style={{fontSize:26,fontWeight:800,color:"#fff",fontFamily:"monospace",letterSpacing:"0.02em",lineHeight:1.1}}>{clockTime}</div>
+          <div style={{fontSize:10,color:"#ffffffcc",marginTop:3}}>{clockDate}</div>
+        </div>
         {myTodayRec?.inTime&&<div style={{textAlign:"center",padding:"12px 20px",background:C.greenL,borderRadius:12,minWidth:90}}>
           <div style={{fontSize:10,color:C.green,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>In Time</div>
           <div style={{fontSize:22,fontWeight:800,color:C.green,fontFamily:"monospace"}}>{myTodayRec.inTime}</div>
@@ -1899,7 +2029,8 @@ function InstCourses({db,saveDb,inst,color,notify,C}){
 }
 
 // Institution Dashboard Shell
-const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"staff",i:"👨‍🏫",l:"Staff"},{k:"tasks",i:"✅",l:"Tasks"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"accounts",i:"💼",l:"Accounts"},{k:"courses",i:"🖥",l:"Courses"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"updates",i:"📰",l:"Updates"},{k:"classlinks",i:"🎥",l:"Class Links"},{k:"alerts",i:"📣",l:"Alerts"},{k:"reports",i:"📊",l:"Reports"},{k:"analytics",i:"📈",l:"Analytics"},{k:"ai",i:"🤖",l:"AI Tools"},{k:"certificates",i:"🏆",l:"Certificates"},{k:"onlineexam",i:"💻",l:"Online Exams"},{k:"library",i:"📚",l:"Library"},{k:"payroll",i:"💵",l:"HR & Payroll"},{k:"leave",i:"🏖",l:"Leave"},{k:"docs",i:"📁",l:"Documents"},{k:"crm",i:"🎯",l:"Admission CRM"},{k:"gamify",i:"🏅",l:"Gamification"}];
+const NAV_GROUPS=["Main","Students","Staff","Academics","Finance","Communication","Insights"];
+const INST_TABS=[{k:"home",i:"🏠",l:"Home",g:"Main"},{k:"students",i:"👥",l:"Students",g:"Students"},{k:"register",i:"➕",l:"Register",g:"Students"},{k:"attend",i:"📅",l:"Attendance",g:"Students"},{k:"fees",i:"💰",l:"Fees",g:"Students"},{k:"receipt",i:"🧾",l:"Fee Receipt",g:"Students"},{k:"homework",i:"📚",l:"Homework",g:"Students"},{k:"exams",i:"📝",l:"Exam Marks",g:"Students"},{k:"assign",i:"📋",l:"Assignments",g:"Students"},{k:"timetable",i:"🗓",l:"Timetable",g:"Students"},{k:"certificates",i:"🏆",l:"Certificates",g:"Students"},{k:"onlineexam",i:"💻",l:"Online Exams",g:"Students"},{k:"gamify",i:"🏅",l:"Gamification",g:"Students"},{k:"crm",i:"🎯",l:"Admission CRM",g:"Students"},{k:"staff",i:"👨‍🏫",l:"Staff",g:"Staff"},{k:"tasks",i:"✅",l:"Tasks",g:"Staff"},{k:"staffatt",i:"🕐",l:"Staff Attendance",g:"Staff"},{k:"payroll",i:"💵",l:"HR & Payroll",g:"Staff"},{k:"leave",i:"🏖",l:"Leave",g:"Staff"},{k:"courses",i:"🖥",l:"Courses",g:"Academics"},{k:"classlinks",i:"🎥",l:"Class Links",g:"Academics"},{k:"library",i:"📚",l:"Library",g:"Academics"},{k:"docs",i:"📁",l:"Documents",g:"Academics"},{k:"accounts",i:"💼",l:"Accounts",g:"Finance"},{k:"updates",i:"📰",l:"Updates",g:"Communication"},{k:"alerts",i:"📣",l:"Alerts",g:"Communication"},{k:"reports",i:"📊",l:"Reports",g:"Insights"},{k:"analytics",i:"📈",l:"Analytics",g:"Insights"},{k:"ai",i:"🤖",l:"AI Tools",g:"Insights"}];
 
 function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const [tab,setTab]=useState("home");
@@ -1950,7 +2081,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
     `}</style>
     {/* CSS vars for sidebar */}
     <style>{`:root{--sb-bg:${C.surface};--sb-border:${C.border};}` + (dark ? ".inst-sidebar{color-scheme:dark;}" : "") + `}`}</style>
-    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={`${m.icon} ${inst.name}`} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen}/>
+    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={`${m.icon} ${inst.brandName||inst.name}`} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen}/>
     {/* Overlay for mobile */}
     <div className={"inst-overlay"+(sideOpen?" open":"")} onClick={()=>setSideOpen(false)} style={{display:sideOpen?"block":"none",position:"fixed",inset:0,top:54,background:"#0005",zIndex:140}}/>
     <div style={{display:"flex",flex:1,minHeight:0}}>
@@ -1963,11 +2094,14 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
             <div style={{fontSize:10,color:C.muted}}>{inst.name}</div>
           </div>
         </div>
-        {visibleTabs.map(t=><button key={t.k} className="tab-btn" onClick={()=>goTab(t.k)}
-          style={{background:tab===t.k?C.activeTab:"transparent",color:tab===t.k?C.activeTabText:C.muted,fontWeight:tab===t.k?600:400,borderRadius:8}}>
-          <span style={{fontSize:16,flexShrink:0}}>{t.i}</span>
-          <span>{t.l}</span>
-        </button>)}
+        {NAV_GROUPS.map(g=>{const items=visibleTabs.filter(t=>t.g===g);if(!items.length)return null;return <div key={g}>
+          {g!=="Main"&&<div style={{fontSize:9,fontWeight:800,color:C.muted2||C.muted,textTransform:"uppercase",letterSpacing:"0.12em",padding:"14px 12px 5px"}}>{g}</div>}
+          {items.map(t=><button key={t.k} className="tab-btn" onClick={()=>goTab(t.k)}
+            style={{background:tab===t.k?C.activeTab:"transparent",color:tab===t.k?C.activeTabText:C.muted,fontWeight:tab===t.k?600:400,borderRadius:8}}>
+            <span style={{fontSize:16,flexShrink:0}}>{t.i}</span>
+            <span>{t.l}</span>
+          </button>)}
+        </div>;})}
         <div style={{flex:1}}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,padding:"8px 0 4px"}}>
           <div style={{padding:"8px 6px",background:C.bg,borderRadius:8,textAlign:"center",border:`1px solid ${C.border}`}}>
@@ -2614,17 +2748,96 @@ function InstReports({students,inst,color,C}){
 }
 
 // ─── PHASE 1: AI TOOLS HUB ────────────────────────────────────────────────────
+// ─── AI ENGINE ──────────────────────────────────────────────────────────────
+// A deployed web app CANNOT call api.anthropic.com directly from the browser
+// (CORS + the API key would be exposed to every visitor). To use a real LLM,
+// set AI_PROXY_URL to your own serverless proxy (Firebase Function / Cloudflare
+// Worker / Vercel route) that keeps the key server-side, accepts {prompt} via
+// POST and returns {text}. When left empty, the built-in offline generator runs
+// so every AI tool still produces useful output with no backend or key.
+const AI_PROXY_URL="";
 async function callAI(prompt){
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})});
+  if(!AI_PROXY_URL) throw new Error("AI_OFFLINE");
+  const res=await fetch(AI_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})});
+  if(!res.ok) throw new Error("AI_HTTP_"+res.status);
   const d=await res.json();
-  return d.content?.[0]?.text||"No response";
+  return d.text||d.content?.[0]?.text||d.output||"No response";
+}
+
+// Offline generator — homework / quiz / assignment / MCQs / project
+function aiHomeworkLocal({instName,subject,topic,standard,type}){
+  const T=type||"Homework";const lvl=standard?` · ${standard}`:"";
+  const hr="─".repeat(46);
+  const head=`${T.toUpperCase()} — ${subject}\nTopic: ${topic}${lvl}\n${instName}\n${hr}\n`;
+  if(T==="MCQs"||T==="Quiz"){
+    const qs=Array.from({length:6},(_,i)=>`Q${i+1}. With respect to "${topic}" in ${subject}, which option is correct?\n    a) ____________   b) ____________\n    c) ____________   d) ____________\n`);
+    return head+`Answer all questions. Each carries equal marks.\nFill in the four options and mark the correct one before sharing.\n\n`+qs.join("\n");
+  }
+  if(T==="Project"){
+    return head+`Project Brief\n\nObjective: Build a small project that demonstrates "${topic}".\n\nTasks:\n1. Research the basics of ${topic} and write a short summary (1 page).\n2. Plan your approach — list the steps and tools you will use.\n3. Build / prepare the project applying ${topic} concepts from ${subject}.\n4. Document what you did, with screenshots or examples.\n5. Prepare a 5-minute presentation of your results.\n\nDeliverables: report + working project + presentation.\nEvaluation: understanding (30%), application (40%), presentation (30%).`;
+  }
+  const tasks=[
+    `Define "${topic}" in your own words and list its key features.`,
+    `Explain how ${topic} works, with one clear example from ${subject}.`,
+    `Solve a problem that uses ${topic}. Show every step of your working.`,
+    `Compare ${topic} with a closely related concept — note similarities and differences.`,
+    `Identify a common mistake students make with ${topic} and how to avoid it.`,
+    `Create your own example/question on ${topic} and provide the full solution.`,
+  ];
+  return head+`Instructions: Attempt all tasks neatly. Write in your own words.\n\n`+tasks.map((t,i)=>`${i+1}. ${t}`).join("\n\n");
+}
+
+// Offline generator — report card comments (3 lengths)
+function aiReportCommentLocal({name,att,avgMarks,hwPct}){
+  const f=name.split(" ")[0]||name;
+  const attTxt=att>=90?"excellent and consistent":att>=75?"good":att>=60?"irregular and needs improvement":"a serious concern";
+  const acadTxt=avgMarks==null?"is yet to sit for assessments":avgMarks>=80?"is performing at a high academic level":avgMarks>=60?"shows steady academic progress":avgMarks>=40?"is making an effort but needs more support":"requires focused academic support";
+  const hwTxt=hwPct==null?"":hwPct>=80?" Homework is completed reliably.":hwPct>=50?" Homework completion can be more consistent.":" Homework completion needs significant improvement.";
+  const short=`${f} ${acadTxt} with ${attTxt} attendance (${att}%).`;
+  const medium=`${name} has shown ${attTxt} attendance this term at ${att}%, and ${acadTxt}${avgMarks!=null?` (average ${avgMarks}%)`:""}.${hwTxt} With continued effort, further progress is well within reach.`;
+  const detailed=`${name} has maintained ${attTxt} attendance (${att}%) during this assessment period and ${acadTxt}${avgMarks!=null?`, achieving an average of ${avgMarks}%`:""}.${hwTxt} ${f} is encouraged to ${att<75?"attend classes more regularly, ":""}${avgMarks!=null&&avgMarks<60?"revise core concepts daily, and seek help when needed":"keep building on these strengths and aim higher each week"}. We are confident ${f} will continue to grow with consistent effort and support from home.`;
+  return `▸ SHORT\n${short}\n\n▸ MEDIUM\n${medium}\n\n▸ DETAILED\n${detailed}`;
+}
+
+// Offline generator — attendance insights
+function aiInsightsLocal({total,avg,low,critical,lowNames}){
+  const health=avg>=90?"Excellent":avg>=80?"Healthy":avg>=70?"Fair — watch closely":"Needs urgent attention";
+  const lines=[];
+  lines.push(`1. OVERALL HEALTH: ${health} — average attendance is ${avg}% across ${total} students.`);
+  lines.push(`2. NEEDS ATTENTION: ${low} student(s) are below 75%${critical?`, of which ${critical} are critical (below 60%)`:""}.`);
+  if(lowNames&&lowNames.length)lines.push(`   At-risk: ${lowNames.slice(0,12).join(", ")}${lowNames.length>12?` +${lowNames.length-12} more`:""}.`);
+  lines.push(`3. TRENDS: ${avg>=85?"Most students attend regularly; the cohort is stable.":avg>=70?"A noticeable group is slipping below the 75% threshold.":"Attendance is widely inconsistent and trending low."}`);
+  lines.push(`4. RECOMMENDATIONS:\n   • Auto-notify parents when a student crosses below 75%.\n   • Hold a short counselling session for critical cases.\n   • Recognise/​reward students above 95% to reinforce the habit.\n   • Review timetable clashes or transport issues affecting the at-risk group.`);
+  lines.push(`5. ACTION PLAN (low attendance):\n   Week 1: Personal call to each at-risk student/parent.\n   Week 2: Set a 90% target and track daily.\n   Week 3: Review progress; escalate persistent cases to mentor.`);
+  return lines.join("\n");
+}
+
+// Offline generator — exam MCQ scaffolds (editable starting questions)
+function aiExamLocal({subject,topic}){
+  return Array.from({length:5},(_,i)=>({
+    question:`(${subject} · ${topic}) Sample question ${i+1} — replace with your question`,
+    options:["Option A","Option B","Option C","Option D"],
+    correct:0,marks:5,
+  }));
+}
+
+// Offline responder — student chatbot
+function aiChatLocal(q,d){
+  const t=q.toLowerCase();
+  if(/\b(hi|hello|hey|vanakkam)\b/.test(t))return `Hi ${d.name}! 👋 Ask me about your attendance, fees, homework, marks or course.`;
+  if(/(attend|present|absent)/.test(t))return `Your attendance is ${d.att}% across ${d.attCount} recorded class(es). ${d.att>=75?"That's above the 75% requirement — keep it up! ✅":"That's below the 75% mark — try to attend regularly. ⚠️"}`;
+  if(/(fee|due|pay|payment|balance)/.test(t))return d.due>0?`Your total fee is ₹${d.total.toLocaleString()}, paid ₹${d.paid.toLocaleString()}, and ₹${d.due.toLocaleString()} is still pending. Please clear it at the office.`:`Your fees are fully paid (₹${d.paid.toLocaleString()}). Nothing pending — thank you! ✅`;
+  if(/(homework|hw|assignment)/.test(t))return d.hwPending>0?`You have ${d.hwPending} pending homework item(s). Check the Homework section for details and due dates.`:`No pending homework right now. 🎉`;
+  if(/(mark|exam|result|grade|score|percent)/.test(t)){if(!d.exams.length)return "No exam marks have been recorded yet.";const avg=Math.round(d.exams.reduce((a,e)=>a+(e.maxMarks>0?e.marks/e.maxMarks*100:Number(e.percentage)||0),0)/d.exams.length);return `You have ${d.exams.length} exam(s) recorded with an average of ${avg}%. ${avg>=60?"Good work — keep improving!":"Let's focus on revising weaker topics."}`;}
+  if(/(course|class|subject|study)/.test(t))return `You are enrolled in: ${d.course}. Let me know what you'd like to know about your studies.`;
+  return `I can help with your attendance (${d.att}%), fees (₹${d.due.toLocaleString()} due), homework (${d.hwPending} pending) and exam marks. Try asking "What is my attendance?" or "How much fee is due?".`;
 }
 
 function InstAIHub({students,inst,color,onUpdate,notify,C}){
   const [subTab,setSubTab]=useState("homework");
   const SUB=[{k:"homework",i:"📚",l:"Homework Gen"},{k:"comments",i:"💬",l:"Report Comments"},{k:"insights",i:"📊",l:"Attendance Insights"}];
   return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <PH title="🤖 AI Tools" sub="Powered by Claude AI" C={C}/>
+    <PH title="🤖 AI Tools" sub="Smart assistant — works offline, no setup needed" C={C}/>
     <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
       {SUB.map(t=><button key={t.k} onClick={()=>setSubTab(t.k)} style={{padding:"8px 18px",borderRadius:20,border:`1px solid ${subTab===t.k?color:C.border}`,background:subTab===t.k?color:"transparent",color:subTab===t.k?"#fff":C.muted,fontWeight:subTab===t.k?700:500,fontSize:12,cursor:"pointer"}}>{t.i} {t.l}</button>)}
     </div>
@@ -2643,7 +2856,9 @@ function AIHomeworkGen({inst,color,C}){
     setLoading(true);setResult("");
     try{
       const prompt=`You are a teacher at ${inst.name} (${inst.type}). Generate ${form.type} for:\nSubject: ${form.subject}\nTopic: ${form.topic}\nClass/Standard: ${form.standard||"General"}\n\nProvide clear, structured ${form.type} with 5-8 questions/tasks appropriate for students. Format nicely.`;
-      const text=await callAI(prompt);
+      let text;
+      try{text=await callAI(prompt);}
+      catch(e){text=aiHomeworkLocal({instName:inst.name,subject:form.subject,topic:form.topic,standard:form.standard,type:form.type});}
       setResult(text);
     }catch(e){setResult("Error generating. Please try again.");}
     setLoading(false);
@@ -2683,7 +2898,9 @@ function AIReportComments({students,color,C}){
     const hw=stu.homeworks||[];const hwDone=hw.filter(h=>h.status==="Submitted").length;
     try{
       const prompt=`Generate a professional report card teacher comment for this student:\nName: ${stu.name}\nAttendance: ${att}%\nAverage Marks: ${avgMarks!==null?avgMarks+"%":"No exams yet"}\nHomework completion: ${hw.length?Math.round(hwDone/hw.length*100)+"%":"N/A"}\n\nWrite 3 different comment options (short, medium, detailed). Be constructive and professional.`;
-      const text=await callAI(prompt);
+      let text;
+      try{text=await callAI(prompt);}
+      catch(e){text=aiReportCommentLocal({name:stu.name,att,avgMarks,hwPct:hw.length?Math.round(hwDone/hw.length*100):null});}
       setResult(prev=>({...prev,[sel]:text}));
     }catch(e){setResult(prev=>({...prev,[sel]:"Error generating comment."}));}
     setLoading(false);
@@ -2727,7 +2944,9 @@ function AIAttendanceInsights({students,color,C}){
     const data=students.map(s=>({name:s.name,att:attPct(s.attendance||[]),total:s.attendance?.length||0}));
     try{
       const prompt=`Analyze attendance data for ${students.length} students:\n${JSON.stringify(data.slice(0,30))}\n\nProvide:\n1. Overall attendance health assessment\n2. Students needing immediate attention (list names)\n3. Trends and patterns you notice\n4. Specific recommendations for the institution\n5. Action plan for low-attendance students\n\nBe concise and actionable.`;
-      const text=await callAI(prompt);
+      let text;
+      try{text=await callAI(prompt);}
+      catch(e){text=aiInsightsLocal({total:students.length,avg,low:low.length,critical:critical.length,lowNames:low.map(s=>s.name)});}
       setResult(text);
     }catch(e){setResult("Error generating insights.");}
     setLoading(false);
@@ -2891,9 +3110,9 @@ function ExamCreator({onSave,color,C}){
     setAiLoading(true);
     try{
       const prompt=`Generate 5 MCQ questions for an exam:\nSubject: ${form.subject}\nTopic: ${form.title}\n\nReturn ONLY valid JSON array, no markdown:\n[{"question":"...","options":["A","B","C","D"],"correct":0,"marks":5}]\ncorrect is 0-indexed position of correct answer.`;
-      const text=await callAI(prompt);
-      const clean=text.replace(/```json|```/g,"").trim();
-      const parsed=JSON.parse(clean);
+      let parsed;
+      try{const text=await callAI(prompt);const clean=text.replace(/```json|```/g,"").trim();parsed=JSON.parse(clean);}
+      catch(e){parsed=aiExamLocal({subject:form.subject,topic:form.title});}
       setQuestions(qs=>[...qs,...parsed.map(q=>({...q,id:uid()}))]);
     }catch(e){console.error(e);}
     setAiLoading(false);
@@ -2953,176 +3172,56 @@ function ExamResults({exam,students,color,C,onUpdate}){
 }
 
 // ─── PHASE 1: CERTIFICATE GENERATOR ─────────────────────────────────────────
-// ─── AllBee Certificate Builder ─────────────────────────────────────────────
-function allbeeTrophySVG(){return `<svg viewBox="0 0 120 100" style="width:52%;height:auto;display:block;margin:0 auto;">
-  <text x="60" y="15" text-anchor="middle" font-size="13" fill="#123c49" font-weight="bold" font-family="Arial">&#9733; &#9733; &#9733;</text>
-  <path d="M44 32 C26 40 24 66 41 83" fill="none" stroke="#2ba79f" stroke-width="2.4" stroke-linecap="round"/>
-  <path d="M76 32 C94 40 96 66 79 83" fill="none" stroke="#2ba79f" stroke-width="2.4" stroke-linecap="round"/>
-  <g fill="#2ba79f"><ellipse cx="37" cy="42" rx="2.4" ry="4"/><ellipse cx="31" cy="52" rx="2.4" ry="4"/><ellipse cx="30" cy="63" rx="2.4" ry="4"/><ellipse cx="33" cy="73" rx="2.4" ry="4"/><ellipse cx="39" cy="81" rx="2.4" ry="4"/>
-  <ellipse cx="83" cy="42" rx="2.4" ry="4"/><ellipse cx="89" cy="52" rx="2.4" ry="4"/><ellipse cx="90" cy="63" rx="2.4" ry="4"/><ellipse cx="87" cy="73" rx="2.4" ry="4"/><ellipse cx="81" cy="81" rx="2.4" ry="4"/></g>
-  <path d="M47 27 H73 V41 C73 54 64 60 60 60 C56 60 47 54 47 41 Z" fill="#123c49"/>
-  <path d="M47 31 C35 31 35 45 48 47" fill="none" stroke="#123c49" stroke-width="3"/>
-  <path d="M73 31 C85 31 85 45 72 47" fill="none" stroke="#123c49" stroke-width="3"/>
-  <circle cx="55" cy="37" r="1.5" fill="#2ba79f"/><circle cx="60" cy="37" r="1.5" fill="#2ba79f"/><circle cx="65" cy="37" r="1.5" fill="#2ba79f"/>
-  <rect x="57" y="60" width="6" height="9" fill="#123c49"/>
-  <path d="M49 69 H71 L67 78 H53 Z" fill="#123c49"/>
-</svg>`;}
-
-function buildAllBeeCertInner(d){
-  const {name,title,courseLine,bodyExtra,date,signName,regNo}=d;
-  return `
-  <style>
-    .abc{container-type:inline-size;position:relative;width:100%;aspect-ratio:1000/636;background:#fff;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;color:#0c4a59;}
-    .abc *{box-sizing:border-box;}
-    .abc-svg{position:absolute;inset:0;width:100%;height:100%;}
-    .abc-logo{position:absolute;top:5.5%;left:4.5%;display:flex;align-items:center;gap:1.4cqw;z-index:2;}
-    .abc-logo .bx{width:7cqw;height:7cqw;border-radius:1.3cqw;background:#1f9e98;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:4.8cqw;line-height:1;font-style:italic;}
-    .abc-logo .lt{line-height:0.92;}
-    .abc-logo .lt b{display:block;font-size:4.2cqw;color:#1f9e98;font-weight:900;letter-spacing:0.02em;}
-    .abc-logo .lt span{display:block;font-size:3.3cqw;color:#0c4a59;letter-spacing:0.2em;font-weight:800;}
-    .abc-tr{position:absolute;top:4%;right:4.5%;width:17%;text-align:center;z-index:2;}
-    .abc-tr .ac{font-weight:800;font-size:2.4cqw;letter-spacing:0.03em;margin-top:0.4cqw;}
-    .abc-tr .acs{font-size:1.65cqw;}
-    .abc-tr .rn{font-style:italic;font-weight:800;font-size:1.9cqw;margin-top:0.6cqw;}
-    .abc-h1{position:absolute;top:17.5%;left:0;right:0;text-align:center;font-size:8cqw;font-weight:900;letter-spacing:0.005em;line-height:1;z-index:2;}
-    .abc-h2{position:absolute;top:30%;left:0;right:0;text-align:center;font-size:4.8cqw;font-weight:500;z-index:2;}
-    .abc-pres{position:absolute;top:44%;left:0;right:0;text-align:center;font-size:2.9cqw;font-weight:600;z-index:2;}
-    .abc-name{position:absolute;top:52.5%;left:0;right:0;text-align:center;font-family:Georgia,'Times New Roman',serif;font-style:italic;font-weight:800;font-size:7cqw;line-height:1;z-index:2;color:#0c4a59;}
-    .abc-nl{position:absolute;top:65.5%;left:24%;right:24%;height:0.32cqw;background:#d4dadd;z-index:2;}
-    .abc-body{position:absolute;top:69.5%;left:18%;right:18%;text-align:center;font-size:1.95cqw;line-height:1.55;color:#1a3b44;z-index:2;}
-    .abc-body b{font-weight:800;}
-    .abc-date{position:absolute;bottom:6.5%;left:11%;text-align:center;z-index:2;}
-    .abc-date .v{font-style:italic;font-weight:800;font-size:3.3cqw;border-bottom:0.3cqw solid #c9d0d3;padding:0 1cqw 0.5cqw;display:inline-block;}
-    .abc-date .l{font-weight:800;font-size:1.95cqw;letter-spacing:0.07em;margin-top:0.9cqw;}
-    .abc-sign{position:absolute;bottom:6.5%;right:10%;text-align:center;z-index:2;min-width:22%;}
-    .abc-sign .v{font-family:'Brush Script MT','Segoe Script','Snell Roundhand',cursive;font-size:4.6cqw;line-height:1;color:#13384a;padding-bottom:0.3cqw;}
-    .abc-sign .l{font-weight:800;font-size:1.95cqw;letter-spacing:0.07em;border-top:0.25cqw solid #c9d0d3;padding-top:0.7cqw;}
-  </style>
-  <div class="abc">
-    <svg class="abc-svg" viewBox="0 0 1000 636" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="600" y="-45" width="210" height="72" rx="36" fill="#123c49"/>
-      <path d="M150 210 L305 245 L305 408 L150 442 Z" fill="#eef1f3"/>
-      <path d="M-20 198 L150 233 L150 418 L-20 452 Z" fill="#123c49"/>
-      <polygon points="322,352 240,400 158,352 158,258 240,210 322,258" fill="none" stroke="#1fc6c2" stroke-width="17" stroke-linejoin="round"/>
-      <path d="M-20 470 Q120 455 178 560 Q208 636 70 636 L-20 636 Z" fill="#1fc6c2"/>
-      <path d="M880 300 L1010 415 L880 530" fill="none" stroke="#123c49" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M912 332 L1010 415 L912 498" fill="none" stroke="#0c4a59" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M442 636 L516 516 L590 636" fill="none" stroke="#0b2730" stroke-width="16" stroke-linejoin="round"/>
-      <path d="M880 555 L1015 555 L1015 636 L820 636 Z" fill="#1fc6c2"/>
-    </svg>
-    <div class="abc-logo"><div class="bx">B</div><div class="lt"><b>ALLBEE</b><span>SOLUTIONS</span></div></div>
-    <div class="abc-tr">${allbeeTrophySVG()}<div class="ac">ACHIEVEMENT</div><div class="acs">Of Course Completion</div>${regNo?`<div class="rn">R.no:${regNo}</div>`:""}</div>
-    <div class="abc-h1">CERTIFICATE</div>
-    <div class="abc-h2">${title}</div>
-    <div class="abc-pres">This Certificate is Proudly Presented to</div>
-    <div class="abc-name">${name||"Student Name"}</div>
-    <div class="abc-nl"></div>
-    <div class="abc-body">This Certificate is Awarded To<br/>${courseLine}<br/>${bodyExtra}</div>
-    <div class="abc-date"><div class="v">${date}</div><div class="l">DATE</div></div>
-    <div class="abc-sign"><div class="v">${signName}</div><div class="l">SIGNATURE</div></div>
-  </div>`;
-}
-
-function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
-
 function InstCertificates({students,inst,color,C}){
-  const [sel,setSel]=useState("");
-  const [template,setTemplate]=useState("allbee");
-  const [type,setType]=useState("completion");
-  const stu=students.find(s=>s.id===sel);
-  const dStr=new Date().toLocaleDateString("en-GB").replace(/\//g,"-");
-  // AllBee editable fields
-  const [course,setCourse]=useState("");
-  const [duration,setDuration]=useState("30 Days Online");
-  const [skills,setSkills]=useState("Word, Excel, and PowerPoint");
-  const [title,setTitle]=useState("Of Achievement");
-  const [date,setDate]=useState(dStr);
-  const [signName,setSignName]=useState("Authorised Signatory");
-  const [regNo,setRegNo]=useState("");
-
-  // auto-fill course from selected student
-  useEffect(()=>{if(stu){setCourse(stu.course||stu.department||stu.danceStyle||stu.class||"MS Office Course");}},[sel]);
-
-  const courseLine=`for successfully completing the ${esc(duration)} <b>${esc(course||"Course")}</b> at ${esc(inst.name)}.`;
-  const bodyExtra=`The candidate actively participated, showed interest in learning, and improved their skills in <b>${esc(skills)}</b>.<br/>We appreciate their effort and wish them success in the future.`;
-  const allbeeData={name:esc(stu?.name),title:esc(title),courseLine,bodyExtra,date:esc(date),signName:esc(signName),regNo:esc(regNo)};
-  const allbeeInner=buildAllBeeCertInner(allbeeData);
-
-  function printAllBee(){
-    const w=window.open("","_blank");
-    if(!w){alert("Please allow pop-ups to print the certificate.");return;}
-    w.document.write(`<!DOCTYPE html><html><head><title>Certificate - ${esc(stu?.name||"")}</title><meta charset="utf-8"/><style>@page{size:A4 landscape;margin:0;}html,body{margin:0;padding:0;}.wrap{width:100%;}</style></head><body><div class="wrap">${allbeeInner}</div><script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`);
-    w.document.close();
-  }
-  function printClassic(){window.print();}
-
+  const [sel,setSel]=useState(null);const [type,setType]=useState("completion");
   const TYPES=[{k:"completion",l:"Course Completion"},{k:"achievement",l:"Achievement"},{k:"participation",l:"Participation"},{k:"topperr",l:"Top Performer"}];
   const CERT_META={completion:{title:"Certificate of Completion",body:(s,i)=>`This is to certify that ${s.name} has successfully completed the prescribed course of study at ${i.name} and has fulfilled all requirements with dedication and commitment.`},achievement:{title:"Certificate of Achievement",body:(s,i)=>`This is to certify that ${s.name} has demonstrated exceptional performance and outstanding achievement at ${i.name}, showing exemplary dedication to academic excellence.`},participation:{title:"Certificate of Participation",body:(s,i)=>`This is to certify that ${s.name} has actively participated in the academic programs conducted at ${i.name} and contributed positively to the learning environment.`},topperr:{title:"Certificate of Excellence — Top Performer",body:(s,i)=>{const exams=s.exams||[];const avg=exams.length?Math.round(exams.reduce((a,e)=>a+(e.maxMarks>0?e.marks/e.maxMarks*100:0),0)/exams.length):0;return`This is to certify that ${s.name} has achieved the distinction of Top Performer at ${i.name} with an outstanding academic average of ${avg}%, reflecting exceptional hard work and intellectual merit.`;}}};
+  function print(){window.print();}
+  const stu=students.find(s=>s.id===sel);
   const certMeta=CERT_META[type];
-
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <PH title="🏆 Certificate Generator" sub="Generate and print certificates for students" C={C}/>
-    <div style={{display:"grid",gridTemplateColumns:"320px 1fr",gap:20,alignItems:"start"}}>
+    <div style={{display:"grid",gridTemplateColumns:"300px 1fr",gap:20}}>
       <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,height:"fit-content"}}>
         <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Settings</div>
-        <FG label="Design Template" C={C} style={{marginBottom:12}}>
-          <Sel C={C} value={template} onChange={e=>setTemplate(e.target.value)}>
-            <option value="allbee">AllBee Solutions Design</option>
-            <option value="classic">Classic Bordered</option>
+        <FG label="Certificate Type" C={C} style={{marginBottom:12}}>
+          <Sel C={C} value={type} onChange={e=>setType(e.target.value)}>
+            {TYPES.map(t=><option key={t.k} value={t.k}>{t.l}</option>)}
           </Sel>
         </FG>
-        <FG label="Student" C={C} style={{marginBottom:12}}>
+        <FG label="Student" C={C}>
           <Sel C={C} value={sel||""} onChange={e=>setSel(e.target.value)}>
             <option value="">-- Select Student --</option>
             {students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
           </Sel>
         </FG>
-        {template==="allbee"?<>
-          <FG label="Sub-title" C={C} style={{marginBottom:10}}><Inp C={C} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Of Achievement"/></FG>
-          <FG label="Course Name" C={C} style={{marginBottom:10}}><Inp C={C} value={course} onChange={e=>setCourse(e.target.value)} placeholder="MS Office Course"/></FG>
-          <FG label="Duration / Mode" C={C} style={{marginBottom:10}}><Inp C={C} value={duration} onChange={e=>setDuration(e.target.value)} placeholder="30 Days Online"/></FG>
-          <FG label="Skills Learned" C={C} style={{marginBottom:10}}><Inp C={C} value={skills} onChange={e=>setSkills(e.target.value)} placeholder="Word, Excel, and PowerPoint"/></FG>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-            <FG label="Date" C={C}><Inp C={C} value={date} onChange={e=>setDate(e.target.value)} placeholder="19-10-2025"/></FG>
-            <FG label="Reg No." C={C}><Inp C={C} value={regNo} onChange={e=>setRegNo(e.target.value)} placeholder="2509/04"/></FG>
-          </div>
-          <FG label="Signatory" C={C} style={{marginBottom:6}}><Inp C={C} value={signName} onChange={e=>setSignName(e.target.value)} placeholder="Authorised Signatory"/></FG>
-          <div style={{marginTop:16}}><Btn onClick={printAllBee} C={C} color="teal" disabled={!sel} style={{width:"100%"}}>🖨️ Print / Save as PDF</Btn></div>
-        </>:<>
-          <FG label="Certificate Type" C={C}>
-            <Sel C={C} value={type} onChange={e=>setType(e.target.value)}>{TYPES.map(t=><option key={t.k} value={t.k}>{t.l}</option>)}</Sel>
-          </FG>
-          <div style={{marginTop:16}}><Btn onClick={printClassic} C={C} color="teal" disabled={!sel} style={{width:"100%"}}>🖨️ Print Certificate</Btn></div>
-        </>}
-        <div style={{marginTop:10,fontSize:11,color:C.muted,textAlign:"center"}}>{template==="allbee"?"Opens a print-ready landscape page → Save as PDF":"Use browser Print → Save as PDF"}</div>
+        <div style={{marginTop:16}}>
+          <Btn onClick={print} C={C} color="teal" disabled={!sel} style={{width:"100%"}}>🖨️ Print Certificate</Btn>
+        </div>
+        <div style={{marginTop:10,fontSize:11,color:C.muted,textAlign:"center"}}>Use browser Print → Save as PDF</div>
       </div>
-
       <div>
-        {!sel&&<div style={{background:C.surface,borderRadius:12,border:`2px dashed ${C.border}`,padding:"60px 40px",textAlign:"center",color:C.muted}}><div style={{fontSize:40,marginBottom:12}}>🏆</div><div style={{fontSize:14,fontWeight:600}}>Select a student to preview the certificate</div><div style={{fontSize:11,marginTop:6}}>Then print or save as PDF</div></div>}
-        {sel&&template==="allbee"&&<div style={{borderRadius:8,overflow:"hidden",boxShadow:C.shadowL,border:`1px solid ${C.border}`}} dangerouslySetInnerHTML={{__html:allbeeInner}}/>}
-        {sel&&template==="classic"&&<>
-          <style>{`@media print{.no-print{display:none!important;}.cert-box{box-shadow:none!important;border:3px double #666!important;}}`}</style>
-          <div className="cert-box" style={{background:"#fff",border:`3px double ${color}`,borderRadius:4,padding:"60px 70px",textAlign:"center",boxShadow:C.shadowL,minHeight:500,position:"relative",overflow:"hidden"}}>
-            <div style={{position:"absolute",top:0,left:0,right:0,height:8,background:`linear-gradient(90deg,${color},${color}88,${color})`}}/>
-            <div style={{position:"absolute",bottom:0,left:0,right:0,height:8,background:`linear-gradient(90deg,${color},${color}88,${color})`}}/>
-            <div style={{position:"absolute",top:0,left:0,bottom:0,width:8,background:`linear-gradient(180deg,${color},${color}88,${color})`}}/>
-            <div style={{position:"absolute",top:0,right:0,bottom:0,width:8,background:`linear-gradient(180deg,${color},${color}88,${color})`}}/>
-            <div style={{marginBottom:6,fontSize:26,color:color}}>🏆</div>
-            <div style={{fontSize:11,letterSpacing:"0.3em",color:"#888",textTransform:"uppercase",marginBottom:8}}>AllBee EduSphere Presents</div>
-            <div style={{fontSize:28,fontWeight:900,color:"#111",marginBottom:4,letterSpacing:"0.05em"}}>{certMeta.title}</div>
-            <div style={{width:80,height:3,background:color,margin:"12px auto 28px",borderRadius:2}}/>
-            <div style={{fontSize:13,color:"#555",marginBottom:6,letterSpacing:"0.1em",textTransform:"uppercase"}}>This is to proudly certify that</div>
-            <div style={{fontSize:36,fontWeight:900,color:"#111",margin:"10px 0",fontStyle:"italic",letterSpacing:"0.02em"}}>{stu.name}</div>
-            <div style={{fontSize:12,color:"#777",marginBottom:24}}>{stu.rollNo&&`Roll No: ${stu.rollNo} · `}{stu.course||stu.department||stu.class||stu.danceStyle||""}</div>
-            <div style={{fontSize:14,color:"#444",lineHeight:1.8,maxWidth:480,margin:"0 auto 28px",fontStyle:"italic"}}>"{certMeta.body(stu,inst)}"</div>
-            <div style={{width:80,height:2,background:"#ddd",margin:"0 auto 24px",borderRadius:2}}/>
-            <div style={{display:"flex",justifyContent:"space-around",marginTop:10}}>
-              <div style={{textAlign:"center"}}><div style={{borderTop:"1px solid #333",width:120,paddingTop:6}}><div style={{fontSize:11,color:"#555"}}>Principal / Director</div><div style={{fontSize:10,color:"#999",marginTop:2}}>{inst.name}</div></div></div>
-              <div style={{textAlign:"center"}}><div style={{borderTop:"1px solid #333",width:120,paddingTop:6}}><div style={{fontSize:11,color:"#555"}}>Date of Issue</div><div style={{fontSize:10,color:"#999",marginTop:2}}>{new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"long",year:"numeric"})}</div></div></div>
-            </div>
-            <div style={{marginTop:20,fontSize:9,color:"#bbb",letterSpacing:"0.1em"}}>POWERED BY ALLBEE EDUSPHERE · {inst.name.toUpperCase()}</div>
+        <style>{`@media print{.no-print{display:none!important;}.cert-box{box-shadow:none!important;border:3px double #666!important;}}`}</style>
+        {stu?<div className="cert-box" style={{background:"#fff",border:`3px double ${color}`,borderRadius:4,padding:"60px 70px",textAlign:"center",boxShadow:C.shadowL,minHeight:500,position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:8,background:`linear-gradient(90deg,${color},${color}88,${color})`}}/>
+          <div style={{position:"absolute",bottom:0,left:0,right:0,height:8,background:`linear-gradient(90deg,${color},${color}88,${color})`}}/>
+          <div style={{position:"absolute",top:0,left:0,bottom:0,width:8,background:`linear-gradient(180deg,${color},${color}88,${color})`}}/>
+          <div style={{position:"absolute",top:0,right:0,bottom:0,width:8,background:`linear-gradient(180deg,${color},${color}88,${color})`}}/>
+          <div style={{marginBottom:6,fontSize:26,color:color}}>🏆</div>
+          <div style={{fontSize:11,letterSpacing:"0.3em",color:"#888",textTransform:"uppercase",marginBottom:8}}>AllBee EduSphere Presents</div>
+          <div style={{fontSize:28,fontWeight:900,color:"#111",marginBottom:4,letterSpacing:"0.05em"}}>{certMeta.title}</div>
+          <div style={{width:80,height:3,background:color,margin:"12px auto 28px",borderRadius:2}}/>
+          <div style={{fontSize:13,color:"#555",marginBottom:6,letterSpacing:"0.1em",textTransform:"uppercase"}}>This is to proudly certify that</div>
+          <div style={{fontSize:36,fontWeight:900,color:"#111",margin:"10px 0",fontStyle:"italic",letterSpacing:"0.02em"}}>{stu.name}</div>
+          <div style={{fontSize:12,color:"#777",marginBottom:24}}>{stu.rollNo&&`Roll No: ${stu.rollNo} · `}{stu.course||stu.department||stu.class||stu.danceStyle||""}</div>
+          <div style={{fontSize:14,color:"#444",lineHeight:1.8,maxWidth:480,margin:"0 auto 28px",fontStyle:"italic"}}>"{certMeta.body(stu,inst)}"</div>
+          <div style={{width:80,height:2,background:"#ddd",margin:"0 auto 24px",borderRadius:2}}/>
+          <div style={{display:"flex",justifyContent:"space-around",marginTop:10}}>
+            <div style={{textAlign:"center"}}><div style={{borderTop:"1px solid #333",width:120,paddingTop:6}}><div style={{fontSize:11,color:"#555"}}>Principal / Director</div><div style={{fontSize:10,color:"#999",marginTop:2}}>{inst.name}</div></div></div>
+            <div style={{textAlign:"center"}}><div style={{borderTop:"1px solid #333",width:120,paddingTop:6}}><div style={{fontSize:11,color:"#555"}}>Date of Issue</div><div style={{fontSize:10,color:"#999",marginTop:2}}>{new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"long",year:"numeric"})}</div></div></div>
           </div>
-        </>}
+          <div style={{marginTop:20,fontSize:9,color:"#bbb",letterSpacing:"0.1em"}}>POWERED BY ALLBEE EDUSPHERE · {inst.name.toUpperCase()}</div>
+        </div>:<div style={{background:C.surface,borderRadius:12,border:`2px dashed ${C.border}`,padding:"60px 40px",textAlign:"center",color:C.muted}}><div style={{fontSize:40,marginBottom:12}}>🏆</div><div style={{fontSize:14,fontWeight:600}}>Select a student to preview the certificate</div><div style={{fontSize:11,marginTop:6}}>Then print or save as PDF</div></div>}
       </div>
     </div>
   </div>;
@@ -3145,10 +3244,14 @@ function StuAIChat({stu,inst,C}){
     setInput("");setMsgs(m=>[...m,{role:"user",text:q}]);setLoading(true);
     const ctx=`You are a helpful AI assistant for student ${stu.name} at ${inst?.name||"the institution"}. Answer ONLY based on this student data:\n- Attendance: ${att}% (${stu.attendance?.length||0} classes recorded)\n- Fee: Total ₹${totalFee}, Paid ₹${paidFee}, Due ₹${dueFee}\n- Homework pending: ${hwPending}\n- Exams: ${JSON.stringify((stu.exams||[]).slice(0,5))}\n- Homework: ${JSON.stringify((stu.homeworks||[]).slice(0,5))}\n- Class/Course: ${stu.class||stu.course||stu.department||stu.danceStyle||"N/A"}\nBe friendly, brief, and helpful. If asked something not in data, say you don't have that info.`;
     try{
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,system:ctx,messages:[...msgs.filter(m=>m.role==="user").slice(-4).map(m=>({role:"user",content:m.text})),{role:"user",content:q}]})});
+      const res=await fetch(AI_PROXY_URL||"about:blank",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:ctx+"\n\nQuestion: "+q})});
+      if(!AI_PROXY_URL||!res.ok)throw new Error("offline");
       const d=await res.json();
-      setMsgs(m=>[...m,{role:"assistant",text:d.content?.[0]?.text||"Sorry, I couldn't respond. Try again."}]);
-    }catch(e){setMsgs(m=>[...m,{role:"assistant",text:"Network error. Please check connection."}]);}
+      setMsgs(m=>[...m,{role:"assistant",text:d.text||d.content?.[0]?.text||"Sorry, I couldn't respond. Try again."}]);
+    }catch(e){
+      const ans=aiChatLocal(q,{name:stu.name,att,attCount:stu.attendance?.length||0,total:totalFee,paid:paidFee,due:dueFee,hwPending,exams:stu.exams||[],course:stu.class||stu.course||stu.department||stu.danceStyle||"your course"});
+      setMsgs(m=>[...m,{role:"assistant",text:ans}]);
+    }
     setLoading(false);
   }
   return <div style={{animation:"fadeUp 0.4s ease"}}>
