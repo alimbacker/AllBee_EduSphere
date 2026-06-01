@@ -1915,7 +1915,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   function addStudent(data){const s={...data,id:uid(),instId:inst.id,createdAt:today(),attendance:[],fees:[],homeworks:[],exams:[],assignments:[]};saveDb({students:[...db.students,s]});notify("Student registered!");setTab("students");}
   function updStudent(id,patch){saveDb({students:db.students.map(s=>s.id===id?{...s,...patch}:s)});}
   function goTab(k){setTab(k);setSideOpen(false);}
-  const visibleTabs=INST_TABS.filter(t=>{if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);if(!isAdmin)return!["register","staff","courses"].includes(t.k);if(t.k==="courses")return inst.type==="Computer Institute";return true;});
+  const visibleTabs=INST_TABS.filter(t=>{if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);if(!isAdmin)return!["register","staff","courses","payroll","crm"].includes(t.k);if(t.k==="courses")return inst.type==="Computer Institute";return true;});
   const curTab=visibleTabs.find(t=>t.k===tab);
   return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:C.bg}}>
     <style>{`
@@ -3253,7 +3253,7 @@ function InstLeave({db,saveDb,user,inst,color,isAdmin,notify,C}){
   const allLeaves=leaves.sort((a,b)=>b.appliedAt.localeCompare(a.appliedAt));
   const pending=allLeaves.filter(l=>l.status==="Pending");
   const statusColor=s=>s==="Approved"?C.green:s==="Rejected"?C.red:C.gold;
-  const SUB=isAdmin?[{k:"all",l:"📋 All Leaves"},{k:"pending",l:`⏳ Pending${pending.length?` (${pending.length})`:""`},{k:"apply",l:"+ Apply Leave"}]:[{k:"apply",l:"+ Apply Leave"},{k:"my",l:"My Leaves"}];
+  const SUB=isAdmin?[{k:"all",l:"📋 All Leaves"},{k:"pending",l:`⏳ Pending${pending.length?" ("+pending.length+")":""}`},{k:"apply",l:"+ Apply Leave"}]:[{k:"apply",l:"+ Apply Leave"},{k:"my",l:"My Leaves"}];
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <PH title="🏖 Leave Management" sub={`${pending.length} pending approval`} C={C}/>
     <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
