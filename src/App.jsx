@@ -48,6 +48,8 @@ const DANCE_LEVELS=["Beginner","Elementary","Intermediate","Advanced","Professio
 const DANCE_BATCHES=["Morning 7-9 AM","Morning 9-11 AM","Afternoon 12-2 PM","Evening 4-6 PM","Evening 6-8 PM","Weekend Special"];
 const FEE_STATUS=["Paid","Partial","Pending","Waived"];
 const HW_STATUS=["Pending","Submitted","Late","Incomplete"];
+const STUDENT_STATUS=["Studying","Completed","Dropout"];
+const stuStatusColor=s=>s==="Completed"?"green":s==="Dropout"?"red":"blue";
 const ASSIGN_TYPES=["Written","Project","Practical","Presentation","Online","Research","Performance"];
 const ASSIGN_STATUS=["Assigned","Submitted","Late","Not Submitted","Graded"];
 const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -2030,7 +2032,7 @@ function InstCourses({db,saveDb,inst,color,notify,C}){
 
 // Institution Dashboard Shell
 const NAV_GROUPS=["Main","Students","Staff","Academics","Finance","Communication","Insights"];
-const INST_TABS=[{k:"home",i:"🏠",l:"Home",g:"Main"},{k:"students",i:"👥",l:"Students",g:"Students"},{k:"register",i:"➕",l:"Register",g:"Students"},{k:"attend",i:"📅",l:"Attendance",g:"Students"},{k:"fees",i:"💰",l:"Fees",g:"Students"},{k:"receipt",i:"🧾",l:"Fee Receipt",g:"Students"},{k:"homework",i:"📚",l:"Homework",g:"Students"},{k:"exams",i:"📝",l:"Exam Marks",g:"Students"},{k:"assign",i:"📋",l:"Assignments",g:"Students"},{k:"timetable",i:"🗓",l:"Timetable",g:"Students"},{k:"certificates",i:"🏆",l:"Certificates",g:"Students"},{k:"onlineexam",i:"💻",l:"Online Exams",g:"Students"},{k:"gamify",i:"🏅",l:"Gamification",g:"Students"},{k:"crm",i:"🎯",l:"Admission CRM",g:"Students"},{k:"staff",i:"👨‍🏫",l:"Staff",g:"Staff"},{k:"tasks",i:"✅",l:"Tasks",g:"Staff"},{k:"staffatt",i:"🕐",l:"Staff Attendance",g:"Staff"},{k:"payroll",i:"💵",l:"HR & Payroll",g:"Staff"},{k:"leave",i:"🏖",l:"Leave",g:"Staff"},{k:"courses",i:"🖥",l:"Courses",g:"Academics"},{k:"classlinks",i:"🎥",l:"Class Links",g:"Academics"},{k:"library",i:"📚",l:"Library",g:"Academics"},{k:"docs",i:"📁",l:"Documents",g:"Academics"},{k:"accounts",i:"💼",l:"Accounts",g:"Finance"},{k:"updates",i:"📰",l:"Updates",g:"Communication"},{k:"alerts",i:"📣",l:"Alerts",g:"Communication"},{k:"reports",i:"📊",l:"Reports",g:"Insights"},{k:"analytics",i:"📈",l:"Analytics",g:"Insights"},{k:"ai",i:"🤖",l:"AI Tools",g:"Insights"}];
+const INST_TABS=[{k:"home",i:"🏠",l:"Home",g:"Main"},{k:"students",i:"👥",l:"Students",g:"Students"},{k:"register",i:"➕",l:"Register",g:"Students"},{k:"import",i:"📥",l:"Import Data",g:"Students"},{k:"attend",i:"📅",l:"Attendance",g:"Students"},{k:"fees",i:"💰",l:"Fees",g:"Students"},{k:"receipt",i:"🧾",l:"Fee Receipt",g:"Students"},{k:"homework",i:"📚",l:"Homework",g:"Students"},{k:"exams",i:"📝",l:"Exam Marks",g:"Students"},{k:"assign",i:"📋",l:"Assignments",g:"Students"},{k:"timetable",i:"🗓",l:"Timetable",g:"Students"},{k:"certificates",i:"🏆",l:"Certificates",g:"Students"},{k:"onlineexam",i:"💻",l:"Online Exams",g:"Students"},{k:"gamify",i:"🏅",l:"Gamification",g:"Students"},{k:"crm",i:"🎯",l:"Admission CRM",g:"Students"},{k:"staff",i:"👨‍🏫",l:"Staff",g:"Staff"},{k:"tasks",i:"✅",l:"Tasks",g:"Staff"},{k:"staffatt",i:"🕐",l:"Staff Attendance",g:"Staff"},{k:"payroll",i:"💵",l:"HR & Payroll",g:"Staff"},{k:"leave",i:"🏖",l:"Leave",g:"Staff"},{k:"courses",i:"🖥",l:"Courses",g:"Academics"},{k:"classlinks",i:"🎥",l:"Class Links",g:"Academics"},{k:"library",i:"📚",l:"Library",g:"Academics"},{k:"docs",i:"📁",l:"Documents",g:"Academics"},{k:"accounts",i:"💼",l:"Accounts",g:"Finance"},{k:"updates",i:"📰",l:"Updates",g:"Communication"},{k:"alerts",i:"📣",l:"Alerts",g:"Communication"},{k:"reports",i:"📊",l:"Reports",g:"Insights"},{k:"analytics",i:"📈",l:"Analytics",g:"Insights"},{k:"ai",i:"🤖",l:"AI Tools",g:"Insights"}];
 
 function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const [tab,setTab]=useState("home");
@@ -2047,7 +2049,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   function addStudent(data){const s={...data,id:uid(),instId:inst.id,createdAt:today(),attendance:[],fees:[],homeworks:[],exams:[],assignments:[]};saveDb({students:[...db.students,s]});notify("Student registered!");setTab("students");}
   function updStudent(id,patch){saveDb({students:db.students.map(s=>s.id===id?{...s,...patch}:s)});}
   function goTab(k){setTab(k);setSideOpen(false);}
-  const visibleTabs=INST_TABS.filter(t=>{if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);if(!isAdmin)return!["register","staff","courses","payroll","crm"].includes(t.k);if(t.k==="courses")return inst.type==="Computer Institute";return true;});
+  const visibleTabs=INST_TABS.filter(t=>{if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);if(!isAdmin)return!["register","import","staff","courses","payroll","crm"].includes(t.k);if(t.k==="courses")return inst.type==="Computer Institute";return true;});
   const curTab=visibleTabs.find(t=>t.k===tab);
   return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:C.bg}}>
     <style>{`
@@ -2127,6 +2129,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
         {tab==="staff"&&isAdmin&&<InstStaff staff={myStaff} inst={inst} color={color} onAdd={addStaff} onUpdate={updStaff} onDelete={delStaff} notify={notify} C={C}/>}
         {tab==="students"&&<InstStudents students={myStudents} inst={inst} courses={myCourses} color={color} onUpdate={updStudent} onDelete={id=>{if(window.confirm("Permanently delete student?")){saveDb({students:db.students.filter(s=>s.id!==id)});notify("Student deleted","error");}}} C={C}/>}
         {tab==="register"&&isAdmin&&<InstRegister inst={inst} onSave={addStudent} color={color} m={m} courses={myCourses} C={C}/>}
+        {tab==="import"&&isAdmin&&<InstImport db={db} saveDb={saveDb} inst={inst} notify={notify} C={C}/>}
         {tab==="attend"&&<InstAttend students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
         {tab==="fees"&&<InstFees students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
         {tab==="homework"&&<InstHomework students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
@@ -2196,18 +2199,23 @@ function InstHome({inst,students,color,setTab,m,C}){
 }
 
 function InstStudents({students,inst,courses,color,onUpdate,onDelete,C}){
-  const [q,setQ]=useState("");const [sel,setSel]=useState(null);const [photoFor,setPhotoFor]=useState(null);const [editId,setEditId]=useState(null);
-  const fs=students.filter(s=>[s.name,s.rollNo,s.phone,s.department,s.class,s.course,s.danceStyle].some(v=>v?.toLowerCase().includes(q.toLowerCase())));
+  const [q,setQ]=useState("");const [sel,setSel]=useState(null);const [photoFor,setPhotoFor]=useState(null);const [editId,setEditId]=useState(null);const [stFilter,setStFilter]=useState("all");
+  const fs=students.filter(s=>(stFilter==="all"||(s.status||"Studying")===stFilter)&&[s.name,s.rollNo,s.phone,s.department,s.class,s.course,s.danceStyle].some(v=>v?.toLowerCase().includes(q.toLowerCase())));
+  const counts={Studying:students.filter(s=>(s.status||"Studying")==="Studying").length,Completed:students.filter(s=>s.status==="Completed").length,Dropout:students.filter(s=>s.status==="Dropout").length};
   function handleEdit(s,e){e.stopPropagation();setSel(null);setEditId(s.id);}
   return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <PH title="👥 Students" sub={`${students.length} enrolled`} C={C}/>
-    <Inp C={C} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, roll, phone..." style={{marginBottom:14}}/>
+    <PH title="👥 Students" sub={`${students.length} enrolled · ${counts.Studying} studying · ${counts.Completed} completed · ${counts.Dropout} dropout`} C={C}/>
+    <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+      <Inp C={C} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, roll, phone..." style={{flex:1,minWidth:180,marginBottom:0}}/>
+      <Sel C={C} value={stFilter} onChange={e=>setStFilter(e.target.value)} style={{width:"auto"}}><option value="all">All Status</option>{STUDENT_STATUS.map(s=><option key={s} value={s}>{s} ({counts[s]||0})</option>)}</Sel>
+    </div>
     <div style={{display:"grid",gridTemplateColumns:sel?"1fr 360px":"1fr",gap:18,alignItems:"start"}}>
       <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,overflow:"hidden",boxShadow:C.shadow}}>
         {!fs.length&&<Empty msg="No students" C={C}/>}
         {fs.map(s=>{const pct=attPct(s.attendance);return<div key={s.id} onClick={()=>setSel(sel?.id===s.id?null:s)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:sel?.id===s.id?C.tealL:"transparent",transition:"background 0.1s"}} onMouseOver={e=>{if(sel?.id!==s.id)e.currentTarget.style.background=C.bg;}} onMouseOut={e=>{if(sel?.id!==s.id)e.currentTarget.style.background="transparent";}}>
           <div style={{display:"flex",alignItems:"center",gap:11}}><Avatar name={s.name} photo={s.photo} color={color} size={38}/><div><div style={{fontWeight:600,fontSize:13,color:C.text}}>{s.name}</div><div style={{fontSize:11,color:C.muted}}>{s.rollNo} - {s.course||s.department||s.danceStyle||s.class||""}{s.section?` - ${s.section}`:""}{s.batch?` (${s.batch})`:""}</div></div></div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <Badge label={s.status||"Studying"} color={stuStatusColor(s.status||"Studying")} C={C}/>
             <MiniBar pct={pct} color={pct>=75?C.green:C.red} C={C}/>
             {s.fees?.some(f=>f.status==="Pending"||f.status==="Partial")&&<Badge label="Fee Due" color="pink" C={C}/>}
             <button onClick={e=>handleEdit(s,e)} style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${C.teal}`,background:C.tealL,color:C.teal,fontSize:11,fontWeight:700,cursor:"pointer"}}>✏ Edit</button>
@@ -2284,6 +2292,8 @@ function StuEditModal({student,inst,courses,color,onSave,onClose,C}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:18}}>
           <FG label="Roll Number" C={C}><Inp C={C} value={f.rollNo||""} onChange={e=>set("rollNo",e.target.value)} placeholder="Roll No"/></FG>
           <FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate||""} onChange={e=>set("admissionDate",e.target.value)}/></FG>
+          <FG label="Enrollment Status" C={C}><Sel C={C} value={f.status||"Studying"} onChange={e=>set("status",e.target.value)}>{STUDENT_STATUS.map(s=><option key={s}>{s}</option>)}</Sel></FG>
+          {(f.status==="Completed"||f.status==="Dropout")&&<FG label={f.status==="Completed"?"Date of Completion":"Date of Dropout"} C={C}><Inp C={C} type="date" value={f.completionDate||""} onChange={e=>set("completionDate",e.target.value)}/></FG>}
           {TYPE==="College"&&<><FG label="Dept Group" C={C}><Sel C={C} value={f.deptGroup||""} onChange={e=>set("deptGroup",e.target.value)}>{Object.keys(DEPARTMENTS).map(d=><option key={d}>{d}</option>)}</Sel></FG>
           <FG label="Department" C={C}><Sel C={C} value={f.department||""} onChange={e=>set("department",e.target.value)}><option value="">-- Select --</option>{(DEPARTMENTS[f.deptGroup]||[]).map(d=><option key={d}>{d}</option>)}</Sel></FG>
           <FG label="Year" C={C}><Sel C={C} value={f.year||""} onChange={e=>set("year",e.target.value)}>{["1st Year","2nd Year","3rd Year","4th Year","PG 1st Year","PG 2nd Year"].map(y=><option key={y}>{y}</option>)}</Sel></FG>
@@ -2328,6 +2338,7 @@ function StuProfileCard({s,color,onClose,onPhoto,onEdit,onDelete,C}){
         <div style={{fontWeight:800,fontSize:15,color:C.text}}>{s.name}</div>
         <div style={{fontSize:11,color:C.muted}}>{s.rollNo}</div>
         <div style={{fontSize:12,color,fontWeight:600,marginTop:2}}>{s.course||s.department||s.danceStyle||s.class||""}{s.batch?` · ${s.batch}`:""}</div>
+        <div style={{marginTop:6}}><Badge label={(s.status||"Studying")+(s.completionDate&&(s.status==="Completed"||s.status==="Dropout")?" · "+fmt(s.completionDate):"")} color={stuStatusColor(s.status||"Studying")} C={C}/></div>
         <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:8}}>
           <button onClick={()=>onEdit(s)} style={{padding:"5px 16px",borderRadius:7,border:`1px solid ${color}`,background:"transparent",color,fontSize:12,fontWeight:700,cursor:"pointer"}}>✏ Edit Profile</button>
           {onDelete&&<button onClick={()=>onDelete(s.id)} style={{padding:"5px 16px",borderRadius:7,border:`1px solid ${C.red}`,background:"transparent",color:C.red,fontSize:12,fontWeight:700,cursor:"pointer"}}>🗑 Delete</button>}
@@ -2338,14 +2349,186 @@ function StuProfileCard({s,color,onClose,onPhoto,onEdit,onDelete,C}){
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
       {[{l:"Attendance",v:`${pct}%`,c:pct>=75?C.green:C.red},{l:"Avg Marks",v:avgM!=null?`${avgM}%`:"--",c:C.teal},{l:"Fee Paid",v:`Rs.${pf.toLocaleString()}`,c:C.green},{l:"HW Done",v:`${hwDone}/${s.homeworks?.length||0}`,c:C.purple}].map(r=><div key={r.l} style={{background:C.bg,borderRadius:9,padding:"10px",textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:14,fontWeight:800,color:r.c}}>{r.v}</div><div style={{fontSize:9,color:C.muted,marginTop:2}}>{r.l}</div></div>)}
     </div>
-    {[{l:"Course",v:s.course},{l:"Department",v:s.department},{l:"Dance Style",v:s.danceStyle},{l:"Class",v:s.class},{l:"Batch",v:s.batch},{l:"Duration",v:s.duration},{l:"Year",v:s.year},{l:"Phone",v:s.phone},{l:"Email",v:s.email},{l:"Parent",v:s.parent},{l:"Parent Ph",v:s.parentPhone},{l:"DOB",v:fmt(s.dob)},{l:"Gender",v:s.gender},{l:"Blood",v:s.blood},{l:"Admitted",v:fmt(s.admissionDate)}].filter(r=>r.v&&r.v!=="--").map(r=><div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}><span style={{color:C.muted}}>{r.l}</span><span style={{fontWeight:600,color:C.text}}>{r.v}</span></div>)}
+    {[{l:"Status",v:s.status||"Studying"},{l:s.status==="Dropout"?"Dropout Date":"Completed On",v:fmt(s.completionDate)},{l:"Course",v:s.course},{l:"Department",v:s.department},{l:"Dance Style",v:s.danceStyle},{l:"Class",v:s.class},{l:"Batch",v:s.batch},{l:"Duration",v:s.duration},{l:"Year",v:s.year},{l:"Phone",v:s.phone},{l:"Email",v:s.email},{l:"Parent",v:s.parent},{l:"Parent Ph",v:s.parentPhone},{l:"DOB",v:fmt(s.dob)},{l:"Gender",v:s.gender},{l:"Blood",v:s.blood},{l:"Admitted",v:fmt(s.admissionDate)}].filter(r=>r.v&&r.v!=="--").map(r=><div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}><span style={{color:C.muted}}>{r.l}</span><span style={{fontWeight:600,color:C.text}}>{r.v}</span></div>)}
     {s.attendance?.length>0&&<div style={{marginTop:12}}><Sec C={C}>Last 7 Days</Sec><div style={{display:"flex",gap:3}}>{s.attendance.slice(-7).map((a,i)=><div key={i} title={`${fmt(a.date)}: ${a.status}`} style={{flex:1,height:24,borderRadius:5,background:a.status==="Present"?C.green:a.status==="Absent"?C.red:C.gold,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700}}>{a.status[0]}</div>)}</div></div>}
+  </div>;
+}
+
+// ─── BULK IMPORT (Excel / Google Sheets) ────────────────────────────────────
+const IMPORT_FIELDS=[
+  {key:"name",label:"Name *",syn:["name","studentname","fullname","student","candidatename"]},
+  {key:"rollNo",label:"Roll / Enroll No",syn:["roll","rollno","rollnumber","enroll","enrollment","enrollmentno","regno","registerno","registrationno","admissionno","admno","idno"]},
+  {key:"phone",label:"Phone",syn:["phone","mobile","contact","phoneno","mobileno","phonenumber","contactnumber","cell"]},
+  {key:"email",label:"Email",syn:["email","mail","emailid","emailaddress"]},
+  {key:"gender",label:"Gender",syn:["gender","sex"]},
+  {key:"dob",label:"Date of Birth",syn:["dob","dateofbirth","birthdate","birthday"]},
+  {key:"course",label:"Course",syn:["course","program","programme","trade","coursename"]},
+  {key:"department",label:"Department",syn:["department","dept","branch","stream"]},
+  {key:"class",label:"Class",syn:["class","standard","std","grade"]},
+  {key:"section",label:"Section",syn:["section","sec"]},
+  {key:"year",label:"Year",syn:["year","yr"]},
+  {key:"danceStyle",label:"Dance Style",syn:["dancestyle","dance","style"]},
+  {key:"batch",label:"Batch",syn:["batch","shift","timing","slot"]},
+  {key:"status",label:"Status",syn:["status","enrollmentstatus","studentstatus","state"]},
+  {key:"completionDate",label:"Completion / Drop Date",syn:["completiondate","dateofcompletion","completedon","completed","passout","passoutdate","passingdate","enddate","dropdate","dropoutdate","finished"]},
+  {key:"admissionDate",label:"Admission Date",syn:["admissiondate","joindate","doj","dateofadmission","joined","joiningdate","startdate","enrolldate"]},
+  {key:"parent",label:"Parent / Guardian",syn:["parent","guardian","father","fathername","parentname","guardianname","motherthename"]},
+  {key:"parentPhone",label:"Parent Phone",syn:["parentphone","guardianphone","parentmobile","fatherphone","parentcontact","guardiancontact"]},
+  {key:"address",label:"Address",syn:["address","location","place","city","town"]},
+];
+function impNormHeader(h){return String(h||"").toLowerCase().replace(/[^a-z0-9]/g,"");}
+function impAutoMap(headers){const map={};headers.forEach((h,idx)=>{const n=impNormHeader(h);const f=IMPORT_FIELDS.find(f=>f.syn.includes(n));if(f&&map[f.key]===undefined)map[f.key]=idx;});return map;}
+function impParse(text){
+  text=String(text||"").replace(/\r\n/g,"\n").replace(/\r/g,"\n").replace(/\n+$/,"");
+  if(!text.trim())return [];
+  const firstLine=text.split("\n")[0];
+  const delim=firstLine.includes("\t")?"\t":",";
+  const rows=[];let row=[],cur="",inQ=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(inQ){if(c==='"'){if(text[i+1]==='"'){cur+='"';i++;}else inQ=false;}else cur+=c;}
+    else{if(c==='"')inQ=true;else if(c===delim){row.push(cur);cur="";}else if(c==="\n"){row.push(cur);rows.push(row);row=[];cur="";}else cur+=c;}
+  }
+  row.push(cur);rows.push(row);
+  return rows.map(r=>r.map(x=>x.trim())).filter(r=>r.some(x=>x!==""));
+}
+function impDate(v){
+  if(!v)return"";v=String(v).trim();
+  let m=v.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if(m)return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`;
+  m=v.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
+  if(m){let d=m[1],mo=m[2],y=m[3];if(y.length===2)y="20"+y;return `${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;}
+  const dt=new Date(v);if(!isNaN(dt.getTime()))return dt.toISOString().slice(0,10);
+  return "";
+}
+function impStatus(v){const n=String(v||"").toLowerCase();if(/complet|pass|finish|graduat|done/.test(n))return"Completed";if(/drop|discontinu|\bleft\b|quit|terminat|inactive/.test(n))return"Dropout";return"Studying";}
+function impGender(v){const n=String(v||"").toLowerCase();if(n.startsWith("f")||n==="female")return"Female";if(n.startsWith("m")||n==="male")return"Male";if(n)return"Other";return"Male";}
+function loadXLSX(){return new Promise((res,rej)=>{if(window.XLSX)return res(window.XLSX);const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=()=>res(window.XLSX);s.onerror=()=>rej(new Error("xlsx"));document.head.appendChild(s);});}
+
+function InstImport({db,saveDb,inst,notify,C}){
+  const [headers,setHeaders]=useState([]);
+  const [rows,setRows]=useState([]);
+  const [map,setMap]=useState({});
+  const [paste,setPaste]=useState("");
+  const [err,setErr]=useState("");
+  const [done,setDone]=useState(0);
+  const fileRef=useRef(null);
+
+  function ingest(aoa){
+    setErr("");setDone(0);
+    const clean=(aoa||[]).filter(r=>r&&r.some(c=>String(c).trim()!==""));
+    if(clean.length<2){setErr("Need a header row plus at least one data row.");setHeaders([]);setRows([]);return;}
+    const hdr=clean[0].map(h=>String(h).trim());
+    setHeaders(hdr);setRows(clean.slice(1));setMap(impAutoMap(hdr));
+  }
+  function doPaste(){ingest(impParse(paste));}
+  async function handleFile(e){
+    const file=e.target.files?.[0];if(!file)return;
+    const ext=file.name.split(".").pop().toLowerCase();
+    if(ext==="xlsx"||ext==="xls"){
+      try{const XLSX=await loadXLSX();const buf=await file.arrayBuffer();const wb=XLSX.read(buf,{type:"array"});const ws=wb.Sheets[wb.SheetNames[0]];ingest(XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:""}));}
+      catch(ex){setErr("Couldn't read that Excel file (you may be offline). Export it as CSV, or open it and copy-paste the cells into the box below.");}
+    }else{const text=await file.text();ingest(impParse(text));}
+    e.target.value="";
+  }
+  const get=(r,key)=>map[key]!=null&&map[key]!==""?String(r[map[key]]??"").trim():"";
+  const validRows=rows.filter(r=>get(r,"name"));
+  function buildStudent(r){
+    return {id:uid(),instId:inst.id,createdAt:today(),institution:inst.type,
+      name:get(r,"name"),rollNo:get(r,"rollNo"),phone:get(r,"phone"),email:get(r,"email"),
+      gender:impGender(get(r,"gender")),dob:impDate(get(r,"dob")),
+      course:get(r,"course"),department:get(r,"department"),class:get(r,"class"),
+      section:get(r,"section"),year:get(r,"year"),danceStyle:get(r,"danceStyle"),batch:get(r,"batch"),
+      status:impStatus(get(r,"status")),completionDate:impDate(get(r,"completionDate")),
+      admissionDate:impDate(get(r,"admissionDate"))||today(),
+      parent:get(r,"parent"),parentPhone:get(r,"parentPhone"),address:get(r,"address"),
+      attendance:[],fees:[],homeworks:[],exams:[],assignments:[],photo:""};
+  }
+  function doImport(){
+    if(!validRows.length){setErr("No rows with a Name to import. Map the Name column first.");return;}
+    if(map.name==null){setErr("Please map the Name column.");return;}
+    const newStudents=validRows.map(buildStudent);
+    saveDb({students:[...db.students,...newStudents]});
+    setDone(newStudents.length);notify(`✅ Imported ${newStudents.length} student${newStudents.length!==1?"s":""}!`);
+    setHeaders([]);setRows([]);setMap({});setPaste("");
+  }
+  function downloadTemplate(){
+    const h=["Name","Roll No","Phone","Email","Gender","DOB","Course","Department","Class","Section","Status","Completion Date","Admission Date","Parent","Parent Phone","Address"];
+    const sample=["Anitha R","CI2025001","9876543210","anitha@mail.com","Female","2005-06-15","MS Office","","","","Completed","2025-10-19","2025-09-01","Ramesh","9876500000","Madurai"];
+    const csv=h.join(",")+"\n"+sample.map(x=>/[",\n]/.test(x)?`"${x}"`:x).join(",");
+    const url=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+    const a=document.createElement("a");a.href=url;a.download="student_import_template.csv";a.click();URL.revokeObjectURL(url);
+  }
+  const loaded=headers.length>0;
+
+  return <div style={{animation:"fadeUp 0.4s ease",maxWidth:1000}}>
+    <PH title="📥 Import Students" sub="Bring in your existing data from Excel or Google Sheets" C={C}/>
+
+    {done>0&&<div style={{background:C.greenL,color:C.green,borderRadius:10,padding:"12px 16px",marginBottom:16,fontWeight:700,fontSize:13}}>✅ {done} student(s) imported successfully. Check the Students tab.</div>}
+    {err&&<div style={{background:C.redL,color:C.red,borderRadius:10,padding:"12px 16px",marginBottom:16,fontSize:13}}>{err}</div>}
+
+    {!loaded&&<>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,marginBottom:16}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:6,color:C.text}}>Option 1 — Upload a file</div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>Choose a <b>.xlsx</b>, <b>.xls</b> or <b>.csv</b> file exported from Excel or Google Sheets (File → Download).</div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{display:"none"}}/>
+          <Btn onClick={()=>fileRef.current?.click()} C={C} color="teal">📂 Choose File</Btn>
+          <Btn onClick={downloadTemplate} C={C} color="gold" outline>⬇ Download Template (CSV)</Btn>
+        </div>
+      </div>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:6,color:C.text}}>Option 2 — Copy & paste</div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>In Google Sheets/Excel select your cells (including the header row), copy, and paste below. The first row must be the column titles.</div>
+        <Txt C={C} value={paste} onChange={e=>setPaste(e.target.value)} rows={7} placeholder={"Name\tRoll No\tPhone\tStatus\nAnitha R\tCI2025001\t9876543210\tCompleted\n..."} style={{fontFamily:"monospace",fontSize:12}}/>
+        <div style={{marginTop:12}}><Btn onClick={doPaste} C={C} color="teal" disabled={!paste.trim()}>Preview Data →</Btn></div>
+      </div>
+    </>}
+
+    {loaded&&<>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
+          <div style={{fontWeight:700,fontSize:13,color:C.text}}>Match your columns</div>
+          <div style={{fontSize:12,color:C.muted}}>{rows.length} row(s) found · {validRows.length} with a name</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10}}>
+          {IMPORT_FIELDS.map(f=><div key={f.key}>
+            <LBL C={C}>{f.label}</LBL>
+            <Sel C={C} value={map[f.key]??""} onChange={e=>setMap(m=>({...m,[f.key]:e.target.value===""?null:Number(e.target.value)}))}>
+              <option value="">— not in my file —</option>
+              {headers.map((h,i)=><option key={i} value={i}>{h||`Column ${i+1}`}</option>)}
+            </Sel>
+          </div>)}
+        </div>
+      </div>
+
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,boxShadow:C.shadow,overflow:"hidden",marginBottom:16}}>
+        <div style={{padding:"12px 16px",fontWeight:700,fontSize:13,color:C.text,borderBottom:`1px solid ${C.border}`}}>Preview (first 6 rows)</div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr>{["Name","Roll","Phone","Course/Class","Status","Completion"].map(h=><th key={h} style={{padding:"8px 12px",textAlign:"left",color:C.muted,fontSize:10,textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:`1px solid ${C.border}`,background:C.bg}}>{h}</th>)}</tr></thead>
+            <tbody>{validRows.slice(0,6).map((r,i)=>{const st=impStatus(get(r,"status"));return<tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
+              <td style={{padding:"8px 12px",fontWeight:600,color:C.text}}>{get(r,"name")}</td>
+              <td style={{padding:"8px 12px",color:C.muted}}>{get(r,"rollNo")||"—"}</td>
+              <td style={{padding:"8px 12px",color:C.muted}}>{get(r,"phone")||"—"}</td>
+              <td style={{padding:"8px 12px",color:C.muted}}>{get(r,"course")||get(r,"department")||get(r,"class")||get(r,"danceStyle")||"—"}</td>
+              <td style={{padding:"8px 12px"}}><Badge label={st} color={stuStatusColor(st)} C={C}/></td>
+              <td style={{padding:"8px 12px",color:C.muted}}>{impDate(get(r,"completionDate"))?fmt(impDate(get(r,"completionDate"))):"—"}</td>
+            </tr>;})}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        <Btn onClick={doImport} C={C} color="green">✅ Import {validRows.length} Student{validRows.length!==1?"s":""}</Btn>
+        <Btn onClick={()=>{setHeaders([]);setRows([]);setMap({});setPaste("");setErr("");}} C={C} color="red" outline>Cancel</Btn>
+      </div>
+    </>}
   </div>;
 }
 
 function InstRegister({inst,onSave,color,m,courses,C}){
   const [step,setStep]=useState(0);
-  const blank={name:"",rollNo:"",dob:"",gender:"Male",phone:"",email:"",address:"",aadhaar:"",religion:"",parent:"",parentPhone:"",admissionDate:today(),deptGroup:"Arts & Science",department:"",year:"1st Year",section:"A",class:"Class 1",medium:"English Medium",group:"N/A",hostel:"Day Scholar",bus:"",scholarship:"None",course:"Basic Computer",duration:"3 Months",batch:"Morning",timing:"",qualification:"Graduate",blood:"--",occupation:"",income:"",danceStyle:"Bharatanatyam",danceLevel:"Beginner",danceBatch:"Evening 4-6 PM",danceGoal:"",photo:""};
+  const blank={name:"",rollNo:"",dob:"",gender:"Male",phone:"",email:"",address:"",aadhaar:"",religion:"",parent:"",parentPhone:"",admissionDate:today(),deptGroup:"Arts & Science",department:"",year:"1st Year",section:"A",class:"Class 1",medium:"English Medium",group:"N/A",hostel:"Day Scholar",bus:"",scholarship:"None",course:"Basic Computer",duration:"3 Months",batch:"Morning",timing:"",qualification:"Graduate",blood:"--",occupation:"",income:"",danceStyle:"Bharatanatyam",danceLevel:"Beginner",danceBatch:"Evening 4-6 PM",danceGoal:"",photo:"",status:"Studying",completionDate:""};
   const [f,setF]=useState(blank);const [err,setErr]=useState({});
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   function validate(){const e={};if(!f.name.trim())e.name="Required";if(!f.phone.match(/^\d{10}$/))e.phone="10 digits needed";if(!f.dob)e.dob="Required";if(inst.type==="College"&&!f.department)e.department="Required";setErr(e);return!Object.keys(e).length;}
@@ -2367,7 +2550,7 @@ function DanceF({f,set,C}){return<G2><FG label="Dance Style" C={C}><Sel C={C} va
 function CollegeF({f,set,err,C}){return<G2><FG label="Dept Group" C={C}><Sel C={C} value={f.deptGroup} onChange={e=>{set("deptGroup",e.target.value);set("department","");}}>{Object.keys(DEPARTMENTS).map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Department *" err={err.department} C={C}><Sel C={C} value={f.department} onChange={e=>set("department",e.target.value)}><option value="">-- Select --</option>{DEPARTMENTS[f.deptGroup].map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Year" C={C}><Sel C={C} value={f.year} onChange={e=>set("year",e.target.value)}>{["1st Year","2nd Year","3rd Year","4th Year","PG 1st Year","PG 2nd Year"].map(y=><option key={y}>{y}</option>)}</Sel></FG><FG label="Section" C={C}><Sel C={C} value={f.section} onChange={e=>set("section",e.target.value)}>{["A","B","C","D"].map(s=><option key={s}>{s}</option>)}</Sel></FG><FG label="Roll Number" C={C}><Inp C={C} value={f.rollNo} onChange={e=>set("rollNo",e.target.value)} placeholder="22CS001"/></FG><FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate} onChange={e=>set("admissionDate",e.target.value)}/></FG><FG label="Hostel" C={C}><Sel C={C} value={f.hostel} onChange={e=>set("hostel",e.target.value)}>{["Day Scholar","Hosteller"].map(h=><option key={h}>{h}</option>)}</Sel></FG><FG label="Scholarship" C={C}><Sel C={C} value={f.scholarship} onChange={e=>set("scholarship",e.target.value)}>{["None","BC/MBC","SC/ST","Merit","Sports"].map(s=><option key={s}>{s}</option>)}</Sel></FG></G2>;}
 function SchoolF({f,set,C}){return<G2><FG label="Class" C={C}><Sel C={C} value={f.class} onChange={e=>set("class",e.target.value)}>{SCHOOL_CLASSES.map(c=><option key={c}>{c}</option>)}</Sel></FG><FG label="Section" C={C}><Sel C={C} value={f.section} onChange={e=>set("section",e.target.value)}>{SCHOOL_SECTIONS.map(s=><option key={s}>{s}</option>)}</Sel></FG><FG label="Roll No" C={C}><Inp C={C} value={f.rollNo} onChange={e=>set("rollNo",e.target.value)} placeholder="01"/></FG><FG label="Medium" C={C}><Sel C={C} value={f.medium} onChange={e=>set("medium",e.target.value)}>{["Tamil Medium","English Medium"].map(m=><option key={m}>{m}</option>)}</Sel></FG><FG label="Group" C={C}><Sel C={C} value={f.group} onChange={e=>set("group",e.target.value)}>{["N/A","Maths-Biology","Maths-CS","Commerce","Arts"].map(g=><option key={g}>{g}</option>)}</Sel></FG><FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate} onChange={e=>set("admissionDate",e.target.value)}/></FG></G2>;}
 function CompF({f,set,courses,C}){const courseList=[...new Set([...(courses||[]),...COMP_COURSES])];return<G2><FG label="Course" C={C}><Sel C={C} value={f.course} onChange={e=>set("course",e.target.value)}>{courseList.map(c=><option key={c}>{c}</option>)}</Sel></FG><FG label="Duration" C={C}><Sel C={C} value={f.duration} onChange={e=>set("duration",e.target.value)}>{["1 Month","3 Months","6 Months","1 Year"].map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Batch" C={C}><Sel C={C} value={f.batch} onChange={e=>set("batch",e.target.value)}>{["Morning","Afternoon","Evening","Weekend"].map(b=><option key={b}>{b}</option>)}</Sel></FG><FG label="Timing" C={C}><Inp C={C} value={f.timing} onChange={e=>set("timing",e.target.value)} placeholder="9AM-11AM"/></FG><FG label="Enrollment No" C={C}><Inp C={C} value={f.rollNo} onChange={e=>set("rollNo",e.target.value)} placeholder="CI2025001"/></FG><FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate} onChange={e=>set("admissionDate",e.target.value)}/></FG></G2>;}
-function PersonalF({f,set,err,color,C}){return<div><div style={{display:"flex",justifyContent:"center",marginBottom:16}}><div><LBL C={C}>Student Photo</LBL><PhotoUpload photo={f.photo} onChange={v=>set("photo",v)} color={color} C={C} size={80}/></div></div><G2><FG label="Full Name *" err={err?.name} C={C}><Inp C={C} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Full name"/></FG><FG label="Date of Birth *" err={err?.dob} C={C}><Inp C={C} type="date" value={f.dob} onChange={e=>set("dob",e.target.value)}/></FG><FG label="Gender" C={C}><Sel C={C} value={f.gender} onChange={e=>set("gender",e.target.value)}>{["Male","Female","Other"].map(g=><option key={g}>{g}</option>)}</Sel></FG><FG label="Blood Group" C={C}><Sel C={C} value={f.blood||"--"} onChange={e=>set("blood",e.target.value)}>{["--","A+","A-","B+","B-","AB+","AB-","O+","O-"].map(b=><option key={b}>{b}</option>)}</Sel></FG><FG label="Aadhaar" C={C}><Inp C={C} value={f.aadhaar} onChange={e=>set("aadhaar",e.target.value)} placeholder="12-digit" maxLength={12}/></FG><FG label="Religion" C={C}><Inp C={C} value={f.religion} onChange={e=>set("religion",e.target.value)} placeholder="e.g. Hindu"/></FG><FG label="Address" span C={C}><Txt C={C} value={f.address} onChange={e=>set("address",e.target.value)} rows={2} placeholder="Full address"/></FG></G2></div>;}
+function PersonalF({f,set,err,color,C}){return<div><div style={{display:"flex",justifyContent:"center",marginBottom:16}}><div><LBL C={C}>Student Photo</LBL><PhotoUpload photo={f.photo} onChange={v=>set("photo",v)} color={color} C={C} size={80}/></div></div><G2><FG label="Full Name *" err={err?.name} C={C}><Inp C={C} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Full name"/></FG><FG label="Date of Birth *" err={err?.dob} C={C}><Inp C={C} type="date" value={f.dob} onChange={e=>set("dob",e.target.value)}/></FG><FG label="Gender" C={C}><Sel C={C} value={f.gender} onChange={e=>set("gender",e.target.value)}>{["Male","Female","Other"].map(g=><option key={g}>{g}</option>)}</Sel></FG><FG label="Blood Group" C={C}><Sel C={C} value={f.blood||"--"} onChange={e=>set("blood",e.target.value)}>{["--","A+","A-","B+","B-","AB+","AB-","O+","O-"].map(b=><option key={b}>{b}</option>)}</Sel></FG><FG label="Aadhaar" C={C}><Inp C={C} value={f.aadhaar} onChange={e=>set("aadhaar",e.target.value)} placeholder="12-digit" maxLength={12}/></FG><FG label="Religion" C={C}><Inp C={C} value={f.religion} onChange={e=>set("religion",e.target.value)} placeholder="e.g. Hindu"/></FG><FG label="Enrollment Status" C={C}><Sel C={C} value={f.status||"Studying"} onChange={e=>set("status",e.target.value)}>{STUDENT_STATUS.map(s=><option key={s}>{s}</option>)}</Sel></FG>{(f.status==="Completed"||f.status==="Dropout")&&<FG label={f.status==="Completed"?"Date of Completion":"Date of Dropout"} C={C}><Inp C={C} type="date" value={f.completionDate||""} onChange={e=>set("completionDate",e.target.value)}/></FG>}<FG label="Address" span C={C}><Txt C={C} value={f.address} onChange={e=>set("address",e.target.value)} rows={2} placeholder="Full address"/></FG></G2></div>;}
 function ContactF({f,set,err,C}){return<G2><FG label="Phone *" err={err?.phone} C={C}><Inp C={C} value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="10-digit" maxLength={10}/></FG><FG label="Email" C={C}><Inp C={C} value={f.email} onChange={e=>set("email",e.target.value)} placeholder="email@example.com"/></FG><FG label="Parent/Guardian" C={C}><Inp C={C} value={f.parent} onChange={e=>set("parent",e.target.value)} placeholder="Parent name"/></FG><FG label="Parent Phone" C={C}><Inp C={C} value={f.parentPhone} onChange={e=>set("parentPhone",e.target.value)} placeholder="Parent mobile" maxLength={10}/></FG><FG label="Occupation" C={C}><Inp C={C} value={f.occupation} onChange={e=>set("occupation",e.target.value)} placeholder="e.g. Farmer"/></FG><FG label="Annual Income" C={C}><Inp C={C} value={f.income} onChange={e=>set("income",e.target.value)} placeholder="e.g. 1,50,000"/></FG></G2>;}
 
 function InstAttend({students,color,onUpdate,notify,C}){
