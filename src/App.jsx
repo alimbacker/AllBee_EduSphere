@@ -1907,6 +1907,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const color=inst.color||C.teal;
   const m=TYPE_META[inst.type]||TYPE_META["College"];
   const myStudents=useMemo(()=>db.students.filter(s=>s.instId===inst.id),[db.students,inst.id]);
+  const myCourses=useMemo(()=>(db.courses||[]).filter(c=>c.instId===inst.id).map(c=>c.name).filter(Boolean),[db.courses,inst.id]);
   const isAdmin=user.role==="admin";
   const myStaff=useMemo(()=>(db.users||[]).filter(u=>u.instId===inst.id&&u.role!=="admin"&&u.role!=="accountant"),[db.users,inst.id]);
   function addStaff(d){if((db.users||[]).find(u=>u.username===d.username)){notify("Username already exists","error");return;}saveDb({users:[...(db.users||[]),{...d,id:uid(),instId:inst.id}]});notify("Staff added!");}
@@ -1990,8 +1991,8 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
         </div>
         {tab==="home"&&<InstHome inst={inst} students={myStudents} color={color} setTab={goTab} m={m} C={C}/>}
         {tab==="staff"&&isAdmin&&<InstStaff staff={myStaff} inst={inst} color={color} onAdd={addStaff} onUpdate={updStaff} onDelete={delStaff} notify={notify} C={C}/>}
-        {tab==="students"&&<InstStudents students={myStudents} inst={inst} color={color} onUpdate={updStudent} onDelete={id=>{if(window.confirm("Permanently delete student?"))saveDb({students:db.students.filter(s=>s.id!==id)});notify("Student deleted","error");}} C={C}/>}
-        {tab==="register"&&isAdmin&&<InstRegister inst={inst} onSave={addStudent} color={color} m={m} C={C}/>}
+        {tab==="students"&&<InstStudents students={myStudents} inst={inst} courses={myCourses} color={color} onUpdate={updStudent} onDelete={id=>{if(window.confirm("Permanently delete student?")){saveDb({students:db.students.filter(s=>s.id!==id)});notify("Student deleted","error");}}} C={C}/>}
+        {tab==="register"&&isAdmin&&<InstRegister inst={inst} onSave={addStudent} color={color} m={m} courses={myCourses} C={C}/>}
         {tab==="attend"&&<InstAttend students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
         {tab==="fees"&&<InstFees students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
         {tab==="homework"&&<InstHomework students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
@@ -2060,7 +2061,7 @@ function InstHome({inst,students,color,setTab,m,C}){
   </div>;
 }
 
-function InstStudents({students,inst,color,onUpdate,onDelete,C}){
+function InstStudents({students,inst,courses,color,onUpdate,onDelete,C}){
   const [q,setQ]=useState("");const [sel,setSel]=useState(null);const [photoFor,setPhotoFor]=useState(null);const [editId,setEditId]=useState(null);
   const fs=students.filter(s=>[s.name,s.rollNo,s.phone,s.department,s.class,s.course,s.danceStyle].some(v=>v?.toLowerCase().includes(q.toLowerCase())));
   function handleEdit(s,e){e.stopPropagation();setSel(null);setEditId(s.id);}
@@ -2077,13 +2078,14 @@ function InstStudents({students,inst,color,onUpdate,onDelete,C}){
             {s.fees?.some(f=>f.status==="Pending"||f.status==="Partial")&&<Badge label="Fee Due" color="pink" C={C}/>}
             <button onClick={e=>handleEdit(s,e)} style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${C.teal}`,background:C.tealL,color:C.teal,fontSize:11,fontWeight:700,cursor:"pointer"}}>✏ Edit</button>
             <button onClick={e=>{e.stopPropagation();setPhotoFor(s.id);}} style={{fontSize:15,background:"none",border:"none",color:C.muted,padding:4,cursor:"pointer"}} title="Upload Photo">📷</button>
+            <button onClick={e=>{e.stopPropagation();onDelete(s.id);if(sel?.id===s.id)setSel(null);}} style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${C.red}`,background:C.redL,color:C.red,fontSize:11,fontWeight:700,cursor:"pointer"}} title="Delete Student">🗑</button>
           </div>
         </div>;})}
       </div>
-      {sel&&<StuProfileCard s={students.find(x=>x.id===sel.id)||sel} color={color} onClose={()=>setSel(null)} onPhoto={()=>setPhotoFor(sel.id)} onEdit={(s)=>{setEditId(s.id);setSel(null);}} C={C}/>}
+      {sel&&<StuProfileCard s={students.find(x=>x.id===sel.id)||sel} color={color} onClose={()=>setSel(null)} onPhoto={()=>setPhotoFor(sel.id)} onEdit={(s)=>{setEditId(s.id);setSel(null);}} onDelete={(id)=>{onDelete(id);setSel(null);}} C={C}/>}
     </div>
     {photoFor&&<PhotoModal sid={photoFor} student={students.find(s=>s.id===photoFor)} color={color} onSave={(sid,photo)=>{onUpdate(sid,{photo});setPhotoFor(null);}} onClose={()=>setPhotoFor(null)} C={C}/>}
-    {editId&&<StuEditModal student={students.find(s=>s.id===editId)} inst={inst} color={color} onSave={(id,patch)=>{onUpdate(id,patch);setEditId(null);}} onClose={()=>setEditId(null)} C={C}/>}
+    {editId&&<StuEditModal student={students.find(s=>s.id===editId)} inst={inst} courses={courses} color={color} onSave={(id,patch)=>{onUpdate(id,patch);setEditId(null);}} onClose={()=>setEditId(null)} C={C}/>}
   </div>;
 }
 function PhotoModal({sid,student,color,onSave,onClose,C}){
@@ -2098,7 +2100,7 @@ function PhotoModal({sid,student,color,onSave,onClose,C}){
 }
 
 // ─── Student Edit Modal ───────────────────────────────────────────────────────
-function StuEditModal({student,inst,color,onSave,onClose,C}){
+function StuEditModal({student,inst,courses,color,onSave,onClose,C}){
   const [f,setF]=useState({...student});
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const TYPE=inst.type;
@@ -2158,7 +2160,7 @@ function StuEditModal({student,inst,color,onSave,onClose,C}){
           <FG label="Section" C={C}><Sel C={C} value={f.section||""} onChange={e=>set("section",e.target.value)}>{SCHOOL_SECTIONS.map(s=><option key={s}>{s}</option>)}</Sel></FG>
           <FG label="Medium" C={C}><Sel C={C} value={f.medium||"English Medium"} onChange={e=>set("medium",e.target.value)}>{["Tamil Medium","English Medium"].map(m=><option key={m}>{m}</option>)}</Sel></FG>
           <FG label="Group" C={C}><Sel C={C} value={f.group||"N/A"} onChange={e=>set("group",e.target.value)}>{["N/A","Maths-Biology","Maths-CS","Commerce","Arts"].map(g=><option key={g}>{g}</option>)}</Sel></FG></>}
-          {TYPE==="Computer Institute"&&<><FG label="Course" C={C}><Sel C={C} value={f.course||""} onChange={e=>set("course",e.target.value)}>{COMP_COURSES.map(co=><option key={co}>{co}</option>)}</Sel></FG>
+          {TYPE==="Computer Institute"&&<><FG label="Course" C={C}><Sel C={C} value={f.course||""} onChange={e=>set("course",e.target.value)}>{[...new Set([...(courses||[]),...COMP_COURSES])].map(co=><option key={co}>{co}</option>)}</Sel></FG>
           <FG label="Duration" C={C}><Sel C={C} value={f.duration||""} onChange={e=>set("duration",e.target.value)}>{["1 Month","3 Months","6 Months","1 Year"].map(d=><option key={d}>{d}</option>)}</Sel></FG>
           <FG label="Batch" C={C}><Sel C={C} value={f.batch||"Morning"} onChange={e=>set("batch",e.target.value)}>{["Morning","Afternoon","Evening","Weekend"].map(b=><option key={b}>{b}</option>)}</Sel></FG>
           <FG label="Timing" C={C}><Inp C={C} value={f.timing||""} onChange={e=>set("timing",e.target.value)} placeholder="9AM-11AM"/></FG></>}
@@ -2183,7 +2185,7 @@ function StuEditModal({student,inst,color,onSave,onClose,C}){
   </div>;
 }
 
-function StuProfileCard({s,color,onClose,onPhoto,C}){
+function StuProfileCard({s,color,onClose,onPhoto,onEdit,onDelete,C}){
   const pct=attPct(s.attendance);const tf=s.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;const pf=s.fees?.reduce((a,f)=>a+Number(f.paid||0),0)||0;const exams=s.exams||[];const avgM=exams.length?Math.round(exams.reduce((a,e)=>a+Number(e.percentage||0),0)/exams.length):null;const hwDone=s.homeworks?.filter(h=>h.status==="Submitted").length||0;
   return <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:20,position:"sticky",top:24,boxShadow:C.shadow,animation:"slideIn 0.3s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
@@ -2192,7 +2194,10 @@ function StuProfileCard({s,color,onClose,onPhoto,C}){
         <div style={{fontWeight:800,fontSize:15,color:C.text}}>{s.name}</div>
         <div style={{fontSize:11,color:C.muted}}>{s.rollNo}</div>
         <div style={{fontSize:12,color,fontWeight:600,marginTop:2}}>{s.course||s.department||s.danceStyle||s.class||""}{s.batch?` · ${s.batch}`:""}</div>
-        <button onClick={()=>onEdit(s)} style={{marginTop:8,padding:"5px 16px",borderRadius:7,border:`1px solid ${color}`,background:"transparent",color,fontSize:12,fontWeight:700,cursor:"pointer"}}>✏ Edit Profile</button>
+        <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:8}}>
+          <button onClick={()=>onEdit(s)} style={{padding:"5px 16px",borderRadius:7,border:`1px solid ${color}`,background:"transparent",color,fontSize:12,fontWeight:700,cursor:"pointer"}}>✏ Edit Profile</button>
+          {onDelete&&<button onClick={()=>onDelete(s.id)} style={{padding:"5px 16px",borderRadius:7,border:`1px solid ${C.red}`,background:"transparent",color:C.red,fontSize:12,fontWeight:700,cursor:"pointer"}}>🗑 Delete</button>}
+        </div>
       </div>
       <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,lineHeight:1,cursor:"pointer"}}>×</button>
     </div>
@@ -2204,14 +2209,14 @@ function StuProfileCard({s,color,onClose,onPhoto,C}){
   </div>;
 }
 
-function InstRegister({inst,onSave,color,m,C}){
+function InstRegister({inst,onSave,color,m,courses,C}){
   const [step,setStep]=useState(0);
   const blank={name:"",rollNo:"",dob:"",gender:"Male",phone:"",email:"",address:"",aadhaar:"",religion:"",parent:"",parentPhone:"",admissionDate:today(),deptGroup:"Arts & Science",department:"",year:"1st Year",section:"A",class:"Class 1",medium:"English Medium",group:"N/A",hostel:"Day Scholar",bus:"",scholarship:"None",course:"Basic Computer",duration:"3 Months",batch:"Morning",timing:"",qualification:"Graduate",blood:"--",occupation:"",income:"",danceStyle:"Bharatanatyam",danceLevel:"Beginner",danceBatch:"Evening 4-6 PM",danceGoal:"",photo:""};
   const [f,setF]=useState(blank);const [err,setErr]=useState({});
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   function validate(){const e={};if(!f.name.trim())e.name="Required";if(!f.phone.match(/^\d{10}$/))e.phone="10 digits needed";if(!f.dob)e.dob="Required";if(inst.type==="College"&&!f.department)e.department="Required";setErr(e);return!Object.keys(e).length;}
   function submit(){if(validate()){onSave({...f,institution:inst.type});setF(blank);setStep(0);}}
-  const steps=inst.type==="College"?[["🏫 Academic",<CollegeF f={f} set={set} err={err} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:inst.type==="School"?[["🏫 Class",<SchoolF f={f} set={set} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:inst.type==="Computer Institute"?[["💻 Course",<CompF f={f} set={set} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:[["💃 Dance",<DanceF f={f} set={set} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]];
+  const steps=inst.type==="College"?[["🏫 Academic",<CollegeF f={f} set={set} err={err} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:inst.type==="School"?[["🏫 Class",<SchoolF f={f} set={set} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:inst.type==="Computer Institute"?[["💻 Course",<CompF f={f} set={set} courses={courses} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:[["💃 Dance",<DanceF f={f} set={set} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]];
   return <div style={{maxWidth:700,animation:"fadeUp 0.4s ease"}}>
     <PH title={`${m.icon} Register Student`} sub={`Enrolling into ${inst.name}`} C={C}/>
     <div style={{display:"flex",alignItems:"center",marginBottom:22}}>
@@ -2227,7 +2232,7 @@ function InstRegister({inst,onSave,color,m,C}){
 function DanceF({f,set,C}){return<G2><FG label="Dance Style" C={C}><Sel C={C} value={f.danceStyle} onChange={e=>set("danceStyle",e.target.value)}>{DANCE_STYLES.map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Level" C={C}><Sel C={C} value={f.danceLevel} onChange={e=>set("danceLevel",e.target.value)}>{DANCE_LEVELS.map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Batch" C={C}><Sel C={C} value={f.danceBatch} onChange={e=>set("danceBatch",e.target.value)}>{DANCE_BATCHES.map(b=><option key={b}>{b}</option>)}</Sel></FG><FG label="Enrollment No" C={C}><Inp C={C} value={f.rollNo} onChange={e=>set("rollNo",e.target.value)} placeholder="DNA2025001"/></FG><FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate} onChange={e=>set("admissionDate",e.target.value)}/></FG><FG label="Goal" C={C}><Inp C={C} value={f.danceGoal} onChange={e=>set("danceGoal",e.target.value)} placeholder="e.g. Arangetram 2026"/></FG></G2>;}
 function CollegeF({f,set,err,C}){return<G2><FG label="Dept Group" C={C}><Sel C={C} value={f.deptGroup} onChange={e=>{set("deptGroup",e.target.value);set("department","");}}>{Object.keys(DEPARTMENTS).map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Department *" err={err.department} C={C}><Sel C={C} value={f.department} onChange={e=>set("department",e.target.value)}><option value="">-- Select --</option>{DEPARTMENTS[f.deptGroup].map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Year" C={C}><Sel C={C} value={f.year} onChange={e=>set("year",e.target.value)}>{["1st Year","2nd Year","3rd Year","4th Year","PG 1st Year","PG 2nd Year"].map(y=><option key={y}>{y}</option>)}</Sel></FG><FG label="Section" C={C}><Sel C={C} value={f.section} onChange={e=>set("section",e.target.value)}>{["A","B","C","D"].map(s=><option key={s}>{s}</option>)}</Sel></FG><FG label="Roll Number" C={C}><Inp C={C} value={f.rollNo} onChange={e=>set("rollNo",e.target.value)} placeholder="22CS001"/></FG><FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate} onChange={e=>set("admissionDate",e.target.value)}/></FG><FG label="Hostel" C={C}><Sel C={C} value={f.hostel} onChange={e=>set("hostel",e.target.value)}>{["Day Scholar","Hosteller"].map(h=><option key={h}>{h}</option>)}</Sel></FG><FG label="Scholarship" C={C}><Sel C={C} value={f.scholarship} onChange={e=>set("scholarship",e.target.value)}>{["None","BC/MBC","SC/ST","Merit","Sports"].map(s=><option key={s}>{s}</option>)}</Sel></FG></G2>;}
 function SchoolF({f,set,C}){return<G2><FG label="Class" C={C}><Sel C={C} value={f.class} onChange={e=>set("class",e.target.value)}>{SCHOOL_CLASSES.map(c=><option key={c}>{c}</option>)}</Sel></FG><FG label="Section" C={C}><Sel C={C} value={f.section} onChange={e=>set("section",e.target.value)}>{SCHOOL_SECTIONS.map(s=><option key={s}>{s}</option>)}</Sel></FG><FG label="Roll No" C={C}><Inp C={C} value={f.rollNo} onChange={e=>set("rollNo",e.target.value)} placeholder="01"/></FG><FG label="Medium" C={C}><Sel C={C} value={f.medium} onChange={e=>set("medium",e.target.value)}>{["Tamil Medium","English Medium"].map(m=><option key={m}>{m}</option>)}</Sel></FG><FG label="Group" C={C}><Sel C={C} value={f.group} onChange={e=>set("group",e.target.value)}>{["N/A","Maths-Biology","Maths-CS","Commerce","Arts"].map(g=><option key={g}>{g}</option>)}</Sel></FG><FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate} onChange={e=>set("admissionDate",e.target.value)}/></FG></G2>;}
-function CompF({f,set,C}){return<G2><FG label="Course" C={C}><Sel C={C} value={f.course} onChange={e=>set("course",e.target.value)}>{COMP_COURSES.map(c=><option key={c}>{c}</option>)}</Sel></FG><FG label="Duration" C={C}><Sel C={C} value={f.duration} onChange={e=>set("duration",e.target.value)}>{["1 Month","3 Months","6 Months","1 Year"].map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Batch" C={C}><Sel C={C} value={f.batch} onChange={e=>set("batch",e.target.value)}>{["Morning","Afternoon","Evening","Weekend"].map(b=><option key={b}>{b}</option>)}</Sel></FG><FG label="Timing" C={C}><Inp C={C} value={f.timing} onChange={e=>set("timing",e.target.value)} placeholder="9AM-11AM"/></FG><FG label="Enrollment No" C={C}><Inp C={C} value={f.rollNo} onChange={e=>set("rollNo",e.target.value)} placeholder="CI2025001"/></FG><FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate} onChange={e=>set("admissionDate",e.target.value)}/></FG></G2>;}
+function CompF({f,set,courses,C}){const courseList=[...new Set([...(courses||[]),...COMP_COURSES])];return<G2><FG label="Course" C={C}><Sel C={C} value={f.course} onChange={e=>set("course",e.target.value)}>{courseList.map(c=><option key={c}>{c}</option>)}</Sel></FG><FG label="Duration" C={C}><Sel C={C} value={f.duration} onChange={e=>set("duration",e.target.value)}>{["1 Month","3 Months","6 Months","1 Year"].map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Batch" C={C}><Sel C={C} value={f.batch} onChange={e=>set("batch",e.target.value)}>{["Morning","Afternoon","Evening","Weekend"].map(b=><option key={b}>{b}</option>)}</Sel></FG><FG label="Timing" C={C}><Inp C={C} value={f.timing} onChange={e=>set("timing",e.target.value)} placeholder="9AM-11AM"/></FG><FG label="Enrollment No" C={C}><Inp C={C} value={f.rollNo} onChange={e=>set("rollNo",e.target.value)} placeholder="CI2025001"/></FG><FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate} onChange={e=>set("admissionDate",e.target.value)}/></FG></G2>;}
 function PersonalF({f,set,err,color,C}){return<div><div style={{display:"flex",justifyContent:"center",marginBottom:16}}><div><LBL C={C}>Student Photo</LBL><PhotoUpload photo={f.photo} onChange={v=>set("photo",v)} color={color} C={C} size={80}/></div></div><G2><FG label="Full Name *" err={err?.name} C={C}><Inp C={C} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Full name"/></FG><FG label="Date of Birth *" err={err?.dob} C={C}><Inp C={C} type="date" value={f.dob} onChange={e=>set("dob",e.target.value)}/></FG><FG label="Gender" C={C}><Sel C={C} value={f.gender} onChange={e=>set("gender",e.target.value)}>{["Male","Female","Other"].map(g=><option key={g}>{g}</option>)}</Sel></FG><FG label="Blood Group" C={C}><Sel C={C} value={f.blood||"--"} onChange={e=>set("blood",e.target.value)}>{["--","A+","A-","B+","B-","AB+","AB-","O+","O-"].map(b=><option key={b}>{b}</option>)}</Sel></FG><FG label="Aadhaar" C={C}><Inp C={C} value={f.aadhaar} onChange={e=>set("aadhaar",e.target.value)} placeholder="12-digit" maxLength={12}/></FG><FG label="Religion" C={C}><Inp C={C} value={f.religion} onChange={e=>set("religion",e.target.value)} placeholder="e.g. Hindu"/></FG><FG label="Address" span C={C}><Txt C={C} value={f.address} onChange={e=>set("address",e.target.value)} rows={2} placeholder="Full address"/></FG></G2></div>;}
 function ContactF({f,set,err,C}){return<G2><FG label="Phone *" err={err?.phone} C={C}><Inp C={C} value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="10-digit" maxLength={10}/></FG><FG label="Email" C={C}><Inp C={C} value={f.email} onChange={e=>set("email",e.target.value)} placeholder="email@example.com"/></FG><FG label="Parent/Guardian" C={C}><Inp C={C} value={f.parent} onChange={e=>set("parent",e.target.value)} placeholder="Parent name"/></FG><FG label="Parent Phone" C={C}><Inp C={C} value={f.parentPhone} onChange={e=>set("parentPhone",e.target.value)} placeholder="Parent mobile" maxLength={10}/></FG><FG label="Occupation" C={C}><Inp C={C} value={f.occupation} onChange={e=>set("occupation",e.target.value)} placeholder="e.g. Farmer"/></FG><FG label="Annual Income" C={C}><Inp C={C} value={f.income} onChange={e=>set("income",e.target.value)} placeholder="e.g. 1,50,000"/></FG></G2>;}
 
@@ -2948,56 +2953,176 @@ function ExamResults({exam,students,color,C,onUpdate}){
 }
 
 // ─── PHASE 1: CERTIFICATE GENERATOR ─────────────────────────────────────────
+// ─── AllBee Certificate Builder ─────────────────────────────────────────────
+function allbeeTrophySVG(){return `<svg viewBox="0 0 120 100" style="width:52%;height:auto;display:block;margin:0 auto;">
+  <text x="60" y="15" text-anchor="middle" font-size="13" fill="#123c49" font-weight="bold" font-family="Arial">&#9733; &#9733; &#9733;</text>
+  <path d="M44 32 C26 40 24 66 41 83" fill="none" stroke="#2ba79f" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M76 32 C94 40 96 66 79 83" fill="none" stroke="#2ba79f" stroke-width="2.4" stroke-linecap="round"/>
+  <g fill="#2ba79f"><ellipse cx="37" cy="42" rx="2.4" ry="4"/><ellipse cx="31" cy="52" rx="2.4" ry="4"/><ellipse cx="30" cy="63" rx="2.4" ry="4"/><ellipse cx="33" cy="73" rx="2.4" ry="4"/><ellipse cx="39" cy="81" rx="2.4" ry="4"/>
+  <ellipse cx="83" cy="42" rx="2.4" ry="4"/><ellipse cx="89" cy="52" rx="2.4" ry="4"/><ellipse cx="90" cy="63" rx="2.4" ry="4"/><ellipse cx="87" cy="73" rx="2.4" ry="4"/><ellipse cx="81" cy="81" rx="2.4" ry="4"/></g>
+  <path d="M47 27 H73 V41 C73 54 64 60 60 60 C56 60 47 54 47 41 Z" fill="#123c49"/>
+  <path d="M47 31 C35 31 35 45 48 47" fill="none" stroke="#123c49" stroke-width="3"/>
+  <path d="M73 31 C85 31 85 45 72 47" fill="none" stroke="#123c49" stroke-width="3"/>
+  <circle cx="55" cy="37" r="1.5" fill="#2ba79f"/><circle cx="60" cy="37" r="1.5" fill="#2ba79f"/><circle cx="65" cy="37" r="1.5" fill="#2ba79f"/>
+  <rect x="57" y="60" width="6" height="9" fill="#123c49"/>
+  <path d="M49 69 H71 L67 78 H53 Z" fill="#123c49"/>
+</svg>`;}
+
+function buildAllBeeCertInner(d){
+  const {name,title,courseLine,bodyExtra,date,signName,regNo}=d;
+  return `
+  <style>
+    .abc{container-type:inline-size;position:relative;width:100%;aspect-ratio:1000/636;background:#fff;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;color:#0c4a59;}
+    .abc *{box-sizing:border-box;}
+    .abc-svg{position:absolute;inset:0;width:100%;height:100%;}
+    .abc-logo{position:absolute;top:5.5%;left:4.5%;display:flex;align-items:center;gap:1.4cqw;z-index:2;}
+    .abc-logo .bx{width:7cqw;height:7cqw;border-radius:1.3cqw;background:#1f9e98;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:4.8cqw;line-height:1;font-style:italic;}
+    .abc-logo .lt{line-height:0.92;}
+    .abc-logo .lt b{display:block;font-size:4.2cqw;color:#1f9e98;font-weight:900;letter-spacing:0.02em;}
+    .abc-logo .lt span{display:block;font-size:3.3cqw;color:#0c4a59;letter-spacing:0.2em;font-weight:800;}
+    .abc-tr{position:absolute;top:4%;right:4.5%;width:17%;text-align:center;z-index:2;}
+    .abc-tr .ac{font-weight:800;font-size:2.4cqw;letter-spacing:0.03em;margin-top:0.4cqw;}
+    .abc-tr .acs{font-size:1.65cqw;}
+    .abc-tr .rn{font-style:italic;font-weight:800;font-size:1.9cqw;margin-top:0.6cqw;}
+    .abc-h1{position:absolute;top:17.5%;left:0;right:0;text-align:center;font-size:8cqw;font-weight:900;letter-spacing:0.005em;line-height:1;z-index:2;}
+    .abc-h2{position:absolute;top:30%;left:0;right:0;text-align:center;font-size:4.8cqw;font-weight:500;z-index:2;}
+    .abc-pres{position:absolute;top:44%;left:0;right:0;text-align:center;font-size:2.9cqw;font-weight:600;z-index:2;}
+    .abc-name{position:absolute;top:52.5%;left:0;right:0;text-align:center;font-family:Georgia,'Times New Roman',serif;font-style:italic;font-weight:800;font-size:7cqw;line-height:1;z-index:2;color:#0c4a59;}
+    .abc-nl{position:absolute;top:65.5%;left:24%;right:24%;height:0.32cqw;background:#d4dadd;z-index:2;}
+    .abc-body{position:absolute;top:69.5%;left:18%;right:18%;text-align:center;font-size:1.95cqw;line-height:1.55;color:#1a3b44;z-index:2;}
+    .abc-body b{font-weight:800;}
+    .abc-date{position:absolute;bottom:6.5%;left:11%;text-align:center;z-index:2;}
+    .abc-date .v{font-style:italic;font-weight:800;font-size:3.3cqw;border-bottom:0.3cqw solid #c9d0d3;padding:0 1cqw 0.5cqw;display:inline-block;}
+    .abc-date .l{font-weight:800;font-size:1.95cqw;letter-spacing:0.07em;margin-top:0.9cqw;}
+    .abc-sign{position:absolute;bottom:6.5%;right:10%;text-align:center;z-index:2;min-width:22%;}
+    .abc-sign .v{font-family:'Brush Script MT','Segoe Script','Snell Roundhand',cursive;font-size:4.6cqw;line-height:1;color:#13384a;padding-bottom:0.3cqw;}
+    .abc-sign .l{font-weight:800;font-size:1.95cqw;letter-spacing:0.07em;border-top:0.25cqw solid #c9d0d3;padding-top:0.7cqw;}
+  </style>
+  <div class="abc">
+    <svg class="abc-svg" viewBox="0 0 1000 636" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="600" y="-45" width="210" height="72" rx="36" fill="#123c49"/>
+      <path d="M150 210 L305 245 L305 408 L150 442 Z" fill="#eef1f3"/>
+      <path d="M-20 198 L150 233 L150 418 L-20 452 Z" fill="#123c49"/>
+      <polygon points="322,352 240,400 158,352 158,258 240,210 322,258" fill="none" stroke="#1fc6c2" stroke-width="17" stroke-linejoin="round"/>
+      <path d="M-20 470 Q120 455 178 560 Q208 636 70 636 L-20 636 Z" fill="#1fc6c2"/>
+      <path d="M880 300 L1010 415 L880 530" fill="none" stroke="#123c49" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M912 332 L1010 415 L912 498" fill="none" stroke="#0c4a59" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M442 636 L516 516 L590 636" fill="none" stroke="#0b2730" stroke-width="16" stroke-linejoin="round"/>
+      <path d="M880 555 L1015 555 L1015 636 L820 636 Z" fill="#1fc6c2"/>
+    </svg>
+    <div class="abc-logo"><div class="bx">B</div><div class="lt"><b>ALLBEE</b><span>SOLUTIONS</span></div></div>
+    <div class="abc-tr">${allbeeTrophySVG()}<div class="ac">ACHIEVEMENT</div><div class="acs">Of Course Completion</div>${regNo?`<div class="rn">R.no:${regNo}</div>`:""}</div>
+    <div class="abc-h1">CERTIFICATE</div>
+    <div class="abc-h2">${title}</div>
+    <div class="abc-pres">This Certificate is Proudly Presented to</div>
+    <div class="abc-name">${name||"Student Name"}</div>
+    <div class="abc-nl"></div>
+    <div class="abc-body">This Certificate is Awarded To<br/>${courseLine}<br/>${bodyExtra}</div>
+    <div class="abc-date"><div class="v">${date}</div><div class="l">DATE</div></div>
+    <div class="abc-sign"><div class="v">${signName}</div><div class="l">SIGNATURE</div></div>
+  </div>`;
+}
+
+function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
 function InstCertificates({students,inst,color,C}){
-  const [sel,setSel]=useState(null);const [type,setType]=useState("completion");const [custom,setCustom]=useState({title:"",body:""});
+  const [sel,setSel]=useState("");
+  const [template,setTemplate]=useState("allbee");
+  const [type,setType]=useState("completion");
+  const stu=students.find(s=>s.id===sel);
+  const dStr=new Date().toLocaleDateString("en-GB").replace(/\//g,"-");
+  // AllBee editable fields
+  const [course,setCourse]=useState("");
+  const [duration,setDuration]=useState("30 Days Online");
+  const [skills,setSkills]=useState("Word, Excel, and PowerPoint");
+  const [title,setTitle]=useState("Of Achievement");
+  const [date,setDate]=useState(dStr);
+  const [signName,setSignName]=useState("Authorised Signatory");
+  const [regNo,setRegNo]=useState("");
+
+  // auto-fill course from selected student
+  useEffect(()=>{if(stu){setCourse(stu.course||stu.department||stu.danceStyle||stu.class||"MS Office Course");}},[sel]);
+
+  const courseLine=`for successfully completing the ${esc(duration)} <b>${esc(course||"Course")}</b> at ${esc(inst.name)}.`;
+  const bodyExtra=`The candidate actively participated, showed interest in learning, and improved their skills in <b>${esc(skills)}</b>.<br/>We appreciate their effort and wish them success in the future.`;
+  const allbeeData={name:esc(stu?.name),title:esc(title),courseLine,bodyExtra,date:esc(date),signName:esc(signName),regNo:esc(regNo)};
+  const allbeeInner=buildAllBeeCertInner(allbeeData);
+
+  function printAllBee(){
+    const w=window.open("","_blank");
+    if(!w){alert("Please allow pop-ups to print the certificate.");return;}
+    w.document.write(`<!DOCTYPE html><html><head><title>Certificate - ${esc(stu?.name||"")}</title><meta charset="utf-8"/><style>@page{size:A4 landscape;margin:0;}html,body{margin:0;padding:0;}.wrap{width:100%;}</style></head><body><div class="wrap">${allbeeInner}</div><script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`);
+    w.document.close();
+  }
+  function printClassic(){window.print();}
+
   const TYPES=[{k:"completion",l:"Course Completion"},{k:"achievement",l:"Achievement"},{k:"participation",l:"Participation"},{k:"topperr",l:"Top Performer"}];
   const CERT_META={completion:{title:"Certificate of Completion",body:(s,i)=>`This is to certify that ${s.name} has successfully completed the prescribed course of study at ${i.name} and has fulfilled all requirements with dedication and commitment.`},achievement:{title:"Certificate of Achievement",body:(s,i)=>`This is to certify that ${s.name} has demonstrated exceptional performance and outstanding achievement at ${i.name}, showing exemplary dedication to academic excellence.`},participation:{title:"Certificate of Participation",body:(s,i)=>`This is to certify that ${s.name} has actively participated in the academic programs conducted at ${i.name} and contributed positively to the learning environment.`},topperr:{title:"Certificate of Excellence — Top Performer",body:(s,i)=>{const exams=s.exams||[];const avg=exams.length?Math.round(exams.reduce((a,e)=>a+(e.maxMarks>0?e.marks/e.maxMarks*100:0),0)/exams.length):0;return`This is to certify that ${s.name} has achieved the distinction of Top Performer at ${i.name} with an outstanding academic average of ${avg}%, reflecting exceptional hard work and intellectual merit.`;}}};
-  function print(){window.print();}
-  const stu=students.find(s=>s.id===sel);
   const certMeta=CERT_META[type];
+
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <PH title="🏆 Certificate Generator" sub="Generate and print certificates for students" C={C}/>
-    <div style={{display:"grid",gridTemplateColumns:"300px 1fr",gap:20}}>
+    <div style={{display:"grid",gridTemplateColumns:"320px 1fr",gap:20,alignItems:"start"}}>
       <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,height:"fit-content"}}>
         <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Settings</div>
-        <FG label="Certificate Type" C={C} style={{marginBottom:12}}>
-          <Sel C={C} value={type} onChange={e=>setType(e.target.value)}>
-            {TYPES.map(t=><option key={t.k} value={t.k}>{t.l}</option>)}
+        <FG label="Design Template" C={C} style={{marginBottom:12}}>
+          <Sel C={C} value={template} onChange={e=>setTemplate(e.target.value)}>
+            <option value="allbee">AllBee Solutions Design</option>
+            <option value="classic">Classic Bordered</option>
           </Sel>
         </FG>
-        <FG label="Student" C={C}>
+        <FG label="Student" C={C} style={{marginBottom:12}}>
           <Sel C={C} value={sel||""} onChange={e=>setSel(e.target.value)}>
             <option value="">-- Select Student --</option>
             {students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
           </Sel>
         </FG>
-        <div style={{marginTop:16}}>
-          <Btn onClick={print} C={C} color="teal" disabled={!sel} style={{width:"100%"}}>🖨️ Print Certificate</Btn>
-        </div>
-        <div style={{marginTop:10,fontSize:11,color:C.muted,textAlign:"center"}}>Use browser Print → Save as PDF</div>
-      </div>
-      <div>
-        <style>{`@media print{.no-print{display:none!important;}.cert-box{box-shadow:none!important;border:3px double #666!important;}}`}</style>
-        {stu?<div className="cert-box" style={{background:"#fff",border:`3px double ${color}`,borderRadius:4,padding:"60px 70px",textAlign:"center",boxShadow:C.shadowL,minHeight:500,position:"relative",overflow:"hidden"}}>
-          <div style={{position:"absolute",top:0,left:0,right:0,height:8,background:`linear-gradient(90deg,${color},${color}88,${color})`}}/>
-          <div style={{position:"absolute",bottom:0,left:0,right:0,height:8,background:`linear-gradient(90deg,${color},${color}88,${color})`}}/>
-          <div style={{position:"absolute",top:0,left:0,bottom:0,width:8,background:`linear-gradient(180deg,${color},${color}88,${color})`}}/>
-          <div style={{position:"absolute",top:0,right:0,bottom:0,width:8,background:`linear-gradient(180deg,${color},${color}88,${color})`}}/>
-          <div style={{marginBottom:6,fontSize:26,color:color}}>🏆</div>
-          <div style={{fontSize:11,letterSpacing:"0.3em",color:"#888",textTransform:"uppercase",marginBottom:8}}>AllBee EduSphere Presents</div>
-          <div style={{fontSize:28,fontWeight:900,color:"#111",marginBottom:4,letterSpacing:"0.05em"}}>{certMeta.title}</div>
-          <div style={{width:80,height:3,background:color,margin:"12px auto 28px",borderRadius:2}}/>
-          <div style={{fontSize:13,color:"#555",marginBottom:6,letterSpacing:"0.1em",textTransform:"uppercase"}}>This is to proudly certify that</div>
-          <div style={{fontSize:36,fontWeight:900,color:"#111",margin:"10px 0",fontStyle:"italic",letterSpacing:"0.02em"}}>{stu.name}</div>
-          <div style={{fontSize:12,color:"#777",marginBottom:24}}>{stu.rollNo&&`Roll No: ${stu.rollNo} · `}{stu.course||stu.department||stu.class||stu.danceStyle||""}</div>
-          <div style={{fontSize:14,color:"#444",lineHeight:1.8,maxWidth:480,margin:"0 auto 28px",fontStyle:"italic"}}>"{certMeta.body(stu,inst)}"</div>
-          <div style={{width:80,height:2,background:"#ddd",margin:"0 auto 24px",borderRadius:2}}/>
-          <div style={{display:"flex",justifyContent:"space-around",marginTop:10}}>
-            <div style={{textAlign:"center"}}><div style={{borderTop:"1px solid #333",width:120,paddingTop:6}}><div style={{fontSize:11,color:"#555"}}>Principal / Director</div><div style={{fontSize:10,color:"#999",marginTop:2}}>{inst.name}</div></div></div>
-            <div style={{textAlign:"center"}}><div style={{borderTop:"1px solid #333",width:120,paddingTop:6}}><div style={{fontSize:11,color:"#555"}}>Date of Issue</div><div style={{fontSize:10,color:"#999",marginTop:2}}>{new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"long",year:"numeric"})}</div></div></div>
+        {template==="allbee"?<>
+          <FG label="Sub-title" C={C} style={{marginBottom:10}}><Inp C={C} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Of Achievement"/></FG>
+          <FG label="Course Name" C={C} style={{marginBottom:10}}><Inp C={C} value={course} onChange={e=>setCourse(e.target.value)} placeholder="MS Office Course"/></FG>
+          <FG label="Duration / Mode" C={C} style={{marginBottom:10}}><Inp C={C} value={duration} onChange={e=>setDuration(e.target.value)} placeholder="30 Days Online"/></FG>
+          <FG label="Skills Learned" C={C} style={{marginBottom:10}}><Inp C={C} value={skills} onChange={e=>setSkills(e.target.value)} placeholder="Word, Excel, and PowerPoint"/></FG>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+            <FG label="Date" C={C}><Inp C={C} value={date} onChange={e=>setDate(e.target.value)} placeholder="19-10-2025"/></FG>
+            <FG label="Reg No." C={C}><Inp C={C} value={regNo} onChange={e=>setRegNo(e.target.value)} placeholder="2509/04"/></FG>
           </div>
-          <div style={{marginTop:20,fontSize:9,color:"#bbb",letterSpacing:"0.1em"}}>POWERED BY ALLBEE EDUSPHERE · {inst.name.toUpperCase()}</div>
-        </div>:<div style={{background:C.surface,borderRadius:12,border:`2px dashed ${C.border}`,padding:"60px 40px",textAlign:"center",color:C.muted}}><div style={{fontSize:40,marginBottom:12}}>🏆</div><div style={{fontSize:14,fontWeight:600}}>Select a student to preview the certificate</div><div style={{fontSize:11,marginTop:6}}>Then print or save as PDF</div></div>}
+          <FG label="Signatory" C={C} style={{marginBottom:6}}><Inp C={C} value={signName} onChange={e=>setSignName(e.target.value)} placeholder="Authorised Signatory"/></FG>
+          <div style={{marginTop:16}}><Btn onClick={printAllBee} C={C} color="teal" disabled={!sel} style={{width:"100%"}}>🖨️ Print / Save as PDF</Btn></div>
+        </>:<>
+          <FG label="Certificate Type" C={C}>
+            <Sel C={C} value={type} onChange={e=>setType(e.target.value)}>{TYPES.map(t=><option key={t.k} value={t.k}>{t.l}</option>)}</Sel>
+          </FG>
+          <div style={{marginTop:16}}><Btn onClick={printClassic} C={C} color="teal" disabled={!sel} style={{width:"100%"}}>🖨️ Print Certificate</Btn></div>
+        </>}
+        <div style={{marginTop:10,fontSize:11,color:C.muted,textAlign:"center"}}>{template==="allbee"?"Opens a print-ready landscape page → Save as PDF":"Use browser Print → Save as PDF"}</div>
+      </div>
+
+      <div>
+        {!sel&&<div style={{background:C.surface,borderRadius:12,border:`2px dashed ${C.border}`,padding:"60px 40px",textAlign:"center",color:C.muted}}><div style={{fontSize:40,marginBottom:12}}>🏆</div><div style={{fontSize:14,fontWeight:600}}>Select a student to preview the certificate</div><div style={{fontSize:11,marginTop:6}}>Then print or save as PDF</div></div>}
+        {sel&&template==="allbee"&&<div style={{borderRadius:8,overflow:"hidden",boxShadow:C.shadowL,border:`1px solid ${C.border}`}} dangerouslySetInnerHTML={{__html:allbeeInner}}/>}
+        {sel&&template==="classic"&&<>
+          <style>{`@media print{.no-print{display:none!important;}.cert-box{box-shadow:none!important;border:3px double #666!important;}}`}</style>
+          <div className="cert-box" style={{background:"#fff",border:`3px double ${color}`,borderRadius:4,padding:"60px 70px",textAlign:"center",boxShadow:C.shadowL,minHeight:500,position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",top:0,left:0,right:0,height:8,background:`linear-gradient(90deg,${color},${color}88,${color})`}}/>
+            <div style={{position:"absolute",bottom:0,left:0,right:0,height:8,background:`linear-gradient(90deg,${color},${color}88,${color})`}}/>
+            <div style={{position:"absolute",top:0,left:0,bottom:0,width:8,background:`linear-gradient(180deg,${color},${color}88,${color})`}}/>
+            <div style={{position:"absolute",top:0,right:0,bottom:0,width:8,background:`linear-gradient(180deg,${color},${color}88,${color})`}}/>
+            <div style={{marginBottom:6,fontSize:26,color:color}}>🏆</div>
+            <div style={{fontSize:11,letterSpacing:"0.3em",color:"#888",textTransform:"uppercase",marginBottom:8}}>AllBee EduSphere Presents</div>
+            <div style={{fontSize:28,fontWeight:900,color:"#111",marginBottom:4,letterSpacing:"0.05em"}}>{certMeta.title}</div>
+            <div style={{width:80,height:3,background:color,margin:"12px auto 28px",borderRadius:2}}/>
+            <div style={{fontSize:13,color:"#555",marginBottom:6,letterSpacing:"0.1em",textTransform:"uppercase"}}>This is to proudly certify that</div>
+            <div style={{fontSize:36,fontWeight:900,color:"#111",margin:"10px 0",fontStyle:"italic",letterSpacing:"0.02em"}}>{stu.name}</div>
+            <div style={{fontSize:12,color:"#777",marginBottom:24}}>{stu.rollNo&&`Roll No: ${stu.rollNo} · `}{stu.course||stu.department||stu.class||stu.danceStyle||""}</div>
+            <div style={{fontSize:14,color:"#444",lineHeight:1.8,maxWidth:480,margin:"0 auto 28px",fontStyle:"italic"}}>"{certMeta.body(stu,inst)}"</div>
+            <div style={{width:80,height:2,background:"#ddd",margin:"0 auto 24px",borderRadius:2}}/>
+            <div style={{display:"flex",justifyContent:"space-around",marginTop:10}}>
+              <div style={{textAlign:"center"}}><div style={{borderTop:"1px solid #333",width:120,paddingTop:6}}><div style={{fontSize:11,color:"#555"}}>Principal / Director</div><div style={{fontSize:10,color:"#999",marginTop:2}}>{inst.name}</div></div></div>
+              <div style={{textAlign:"center"}}><div style={{borderTop:"1px solid #333",width:120,paddingTop:6}}><div style={{fontSize:11,color:"#555"}}>Date of Issue</div><div style={{fontSize:10,color:"#999",marginTop:2}}>{new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"long",year:"numeric"})}</div></div></div>
+            </div>
+            <div style={{marginTop:20,fontSize:9,color:"#bbb",letterSpacing:"0.1em"}}>POWERED BY ALLBEE EDUSPHERE · {inst.name.toUpperCase()}</div>
+          </div>
+        </>}
       </div>
     </div>
   </div>;
