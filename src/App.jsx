@@ -48,6 +48,8 @@ const DANCE_LEVELS=["Beginner","Elementary","Intermediate","Advanced","Professio
 const DANCE_BATCHES=["Morning 7-9 AM","Morning 9-11 AM","Afternoon 12-2 PM","Evening 4-6 PM","Evening 6-8 PM","Weekend Special"];
 const FEE_STATUS=["Paid","Partial","Pending","Waived"];
 const HW_STATUS=["Pending","Submitted","Late","Incomplete"];
+const STUDENT_STATUS=["Studying","Completed","Dropout"];
+const stuStatusColor=s=>s==="Completed"?"green":s==="Dropout"?"red":"blue";
 const ASSIGN_TYPES=["Written","Project","Practical","Presentation","Online","Research","Performance"];
 const ASSIGN_STATUS=["Assigned","Submitted","Late","Not Submitted","Graded"];
 const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -402,7 +404,7 @@ function LoginPage({onLogin,db,C,dark,setDark}){
 }
 
 // Super Admin
-const SA_TABS=[{k:"overview",i:"📊",l:"Overview"},{k:"institutions",i:"🏛",l:"Institutions"},{k:"users",i:"👤",l:"Users"},{k:"students",i:"👥",l:"Students"},{k:"reports",i:"📋",l:"Reports"}];
+const SA_TABS=[{k:"overview",i:"📊",l:"Overview"},{k:"institutions",i:"🏛",l:"Institutions"},{k:"users",i:"👤",l:"Users"},{k:"students",i:"👥",l:"Students"},{k:"whitelabel",i:"🎨",l:"White Label"},{k:"billing",i:"💳",l:"SaaS Billing"},{k:"reports",i:"📋",l:"Reports"}];
 function SuperAdmin({db,saveDb,onLogout,notify,user,C,dark,setDark}){
   const [tab,setTab]=useState("overview");
   function addInst(d){saveDb({institutions:[...db.institutions,{...d,id:uid(),createdAt:today(),active:true}]});notify("Institution added!");}
@@ -423,6 +425,8 @@ function SuperAdmin({db,saveDb,onLogout,notify,user,C,dark,setDark}){
         {tab==="institutions"&&<SAInst db={db} onAdd={addInst} onUpdate={updInst} onDelete={delInst} C={C}/>}
         {tab==="users"&&<SAUsers db={db} onAdd={addUser} onDelete={delUser} onUpdate={updUser} C={C}/>}
         {tab==="students"&&<SAStudents db={db} C={C}/>}
+        {tab==="whitelabel"&&<SAWhiteLabel db={db} onUpdate={updInst} C={C}/>}
+        {tab==="billing"&&<SABilling db={db} saveDb={saveDb} notify={notify} C={C}/>}
         {tab==="reports"&&<SAReports db={db} C={C}/>}
       </div>
     </div>
@@ -518,6 +522,125 @@ function SAStudents({db,C}){
     </div>
   </div>;
 }
+// ─── WHITE LABEL ────────────────────────────────────────────────────────────
+function SAWhiteLabel({db,onUpdate,C}){
+  const [sel,setSel]=useState(db.institutions[0]?.id||"");
+  const inst=db.institutions.find(i=>i.id===sel);
+  const [f,setF]=useState({});
+  useEffect(()=>{if(inst)setF({brandName:inst.brandName||inst.name||"",tagline:inst.tagline||"Smart Student Management",logoText:inst.logoText||(inst.name||"").slice(0,2).toUpperCase(),logoUrl:inst.logoUrl||"",color:inst.color||INST_COLORS[0]});},[sel]);
+  if(!db.institutions.length)return <div style={{animation:"fadeUp 0.4s ease"}}><PH title="🎨 White Label" sub="Brand each institution" C={C}/><Empty msg="Add an institution first" C={C}/></div>;
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  function save(){onUpdate(sel,{brandName:f.brandName,tagline:f.tagline,logoText:f.logoText,logoUrl:f.logoUrl,color:f.color});}
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    <PH title="🎨 White Label" sub="Customise branding per institution — logo, name, colours" C={C}/>
+    <FG label="Institution" C={C} style={{marginBottom:16,maxWidth:340}}>
+      <Sel C={C} value={sel} onChange={e=>setSel(e.target.value)}>{db.institutions.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</Sel>
+    </FG>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,alignItems:"start"}}>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Branding</div>
+        <FG label="Brand / Display Name" C={C} style={{marginBottom:10}}><Inp C={C} value={f.brandName||""} onChange={e=>set("brandName",e.target.value)} placeholder="e.g. AllBee Solutions"/></FG>
+        <FG label="Tagline" C={C} style={{marginBottom:10}}><Inp C={C} value={f.tagline||""} onChange={e=>set("tagline",e.target.value)} placeholder="Smart Student Management"/></FG>
+        <FG label="Logo Initials (fallback)" C={C} style={{marginBottom:10}}><Inp C={C} value={f.logoText||""} onChange={e=>set("logoText",e.target.value.slice(0,3))} placeholder="AB" maxLength={3}/></FG>
+        <FG label="Logo Image URL (optional)" C={C} style={{marginBottom:10}}><Inp C={C} value={f.logoUrl||""} onChange={e=>set("logoUrl",e.target.value)} placeholder="https://.../logo.png"/></FG>
+        <FG label="Primary Colour" C={C}><div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:4}}>{INST_COLORS.map(c=><button key={c} onClick={()=>set("color",c)} style={{width:28,height:28,borderRadius:7,background:c,border:f.color===c?"3px solid #333":"3px solid transparent",cursor:"pointer"}}/>)}</div></FG>
+        <div style={{marginTop:18}}><Btn onClick={save} C={C} color="teal">💾 Save Branding</Btn></div>
+      </div>
+      <div>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:C.text}}>Live Preview</div>
+        <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,boxShadow:C.shadow,overflow:"hidden"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 18px",borderBottom:`1px solid ${C.border}`}}>
+            {f.logoUrl?<img src={f.logoUrl} alt="logo" style={{width:40,height:40,borderRadius:9,objectFit:"cover"}}/>:<div style={{width:40,height:40,borderRadius:9,background:f.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:16}}>{f.logoText||"AB"}</div>}
+            <div><div style={{fontWeight:800,fontSize:15,color:f.color}}>{f.brandName||"Brand Name"}</div><div style={{fontSize:10,color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase"}}>{f.tagline}</div></div>
+          </div>
+          <div style={{padding:18}}>
+            <div style={{height:8,width:"60%",background:f.color,borderRadius:99,marginBottom:10}}/>
+            <div style={{height:8,width:"85%",background:C.border,borderRadius:99,marginBottom:10}}/>
+            <div style={{height:8,width:"40%",background:C.border,borderRadius:99}}/>
+            <div style={{marginTop:16,display:"inline-block",padding:"8px 18px",borderRadius:8,background:f.color,color:"#fff",fontSize:12,fontWeight:700}}>Primary Button</div>
+          </div>
+        </div>
+        <div style={{fontSize:11,color:C.muted,marginTop:8}}>Saved branding applies to this institution's login and dashboard accent colour.</div>
+      </div>
+    </div>
+  </div>;
+}
+
+// ─── SaaS BILLING ───────────────────────────────────────────────────────────
+const PLANS=[
+  {k:"trial",l:"Free Trial",price:0,cap:"Up to 25 students · 14 days",color:"gold"},
+  {k:"starter",l:"Starter",price:1499,cap:"Up to 150 students",color:"blue"},
+  {k:"pro",l:"Professional",price:3999,cap:"Up to 750 students · all modules",color:"teal"},
+  {k:"enterprise",l:"Enterprise",price:8999,cap:"Unlimited students · priority support",color:"purple"},
+];
+function SABilling({db,saveDb,notify,C}){
+  const billing=db.billing||[];
+  const recFor=id=>billing.find(b=>b.instId===id);
+  const planMeta=k=>PLANS.find(p=>p.k===k)||PLANS[0];
+  function nextMonth(){const d=new Date();d.setMonth(d.getMonth()+1);return d.toISOString().slice(0,10);}
+  function setPlan(instId,planK){
+    const p=planMeta(planK);
+    const others=billing.filter(b=>b.instId!==instId);
+    const existing=recFor(instId);
+    const rec={id:existing?.id||uid(),instId,plan:planK,price:p.price,cycle:"monthly",status:p.price===0?"Trial":"Active",startedAt:existing?.startedAt||today(),nextDue:nextMonth(),invoices:existing?.invoices||[]};
+    saveDb({billing:[...others,rec]});notify(`Plan set to ${p.l}`);
+  }
+  function markPaid(instId){
+    const r=recFor(instId);if(!r)return;
+    const inv={id:uid(),date:today(),amount:r.price,plan:r.plan,status:"Paid"};
+    const others=billing.filter(b=>b.instId!==instId);
+    saveDb({billing:[...others,{...r,status:"Active",nextDue:nextMonth(),invoices:[...(r.invoices||[]),inv]}]});notify("✅ Payment recorded — invoice generated");
+  }
+  function setStatus(instId,status){
+    const r=recFor(instId);if(!r)return;
+    const others=billing.filter(b=>b.instId!==instId);
+    saveDb({billing:[...others,{...r,status}]});notify("Status updated: "+status);
+  }
+  const active=billing.filter(b=>b.status==="Active");
+  const mrr=active.reduce((a,b)=>a+Number(b.price||0),0);
+  const overdue=billing.filter(b=>b.status==="Overdue").length;
+  return <div style={{animation:"fadeUp 0.4s ease"}}>
+    <PH title="💳 SaaS Billing" sub="Subscription plans, invoices & revenue across institutions" C={C}/>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:20}}>
+      <StatCard icon="💰" label="MRR" value={`₹${mrr.toLocaleString()}`} color="green" C={C} sub="Monthly recurring"/>
+      <StatCard icon="✅" label="Active" value={active.length} color="teal" C={C} sub="Paid subscriptions"/>
+      <StatCard icon="🏛" label="Institutions" value={db.institutions.length} color="blue" C={C} sub="Total accounts"/>
+      <StatCard icon="⚠" label="Overdue" value={overdue} color={overdue?"red":"green"} C={C} sub="Need follow-up"/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12,marginBottom:22}}>
+      {PLANS.map(p=><div key={p.k} style={{background:C.surface,borderRadius:12,border:`1px solid ${tc(C,p.color)}44`,padding:16,boxShadow:C.shadow,borderTop:`3px solid ${tc(C,p.color)}`}}>
+        <div style={{fontWeight:800,fontSize:14,color:C.text}}>{p.l}</div>
+        <div style={{fontSize:22,fontWeight:900,color:tc(C,p.color),margin:"4px 0"}}>₹{p.price.toLocaleString()}<span style={{fontSize:11,color:C.muted,fontWeight:600}}>/mo</span></div>
+        <div style={{fontSize:11,color:C.muted}}>{p.cap}</div>
+      </div>)}
+    </div>
+    <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:C.text}}>Institution Subscriptions</div>
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {db.institutions.map(inst=>{const r=recFor(inst.id);const p=r?planMeta(r.plan):null;const sc=db.students.filter(s=>s.instId===inst.id).length;return<div key={inst.id} style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:"15px 18px",boxShadow:C.shadow,borderLeft:`4px solid ${inst.color}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+          <div style={{flex:1,minWidth:160}}>
+            <div style={{fontWeight:700,fontSize:14,color:C.text}}>{inst.brandName||inst.name}</div>
+            <div style={{fontSize:11,color:C.muted}}>{sc} students · {r?`Next due ${fmt(r.nextDue)}`:"No plan assigned"}</div>
+          </div>
+          {r&&<Badge label={r.status} color={r.status==="Active"?"green":r.status==="Trial"?"gold":r.status==="Overdue"?"red":"muted"} C={C}/>}
+          {p&&<div style={{textAlign:"center",padding:"5px 12px",background:C.bg,borderRadius:8,minWidth:90}}><div style={{fontWeight:800,fontSize:13,color:tc(C,p.color)}}>₹{p.price.toLocaleString()}</div><div style={{fontSize:9,color:C.muted}}>{p.l}</div></div>}
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <Sel C={C} value={r?.plan||""} onChange={e=>setPlan(inst.id,e.target.value)} style={{width:"auto",padding:"6px 10px",fontSize:12}}><option value="" disabled>Set plan…</option>{PLANS.map(pl=><option key={pl.k} value={pl.k}>{pl.l}</option>)}</Sel>
+            {r&&<Btn onClick={()=>markPaid(inst.id)} C={C} color="green" size="sm">Mark Paid</Btn>}
+            {r&&r.status!=="Suspended"&&<Btn onClick={()=>setStatus(inst.id,"Suspended")} C={C} color="red" size="sm" outline>Suspend</Btn>}
+            {r&&r.status==="Suspended"&&<Btn onClick={()=>setStatus(inst.id,"Active")} C={C} color="green" size="sm" outline>Reactivate</Btn>}
+          </div>
+        </div>
+        {r&&(r.invoices||[]).length>0&&<div style={{marginTop:12,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Invoices</div>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>{(r.invoices||[]).slice().reverse().slice(0,5).map(iv=><div key={iv.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted}}><span>{fmt(iv.date)} · {planMeta(iv.plan).l}</span><span style={{fontWeight:700,color:C.green}}>₹{Number(iv.amount).toLocaleString()} · {iv.status}</span></div>)}</div>
+        </div>}
+      </div>;})}
+      {!db.institutions.length&&<Empty msg="No institutions to bill yet" C={C}/>}
+    </div>
+  </div>;
+}
+
 function SAReports({db,C}){
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <PH title="📋 Reports" sub="Cross-institution analytics" C={C}/>
@@ -1331,6 +1454,10 @@ function StaffAttend({db,saveDb,user,inst,color,isAdmin,notify,C}){
   const myTodayRec=myRecords.find(r=>r.userId===user.id&&r.date===todayStr);
   const [filterDate,setFilterDate]=useState(todayStr);
   const [filterUser,setFilterUser]=useState("all");
+  const [clock,setClock]=useState(new Date());
+  useEffect(()=>{const t=setInterval(()=>setClock(new Date()),1000);return()=>clearInterval(t);},[]);
+  const clockTime=clock.toLocaleTimeString("en-IN",{hour12:true});
+  const clockDate=clock.toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"short",year:"numeric"});
 
   function checkIn(){
     if(myTodayRec?.inTime){notify("Already checked in today","gold");return;}
@@ -1382,6 +1509,11 @@ function StaffAttend({db,saveDb,user,inst,color,isAdmin,notify,C}){
         </div>
       </div>
       <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{textAlign:"center",padding:"12px 22px",background:`linear-gradient(135deg,${color},${color}cc)`,borderRadius:12,minWidth:160,boxShadow:C.shadow}}>
+          <div style={{fontSize:10,color:"#ffffffcc",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:3}}>🕐 Live Time</div>
+          <div style={{fontSize:26,fontWeight:800,color:"#fff",fontFamily:"monospace",letterSpacing:"0.02em",lineHeight:1.1}}>{clockTime}</div>
+          <div style={{fontSize:10,color:"#ffffffcc",marginTop:3}}>{clockDate}</div>
+        </div>
         {myTodayRec?.inTime&&<div style={{textAlign:"center",padding:"12px 20px",background:C.greenL,borderRadius:12,minWidth:90}}>
           <div style={{fontSize:10,color:C.green,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>In Time</div>
           <div style={{fontSize:22,fontWeight:800,color:C.green,fontFamily:"monospace"}}>{myTodayRec.inTime}</div>
@@ -1899,7 +2031,8 @@ function InstCourses({db,saveDb,inst,color,notify,C}){
 }
 
 // Institution Dashboard Shell
-const INST_TABS=[{k:"home",i:"🏠",l:"Home"},{k:"staff",i:"👨‍🏫",l:"Staff"},{k:"tasks",i:"✅",l:"Tasks"},{k:"students",i:"👥",l:"Students"},{k:"register",i:"➕",l:"Register"},{k:"attend",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"receipt",i:"🧾",l:"Fee Receipt"},{k:"homework",i:"📚",l:"Homework"},{k:"exams",i:"📝",l:"Exam Marks"},{k:"assign",i:"📋",l:"Assignments"},{k:"timetable",i:"🗓",l:"Timetable"},{k:"accounts",i:"💼",l:"Accounts"},{k:"courses",i:"🖥",l:"Courses"},{k:"staffatt",i:"🕐",l:"Staff Attendance"},{k:"updates",i:"📰",l:"Updates"},{k:"classlinks",i:"🎥",l:"Class Links"},{k:"alerts",i:"📣",l:"Alerts"},{k:"reports",i:"📊",l:"Reports"},{k:"analytics",i:"📈",l:"Analytics"},{k:"ai",i:"🤖",l:"AI Tools"},{k:"certificates",i:"🏆",l:"Certificates"},{k:"onlineexam",i:"💻",l:"Online Exams"},{k:"library",i:"📚",l:"Library"},{k:"payroll",i:"💵",l:"HR & Payroll"},{k:"leave",i:"🏖",l:"Leave"},{k:"docs",i:"📁",l:"Documents"},{k:"crm",i:"🎯",l:"Admission CRM"},{k:"gamify",i:"🏅",l:"Gamification"}];
+const NAV_GROUPS=["Main","Students","Staff","Academics","Finance","Communication","Insights"];
+const INST_TABS=[{k:"home",i:"🏠",l:"Home",g:"Main"},{k:"students",i:"👥",l:"Students",g:"Students"},{k:"register",i:"➕",l:"Register",g:"Students"},{k:"import",i:"📥",l:"Import Data",g:"Students"},{k:"attend",i:"📅",l:"Attendance",g:"Students"},{k:"fees",i:"💰",l:"Fees",g:"Students"},{k:"receipt",i:"🧾",l:"Fee Receipt",g:"Students"},{k:"homework",i:"📚",l:"Homework",g:"Students"},{k:"exams",i:"📝",l:"Exam Marks",g:"Students"},{k:"assign",i:"📋",l:"Assignments",g:"Students"},{k:"timetable",i:"🗓",l:"Timetable",g:"Students"},{k:"certificates",i:"🏆",l:"Certificates",g:"Students"},{k:"onlineexam",i:"💻",l:"Online Exams",g:"Students"},{k:"gamify",i:"🏅",l:"Gamification",g:"Students"},{k:"crm",i:"🎯",l:"Admission CRM",g:"Students"},{k:"staff",i:"👨‍🏫",l:"Staff",g:"Staff"},{k:"tasks",i:"✅",l:"Tasks",g:"Staff"},{k:"staffatt",i:"🕐",l:"Staff Attendance",g:"Staff"},{k:"payroll",i:"💵",l:"HR & Payroll",g:"Staff"},{k:"leave",i:"🏖",l:"Leave",g:"Staff"},{k:"courses",i:"🖥",l:"Courses",g:"Academics"},{k:"classlinks",i:"🎥",l:"Class Links",g:"Academics"},{k:"library",i:"📚",l:"Library",g:"Academics"},{k:"docs",i:"📁",l:"Documents",g:"Academics"},{k:"accounts",i:"💼",l:"Accounts",g:"Finance"},{k:"updates",i:"📰",l:"Updates",g:"Communication"},{k:"alerts",i:"📣",l:"Alerts",g:"Communication"},{k:"reports",i:"📊",l:"Reports",g:"Insights"},{k:"analytics",i:"📈",l:"Analytics",g:"Insights"},{k:"ai",i:"🤖",l:"AI Tools",g:"Insights"}];
 
 function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const [tab,setTab]=useState("home");
@@ -1907,6 +2040,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const color=inst.color||C.teal;
   const m=TYPE_META[inst.type]||TYPE_META["College"];
   const myStudents=useMemo(()=>db.students.filter(s=>s.instId===inst.id),[db.students,inst.id]);
+  const myCourses=useMemo(()=>(db.courses||[]).filter(c=>c.instId===inst.id).map(c=>c.name).filter(Boolean),[db.courses,inst.id]);
   const isAdmin=user.role==="admin";
   const myStaff=useMemo(()=>(db.users||[]).filter(u=>u.instId===inst.id&&u.role!=="admin"&&u.role!=="accountant"),[db.users,inst.id]);
   function addStaff(d){if((db.users||[]).find(u=>u.username===d.username)){notify("Username already exists","error");return;}saveDb({users:[...(db.users||[]),{...d,id:uid(),instId:inst.id}]});notify("Staff added!");}
@@ -1915,7 +2049,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   function addStudent(data){const s={...data,id:uid(),instId:inst.id,createdAt:today(),attendance:[],fees:[],homeworks:[],exams:[],assignments:[]};saveDb({students:[...db.students,s]});notify("Student registered!");setTab("students");}
   function updStudent(id,patch){saveDb({students:db.students.map(s=>s.id===id?{...s,...patch}:s)});}
   function goTab(k){setTab(k);setSideOpen(false);}
-  const visibleTabs=INST_TABS.filter(t=>{if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);if(!isAdmin)return!["register","staff","courses","payroll","crm"].includes(t.k);if(t.k==="courses")return inst.type==="Computer Institute";return true;});
+  const visibleTabs=INST_TABS.filter(t=>{if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);if(!isAdmin)return!["register","import","staff","courses","payroll","crm"].includes(t.k);if(t.k==="courses")return inst.type==="Computer Institute";return true;});
   const curTab=visibleTabs.find(t=>t.k===tab);
   return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:C.bg}}>
     <style>{`
@@ -1949,7 +2083,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
     `}</style>
     {/* CSS vars for sidebar */}
     <style>{`:root{--sb-bg:${C.surface};--sb-border:${C.border};}` + (dark ? ".inst-sidebar{color-scheme:dark;}" : "") + `}`}</style>
-    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={`${m.icon} ${inst.name}`} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen}/>
+    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={`${m.icon} ${inst.brandName||inst.name}`} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen}/>
     {/* Overlay for mobile */}
     <div className={"inst-overlay"+(sideOpen?" open":"")} onClick={()=>setSideOpen(false)} style={{display:sideOpen?"block":"none",position:"fixed",inset:0,top:54,background:"#0005",zIndex:140}}/>
     <div style={{display:"flex",flex:1,minHeight:0}}>
@@ -1962,11 +2096,14 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
             <div style={{fontSize:10,color:C.muted}}>{inst.name}</div>
           </div>
         </div>
-        {visibleTabs.map(t=><button key={t.k} className="tab-btn" onClick={()=>goTab(t.k)}
-          style={{background:tab===t.k?C.activeTab:"transparent",color:tab===t.k?C.activeTabText:C.muted,fontWeight:tab===t.k?600:400,borderRadius:8}}>
-          <span style={{fontSize:16,flexShrink:0}}>{t.i}</span>
-          <span>{t.l}</span>
-        </button>)}
+        {NAV_GROUPS.map(g=>{const items=visibleTabs.filter(t=>t.g===g);if(!items.length)return null;return <div key={g}>
+          {g!=="Main"&&<div style={{fontSize:9,fontWeight:800,color:C.muted2||C.muted,textTransform:"uppercase",letterSpacing:"0.12em",padding:"14px 12px 5px"}}>{g}</div>}
+          {items.map(t=><button key={t.k} className="tab-btn" onClick={()=>goTab(t.k)}
+            style={{background:tab===t.k?C.activeTab:"transparent",color:tab===t.k?C.activeTabText:C.muted,fontWeight:tab===t.k?600:400,borderRadius:8}}>
+            <span style={{fontSize:16,flexShrink:0}}>{t.i}</span>
+            <span>{t.l}</span>
+          </button>)}
+        </div>;})}
         <div style={{flex:1}}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,padding:"8px 0 4px"}}>
           <div style={{padding:"8px 6px",background:C.bg,borderRadius:8,textAlign:"center",border:`1px solid ${C.border}`}}>
@@ -1990,8 +2127,9 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
         </div>
         {tab==="home"&&<InstHome inst={inst} students={myStudents} color={color} setTab={goTab} m={m} C={C}/>}
         {tab==="staff"&&isAdmin&&<InstStaff staff={myStaff} inst={inst} color={color} onAdd={addStaff} onUpdate={updStaff} onDelete={delStaff} notify={notify} C={C}/>}
-        {tab==="students"&&<InstStudents students={myStudents} inst={inst} color={color} onUpdate={updStudent} onDelete={id=>{if(window.confirm("Permanently delete student?"))saveDb({students:db.students.filter(s=>s.id!==id)});notify("Student deleted","error");}} C={C}/>}
-        {tab==="register"&&isAdmin&&<InstRegister inst={inst} onSave={addStudent} color={color} m={m} C={C}/>}
+        {tab==="students"&&<InstStudents students={myStudents} inst={inst} courses={myCourses} color={color} onUpdate={updStudent} onDelete={id=>{if(window.confirm("Permanently delete student?")){saveDb({students:db.students.filter(s=>s.id!==id)});notify("Student deleted","error");}}} C={C}/>}
+        {tab==="register"&&isAdmin&&<InstRegister inst={inst} onSave={addStudent} color={color} m={m} courses={myCourses} C={C}/>}
+        {tab==="import"&&isAdmin&&<InstImport db={db} saveDb={saveDb} inst={inst} notify={notify} C={C}/>}
         {tab==="attend"&&<InstAttend students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
         {tab==="fees"&&<InstFees students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
         {tab==="homework"&&<InstHomework students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
@@ -2060,30 +2198,36 @@ function InstHome({inst,students,color,setTab,m,C}){
   </div>;
 }
 
-function InstStudents({students,inst,color,onUpdate,onDelete,C}){
-  const [q,setQ]=useState("");const [sel,setSel]=useState(null);const [photoFor,setPhotoFor]=useState(null);const [editId,setEditId]=useState(null);
-  const fs=students.filter(s=>[s.name,s.rollNo,s.phone,s.department,s.class,s.course,s.danceStyle].some(v=>v?.toLowerCase().includes(q.toLowerCase())));
+function InstStudents({students,inst,courses,color,onUpdate,onDelete,C}){
+  const [q,setQ]=useState("");const [sel,setSel]=useState(null);const [photoFor,setPhotoFor]=useState(null);const [editId,setEditId]=useState(null);const [stFilter,setStFilter]=useState("all");
+  const fs=students.filter(s=>(stFilter==="all"||(s.status||"Studying")===stFilter)&&[s.name,s.rollNo,s.phone,s.department,s.class,s.course,s.danceStyle].some(v=>v?.toLowerCase().includes(q.toLowerCase())));
+  const counts={Studying:students.filter(s=>(s.status||"Studying")==="Studying").length,Completed:students.filter(s=>s.status==="Completed").length,Dropout:students.filter(s=>s.status==="Dropout").length};
   function handleEdit(s,e){e.stopPropagation();setSel(null);setEditId(s.id);}
   return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <PH title="👥 Students" sub={`${students.length} enrolled`} C={C}/>
-    <Inp C={C} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, roll, phone..." style={{marginBottom:14}}/>
+    <PH title="👥 Students" sub={`${students.length} enrolled · ${counts.Studying} studying · ${counts.Completed} completed · ${counts.Dropout} dropout`} C={C}/>
+    <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+      <Inp C={C} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, roll, phone..." style={{flex:1,minWidth:180,marginBottom:0}}/>
+      <Sel C={C} value={stFilter} onChange={e=>setStFilter(e.target.value)} style={{width:"auto"}}><option value="all">All Status</option>{STUDENT_STATUS.map(s=><option key={s} value={s}>{s} ({counts[s]||0})</option>)}</Sel>
+    </div>
     <div style={{display:"grid",gridTemplateColumns:sel?"1fr 360px":"1fr",gap:18,alignItems:"start"}}>
       <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,overflow:"hidden",boxShadow:C.shadow}}>
         {!fs.length&&<Empty msg="No students" C={C}/>}
         {fs.map(s=>{const pct=attPct(s.attendance);return<div key={s.id} onClick={()=>setSel(sel?.id===s.id?null:s)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:sel?.id===s.id?C.tealL:"transparent",transition:"background 0.1s"}} onMouseOver={e=>{if(sel?.id!==s.id)e.currentTarget.style.background=C.bg;}} onMouseOut={e=>{if(sel?.id!==s.id)e.currentTarget.style.background="transparent";}}>
           <div style={{display:"flex",alignItems:"center",gap:11}}><Avatar name={s.name} photo={s.photo} color={color} size={38}/><div><div style={{fontWeight:600,fontSize:13,color:C.text}}>{s.name}</div><div style={{fontSize:11,color:C.muted}}>{s.rollNo} - {s.course||s.department||s.danceStyle||s.class||""}{s.section?` - ${s.section}`:""}{s.batch?` (${s.batch})`:""}</div></div></div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <Badge label={s.status||"Studying"} color={stuStatusColor(s.status||"Studying")} C={C}/>
             <MiniBar pct={pct} color={pct>=75?C.green:C.red} C={C}/>
             {s.fees?.some(f=>f.status==="Pending"||f.status==="Partial")&&<Badge label="Fee Due" color="pink" C={C}/>}
             <button onClick={e=>handleEdit(s,e)} style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${C.teal}`,background:C.tealL,color:C.teal,fontSize:11,fontWeight:700,cursor:"pointer"}}>✏ Edit</button>
             <button onClick={e=>{e.stopPropagation();setPhotoFor(s.id);}} style={{fontSize:15,background:"none",border:"none",color:C.muted,padding:4,cursor:"pointer"}} title="Upload Photo">📷</button>
+            <button onClick={e=>{e.stopPropagation();onDelete(s.id);if(sel?.id===s.id)setSel(null);}} style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${C.red}`,background:C.redL,color:C.red,fontSize:11,fontWeight:700,cursor:"pointer"}} title="Delete Student">🗑</button>
           </div>
         </div>;})}
       </div>
-      {sel&&<StuProfileCard s={students.find(x=>x.id===sel.id)||sel} color={color} onClose={()=>setSel(null)} onPhoto={()=>setPhotoFor(sel.id)} onEdit={(s)=>{setEditId(s.id);setSel(null);}} C={C}/>}
+      {sel&&<StuProfileCard s={students.find(x=>x.id===sel.id)||sel} color={color} onClose={()=>setSel(null)} onPhoto={()=>setPhotoFor(sel.id)} onEdit={(s)=>{setEditId(s.id);setSel(null);}} onDelete={(id)=>{onDelete(id);setSel(null);}} C={C}/>}
     </div>
     {photoFor&&<PhotoModal sid={photoFor} student={students.find(s=>s.id===photoFor)} color={color} onSave={(sid,photo)=>{onUpdate(sid,{photo});setPhotoFor(null);}} onClose={()=>setPhotoFor(null)} C={C}/>}
-    {editId&&<StuEditModal student={students.find(s=>s.id===editId)} inst={inst} color={color} onSave={(id,patch)=>{onUpdate(id,patch);setEditId(null);}} onClose={()=>setEditId(null)} C={C}/>}
+    {editId&&<StuEditModal student={students.find(s=>s.id===editId)} inst={inst} courses={courses} color={color} onSave={(id,patch)=>{onUpdate(id,patch);setEditId(null);}} onClose={()=>setEditId(null)} C={C}/>}
   </div>;
 }
 function PhotoModal({sid,student,color,onSave,onClose,C}){
@@ -2098,7 +2242,7 @@ function PhotoModal({sid,student,color,onSave,onClose,C}){
 }
 
 // ─── Student Edit Modal ───────────────────────────────────────────────────────
-function StuEditModal({student,inst,color,onSave,onClose,C}){
+function StuEditModal({student,inst,courses,color,onSave,onClose,C}){
   const [f,setF]=useState({...student});
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const TYPE=inst.type;
@@ -2148,6 +2292,8 @@ function StuEditModal({student,inst,color,onSave,onClose,C}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:18}}>
           <FG label="Roll Number" C={C}><Inp C={C} value={f.rollNo||""} onChange={e=>set("rollNo",e.target.value)} placeholder="Roll No"/></FG>
           <FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate||""} onChange={e=>set("admissionDate",e.target.value)}/></FG>
+          <FG label="Enrollment Status" C={C}><Sel C={C} value={f.status||"Studying"} onChange={e=>set("status",e.target.value)}>{STUDENT_STATUS.map(s=><option key={s}>{s}</option>)}</Sel></FG>
+          {(f.status==="Completed"||f.status==="Dropout")&&<FG label={f.status==="Completed"?"Date of Completion":"Date of Dropout"} C={C}><Inp C={C} type="date" value={f.completionDate||""} onChange={e=>set("completionDate",e.target.value)}/></FG>}
           {TYPE==="College"&&<><FG label="Dept Group" C={C}><Sel C={C} value={f.deptGroup||""} onChange={e=>set("deptGroup",e.target.value)}>{Object.keys(DEPARTMENTS).map(d=><option key={d}>{d}</option>)}</Sel></FG>
           <FG label="Department" C={C}><Sel C={C} value={f.department||""} onChange={e=>set("department",e.target.value)}><option value="">-- Select --</option>{(DEPARTMENTS[f.deptGroup]||[]).map(d=><option key={d}>{d}</option>)}</Sel></FG>
           <FG label="Year" C={C}><Sel C={C} value={f.year||""} onChange={e=>set("year",e.target.value)}>{["1st Year","2nd Year","3rd Year","4th Year","PG 1st Year","PG 2nd Year"].map(y=><option key={y}>{y}</option>)}</Sel></FG>
@@ -2158,7 +2304,7 @@ function StuEditModal({student,inst,color,onSave,onClose,C}){
           <FG label="Section" C={C}><Sel C={C} value={f.section||""} onChange={e=>set("section",e.target.value)}>{SCHOOL_SECTIONS.map(s=><option key={s}>{s}</option>)}</Sel></FG>
           <FG label="Medium" C={C}><Sel C={C} value={f.medium||"English Medium"} onChange={e=>set("medium",e.target.value)}>{["Tamil Medium","English Medium"].map(m=><option key={m}>{m}</option>)}</Sel></FG>
           <FG label="Group" C={C}><Sel C={C} value={f.group||"N/A"} onChange={e=>set("group",e.target.value)}>{["N/A","Maths-Biology","Maths-CS","Commerce","Arts"].map(g=><option key={g}>{g}</option>)}</Sel></FG></>}
-          {TYPE==="Computer Institute"&&<><FG label="Course" C={C}><Sel C={C} value={f.course||""} onChange={e=>set("course",e.target.value)}>{COMP_COURSES.map(co=><option key={co}>{co}</option>)}</Sel></FG>
+          {TYPE==="Computer Institute"&&<><FG label="Course" C={C}><Sel C={C} value={f.course||""} onChange={e=>set("course",e.target.value)}>{[...new Set([...(courses||[]),...COMP_COURSES])].map(co=><option key={co}>{co}</option>)}</Sel></FG>
           <FG label="Duration" C={C}><Sel C={C} value={f.duration||""} onChange={e=>set("duration",e.target.value)}>{["1 Month","3 Months","6 Months","1 Year"].map(d=><option key={d}>{d}</option>)}</Sel></FG>
           <FG label="Batch" C={C}><Sel C={C} value={f.batch||"Morning"} onChange={e=>set("batch",e.target.value)}>{["Morning","Afternoon","Evening","Weekend"].map(b=><option key={b}>{b}</option>)}</Sel></FG>
           <FG label="Timing" C={C}><Inp C={C} value={f.timing||""} onChange={e=>set("timing",e.target.value)} placeholder="9AM-11AM"/></FG></>}
@@ -2183,7 +2329,7 @@ function StuEditModal({student,inst,color,onSave,onClose,C}){
   </div>;
 }
 
-function StuProfileCard({s,color,onClose,onPhoto,C}){
+function StuProfileCard({s,color,onClose,onPhoto,onEdit,onDelete,C}){
   const pct=attPct(s.attendance);const tf=s.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;const pf=s.fees?.reduce((a,f)=>a+Number(f.paid||0),0)||0;const exams=s.exams||[];const avgM=exams.length?Math.round(exams.reduce((a,e)=>a+Number(e.percentage||0),0)/exams.length):null;const hwDone=s.homeworks?.filter(h=>h.status==="Submitted").length||0;
   return <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:20,position:"sticky",top:24,boxShadow:C.shadow,animation:"slideIn 0.3s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
@@ -2192,26 +2338,202 @@ function StuProfileCard({s,color,onClose,onPhoto,C}){
         <div style={{fontWeight:800,fontSize:15,color:C.text}}>{s.name}</div>
         <div style={{fontSize:11,color:C.muted}}>{s.rollNo}</div>
         <div style={{fontSize:12,color,fontWeight:600,marginTop:2}}>{s.course||s.department||s.danceStyle||s.class||""}{s.batch?` · ${s.batch}`:""}</div>
-        <button onClick={()=>onEdit(s)} style={{marginTop:8,padding:"5px 16px",borderRadius:7,border:`1px solid ${color}`,background:"transparent",color,fontSize:12,fontWeight:700,cursor:"pointer"}}>✏ Edit Profile</button>
+        <div style={{marginTop:6}}><Badge label={(s.status||"Studying")+(s.completionDate&&(s.status==="Completed"||s.status==="Dropout")?" · "+fmt(s.completionDate):"")} color={stuStatusColor(s.status||"Studying")} C={C}/></div>
+        <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:8}}>
+          <button onClick={()=>onEdit(s)} style={{padding:"5px 16px",borderRadius:7,border:`1px solid ${color}`,background:"transparent",color,fontSize:12,fontWeight:700,cursor:"pointer"}}>✏ Edit Profile</button>
+          {onDelete&&<button onClick={()=>onDelete(s.id)} style={{padding:"5px 16px",borderRadius:7,border:`1px solid ${C.red}`,background:"transparent",color:C.red,fontSize:12,fontWeight:700,cursor:"pointer"}}>🗑 Delete</button>}
+        </div>
       </div>
       <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:22,lineHeight:1,cursor:"pointer"}}>×</button>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
       {[{l:"Attendance",v:`${pct}%`,c:pct>=75?C.green:C.red},{l:"Avg Marks",v:avgM!=null?`${avgM}%`:"--",c:C.teal},{l:"Fee Paid",v:`Rs.${pf.toLocaleString()}`,c:C.green},{l:"HW Done",v:`${hwDone}/${s.homeworks?.length||0}`,c:C.purple}].map(r=><div key={r.l} style={{background:C.bg,borderRadius:9,padding:"10px",textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:14,fontWeight:800,color:r.c}}>{r.v}</div><div style={{fontSize:9,color:C.muted,marginTop:2}}>{r.l}</div></div>)}
     </div>
-    {[{l:"Course",v:s.course},{l:"Department",v:s.department},{l:"Dance Style",v:s.danceStyle},{l:"Class",v:s.class},{l:"Batch",v:s.batch},{l:"Duration",v:s.duration},{l:"Year",v:s.year},{l:"Phone",v:s.phone},{l:"Email",v:s.email},{l:"Parent",v:s.parent},{l:"Parent Ph",v:s.parentPhone},{l:"DOB",v:fmt(s.dob)},{l:"Gender",v:s.gender},{l:"Blood",v:s.blood},{l:"Admitted",v:fmt(s.admissionDate)}].filter(r=>r.v&&r.v!=="--").map(r=><div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}><span style={{color:C.muted}}>{r.l}</span><span style={{fontWeight:600,color:C.text}}>{r.v}</span></div>)}
+    {[{l:"Status",v:s.status||"Studying"},{l:s.status==="Dropout"?"Dropout Date":"Completed On",v:fmt(s.completionDate)},{l:"Course",v:s.course},{l:"Department",v:s.department},{l:"Dance Style",v:s.danceStyle},{l:"Class",v:s.class},{l:"Batch",v:s.batch},{l:"Duration",v:s.duration},{l:"Year",v:s.year},{l:"Phone",v:s.phone},{l:"Email",v:s.email},{l:"Parent",v:s.parent},{l:"Parent Ph",v:s.parentPhone},{l:"DOB",v:fmt(s.dob)},{l:"Gender",v:s.gender},{l:"Blood",v:s.blood},{l:"Admitted",v:fmt(s.admissionDate)}].filter(r=>r.v&&r.v!=="--").map(r=><div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}><span style={{color:C.muted}}>{r.l}</span><span style={{fontWeight:600,color:C.text}}>{r.v}</span></div>)}
     {s.attendance?.length>0&&<div style={{marginTop:12}}><Sec C={C}>Last 7 Days</Sec><div style={{display:"flex",gap:3}}>{s.attendance.slice(-7).map((a,i)=><div key={i} title={`${fmt(a.date)}: ${a.status}`} style={{flex:1,height:24,borderRadius:5,background:a.status==="Present"?C.green:a.status==="Absent"?C.red:C.gold,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700}}>{a.status[0]}</div>)}</div></div>}
   </div>;
 }
 
-function InstRegister({inst,onSave,color,m,C}){
+// ─── BULK IMPORT (Excel / Google Sheets) ────────────────────────────────────
+const IMPORT_FIELDS=[
+  {key:"name",label:"Name *",syn:["name","studentname","fullname","student","candidatename"]},
+  {key:"rollNo",label:"Roll / Enroll No",syn:["roll","rollno","rollnumber","enroll","enrollment","enrollmentno","regno","registerno","registrationno","admissionno","admno","idno"]},
+  {key:"phone",label:"Phone",syn:["phone","mobile","contact","phoneno","mobileno","phonenumber","contactnumber","cell"]},
+  {key:"email",label:"Email",syn:["email","mail","emailid","emailaddress"]},
+  {key:"gender",label:"Gender",syn:["gender","sex"]},
+  {key:"dob",label:"Date of Birth",syn:["dob","dateofbirth","birthdate","birthday"]},
+  {key:"course",label:"Course",syn:["course","program","programme","trade","coursename"]},
+  {key:"department",label:"Department",syn:["department","dept","branch","stream"]},
+  {key:"class",label:"Class",syn:["class","standard","std","grade"]},
+  {key:"section",label:"Section",syn:["section","sec"]},
+  {key:"year",label:"Year",syn:["year","yr"]},
+  {key:"danceStyle",label:"Dance Style",syn:["dancestyle","dance","style"]},
+  {key:"batch",label:"Batch",syn:["batch","shift","timing","slot"]},
+  {key:"status",label:"Status",syn:["status","enrollmentstatus","studentstatus","state"]},
+  {key:"completionDate",label:"Completion / Drop Date",syn:["completiondate","dateofcompletion","completedon","completed","passout","passoutdate","passingdate","enddate","dropdate","dropoutdate","finished"]},
+  {key:"admissionDate",label:"Admission Date",syn:["admissiondate","joindate","doj","dateofadmission","joined","joiningdate","startdate","enrolldate"]},
+  {key:"parent",label:"Parent / Guardian",syn:["parent","guardian","father","fathername","parentname","guardianname","motherthename"]},
+  {key:"parentPhone",label:"Parent Phone",syn:["parentphone","guardianphone","parentmobile","fatherphone","parentcontact","guardiancontact"]},
+  {key:"address",label:"Address",syn:["address","location","place","city","town"]},
+];
+function impNormHeader(h){return String(h||"").toLowerCase().replace(/[^a-z0-9]/g,"");}
+function impAutoMap(headers){const map={};headers.forEach((h,idx)=>{const n=impNormHeader(h);const f=IMPORT_FIELDS.find(f=>f.syn.includes(n));if(f&&map[f.key]===undefined)map[f.key]=idx;});return map;}
+function impParse(text){
+  text=String(text||"").replace(/\r\n/g,"\n").replace(/\r/g,"\n").replace(/\n+$/,"");
+  if(!text.trim())return [];
+  const firstLine=text.split("\n")[0];
+  const delim=firstLine.includes("\t")?"\t":",";
+  const rows=[];let row=[],cur="",inQ=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(inQ){if(c==='"'){if(text[i+1]==='"'){cur+='"';i++;}else inQ=false;}else cur+=c;}
+    else{if(c==='"')inQ=true;else if(c===delim){row.push(cur);cur="";}else if(c==="\n"){row.push(cur);rows.push(row);row=[];cur="";}else cur+=c;}
+  }
+  row.push(cur);rows.push(row);
+  return rows.map(r=>r.map(x=>x.trim())).filter(r=>r.some(x=>x!==""));
+}
+function impDate(v){
+  if(!v)return"";v=String(v).trim();
+  let m=v.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if(m)return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`;
+  m=v.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
+  if(m){let d=m[1],mo=m[2],y=m[3];if(y.length===2)y="20"+y;return `${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;}
+  const dt=new Date(v);if(!isNaN(dt.getTime()))return dt.toISOString().slice(0,10);
+  return "";
+}
+function impStatus(v){const n=String(v||"").toLowerCase();if(/complet|pass|finish|graduat|done/.test(n))return"Completed";if(/drop|discontinu|\bleft\b|quit|terminat|inactive/.test(n))return"Dropout";return"Studying";}
+function impGender(v){const n=String(v||"").toLowerCase();if(n.startsWith("f")||n==="female")return"Female";if(n.startsWith("m")||n==="male")return"Male";if(n)return"Other";return"Male";}
+function loadXLSX(){return new Promise((res,rej)=>{if(window.XLSX)return res(window.XLSX);const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=()=>res(window.XLSX);s.onerror=()=>rej(new Error("xlsx"));document.head.appendChild(s);});}
+
+function InstImport({db,saveDb,inst,notify,C}){
+  const [headers,setHeaders]=useState([]);
+  const [rows,setRows]=useState([]);
+  const [map,setMap]=useState({});
+  const [paste,setPaste]=useState("");
+  const [err,setErr]=useState("");
+  const [done,setDone]=useState(0);
+  const fileRef=useRef(null);
+
+  function ingest(aoa){
+    setErr("");setDone(0);
+    const clean=(aoa||[]).filter(r=>r&&r.some(c=>String(c).trim()!==""));
+    if(clean.length<2){setErr("Need a header row plus at least one data row.");setHeaders([]);setRows([]);return;}
+    const hdr=clean[0].map(h=>String(h).trim());
+    setHeaders(hdr);setRows(clean.slice(1));setMap(impAutoMap(hdr));
+  }
+  function doPaste(){ingest(impParse(paste));}
+  async function handleFile(e){
+    const file=e.target.files?.[0];if(!file)return;
+    const ext=file.name.split(".").pop().toLowerCase();
+    if(ext==="xlsx"||ext==="xls"){
+      try{const XLSX=await loadXLSX();const buf=await file.arrayBuffer();const wb=XLSX.read(buf,{type:"array"});const ws=wb.Sheets[wb.SheetNames[0]];ingest(XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:""}));}
+      catch(ex){setErr("Couldn't read that Excel file (you may be offline). Export it as CSV, or open it and copy-paste the cells into the box below.");}
+    }else{const text=await file.text();ingest(impParse(text));}
+    e.target.value="";
+  }
+  const get=(r,key)=>map[key]!=null&&map[key]!==""?String(r[map[key]]??"").trim():"";
+  const validRows=rows.filter(r=>get(r,"name"));
+  function buildStudent(r){
+    return {id:uid(),instId:inst.id,createdAt:today(),institution:inst.type,
+      name:get(r,"name"),rollNo:get(r,"rollNo"),phone:get(r,"phone"),email:get(r,"email"),
+      gender:impGender(get(r,"gender")),dob:impDate(get(r,"dob")),
+      course:get(r,"course"),department:get(r,"department"),class:get(r,"class"),
+      section:get(r,"section"),year:get(r,"year"),danceStyle:get(r,"danceStyle"),batch:get(r,"batch"),
+      status:impStatus(get(r,"status")),completionDate:impDate(get(r,"completionDate")),
+      admissionDate:impDate(get(r,"admissionDate"))||today(),
+      parent:get(r,"parent"),parentPhone:get(r,"parentPhone"),address:get(r,"address"),
+      attendance:[],fees:[],homeworks:[],exams:[],assignments:[],photo:""};
+  }
+  function doImport(){
+    if(!validRows.length){setErr("No rows with a Name to import. Map the Name column first.");return;}
+    if(map.name==null){setErr("Please map the Name column.");return;}
+    const newStudents=validRows.map(buildStudent);
+    saveDb({students:[...db.students,...newStudents]});
+    setDone(newStudents.length);notify(`✅ Imported ${newStudents.length} student${newStudents.length!==1?"s":""}!`);
+    setHeaders([]);setRows([]);setMap({});setPaste("");
+  }
+  function downloadTemplate(){
+    const h=["Name","Roll No","Phone","Email","Gender","DOB","Course","Department","Class","Section","Status","Completion Date","Admission Date","Parent","Parent Phone","Address"];
+    const sample=["Anitha R","CI2025001","9876543210","anitha@mail.com","Female","2005-06-15","MS Office","","","","Completed","2025-10-19","2025-09-01","Ramesh","9876500000","Madurai"];
+    const csv=h.join(",")+"\n"+sample.map(x=>/[",\n]/.test(x)?`"${x}"`:x).join(",");
+    const url=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+    const a=document.createElement("a");a.href=url;a.download="student_import_template.csv";a.click();URL.revokeObjectURL(url);
+  }
+  const loaded=headers.length>0;
+
+  return <div style={{animation:"fadeUp 0.4s ease",maxWidth:1000}}>
+    <PH title="📥 Import Students" sub="Bring in your existing data from Excel or Google Sheets" C={C}/>
+
+    {done>0&&<div style={{background:C.greenL,color:C.green,borderRadius:10,padding:"12px 16px",marginBottom:16,fontWeight:700,fontSize:13}}>✅ {done} student(s) imported successfully. Check the Students tab.</div>}
+    {err&&<div style={{background:C.redL,color:C.red,borderRadius:10,padding:"12px 16px",marginBottom:16,fontSize:13}}>{err}</div>}
+
+    {!loaded&&<>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,marginBottom:16}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:6,color:C.text}}>Option 1 — Upload a file</div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>Choose a <b>.xlsx</b>, <b>.xls</b> or <b>.csv</b> file exported from Excel or Google Sheets (File → Download).</div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{display:"none"}}/>
+          <Btn onClick={()=>fileRef.current?.click()} C={C} color="teal">📂 Choose File</Btn>
+          <Btn onClick={downloadTemplate} C={C} color="gold" outline>⬇ Download Template (CSV)</Btn>
+        </div>
+      </div>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:6,color:C.text}}>Option 2 — Copy & paste</div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>In Google Sheets/Excel select your cells (including the header row), copy, and paste below. The first row must be the column titles.</div>
+        <Txt C={C} value={paste} onChange={e=>setPaste(e.target.value)} rows={7} placeholder={"Name\tRoll No\tPhone\tStatus\nAnitha R\tCI2025001\t9876543210\tCompleted\n..."} style={{fontFamily:"monospace",fontSize:12}}/>
+        <div style={{marginTop:12}}><Btn onClick={doPaste} C={C} color="teal" disabled={!paste.trim()}>Preview Data →</Btn></div>
+      </div>
+    </>}
+
+    {loaded&&<>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
+          <div style={{fontWeight:700,fontSize:13,color:C.text}}>Match your columns</div>
+          <div style={{fontSize:12,color:C.muted}}>{rows.length} row(s) found · {validRows.length} with a name</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10}}>
+          {IMPORT_FIELDS.map(f=><div key={f.key}>
+            <LBL C={C}>{f.label}</LBL>
+            <Sel C={C} value={map[f.key]??""} onChange={e=>setMap(m=>({...m,[f.key]:e.target.value===""?null:Number(e.target.value)}))}>
+              <option value="">— not in my file —</option>
+              {headers.map((h,i)=><option key={i} value={i}>{h||`Column ${i+1}`}</option>)}
+            </Sel>
+          </div>)}
+        </div>
+      </div>
+
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,boxShadow:C.shadow,overflow:"hidden",marginBottom:16}}>
+        <div style={{padding:"12px 16px",fontWeight:700,fontSize:13,color:C.text,borderBottom:`1px solid ${C.border}`}}>Preview (first 6 rows)</div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr>{["Name","Roll","Phone","Course/Class","Status","Completion"].map(h=><th key={h} style={{padding:"8px 12px",textAlign:"left",color:C.muted,fontSize:10,textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:`1px solid ${C.border}`,background:C.bg}}>{h}</th>)}</tr></thead>
+            <tbody>{validRows.slice(0,6).map((r,i)=>{const st=impStatus(get(r,"status"));return<tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
+              <td style={{padding:"8px 12px",fontWeight:600,color:C.text}}>{get(r,"name")}</td>
+              <td style={{padding:"8px 12px",color:C.muted}}>{get(r,"rollNo")||"—"}</td>
+              <td style={{padding:"8px 12px",color:C.muted}}>{get(r,"phone")||"—"}</td>
+              <td style={{padding:"8px 12px",color:C.muted}}>{get(r,"course")||get(r,"department")||get(r,"class")||get(r,"danceStyle")||"—"}</td>
+              <td style={{padding:"8px 12px"}}><Badge label={st} color={stuStatusColor(st)} C={C}/></td>
+              <td style={{padding:"8px 12px",color:C.muted}}>{impDate(get(r,"completionDate"))?fmt(impDate(get(r,"completionDate"))):"—"}</td>
+            </tr>;})}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        <Btn onClick={doImport} C={C} color="green">✅ Import {validRows.length} Student{validRows.length!==1?"s":""}</Btn>
+        <Btn onClick={()=>{setHeaders([]);setRows([]);setMap({});setPaste("");setErr("");}} C={C} color="red" outline>Cancel</Btn>
+      </div>
+    </>}
+  </div>;
+}
+
+function InstRegister({inst,onSave,color,m,courses,C}){
   const [step,setStep]=useState(0);
-  const blank={name:"",rollNo:"",dob:"",gender:"Male",phone:"",email:"",address:"",aadhaar:"",religion:"",parent:"",parentPhone:"",admissionDate:today(),deptGroup:"Arts & Science",department:"",year:"1st Year",section:"A",class:"Class 1",medium:"English Medium",group:"N/A",hostel:"Day Scholar",bus:"",scholarship:"None",course:"Basic Computer",duration:"3 Months",batch:"Morning",timing:"",qualification:"Graduate",blood:"--",occupation:"",income:"",danceStyle:"Bharatanatyam",danceLevel:"Beginner",danceBatch:"Evening 4-6 PM",danceGoal:"",photo:""};
+  const blank={name:"",rollNo:"",dob:"",gender:"Male",phone:"",email:"",address:"",aadhaar:"",religion:"",parent:"",parentPhone:"",admissionDate:today(),deptGroup:"Arts & Science",department:"",year:"1st Year",section:"A",class:"Class 1",medium:"English Medium",group:"N/A",hostel:"Day Scholar",bus:"",scholarship:"None",course:"Basic Computer",duration:"3 Months",batch:"Morning",timing:"",qualification:"Graduate",blood:"--",occupation:"",income:"",danceStyle:"Bharatanatyam",danceLevel:"Beginner",danceBatch:"Evening 4-6 PM",danceGoal:"",photo:"",status:"Studying",completionDate:""};
   const [f,setF]=useState(blank);const [err,setErr]=useState({});
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   function validate(){const e={};if(!f.name.trim())e.name="Required";if(!f.phone.match(/^\d{10}$/))e.phone="10 digits needed";if(!f.dob)e.dob="Required";if(inst.type==="College"&&!f.department)e.department="Required";setErr(e);return!Object.keys(e).length;}
   function submit(){if(validate()){onSave({...f,institution:inst.type});setF(blank);setStep(0);}}
-  const steps=inst.type==="College"?[["🏫 Academic",<CollegeF f={f} set={set} err={err} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:inst.type==="School"?[["🏫 Class",<SchoolF f={f} set={set} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:inst.type==="Computer Institute"?[["💻 Course",<CompF f={f} set={set} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:[["💃 Dance",<DanceF f={f} set={set} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]];
+  const steps=inst.type==="College"?[["🏫 Academic",<CollegeF f={f} set={set} err={err} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:inst.type==="School"?[["🏫 Class",<SchoolF f={f} set={set} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:inst.type==="Computer Institute"?[["💻 Course",<CompF f={f} set={set} courses={courses} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:[["💃 Dance",<DanceF f={f} set={set} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]];
   return <div style={{maxWidth:700,animation:"fadeUp 0.4s ease"}}>
     <PH title={`${m.icon} Register Student`} sub={`Enrolling into ${inst.name}`} C={C}/>
     <div style={{display:"flex",alignItems:"center",marginBottom:22}}>
@@ -2227,8 +2549,8 @@ function InstRegister({inst,onSave,color,m,C}){
 function DanceF({f,set,C}){return<G2><FG label="Dance Style" C={C}><Sel C={C} value={f.danceStyle} onChange={e=>set("danceStyle",e.target.value)}>{DANCE_STYLES.map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Level" C={C}><Sel C={C} value={f.danceLevel} onChange={e=>set("danceLevel",e.target.value)}>{DANCE_LEVELS.map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Batch" C={C}><Sel C={C} value={f.danceBatch} onChange={e=>set("danceBatch",e.target.value)}>{DANCE_BATCHES.map(b=><option key={b}>{b}</option>)}</Sel></FG><FG label="Enrollment No" C={C}><Inp C={C} value={f.rollNo} onChange={e=>set("rollNo",e.target.value)} placeholder="DNA2025001"/></FG><FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate} onChange={e=>set("admissionDate",e.target.value)}/></FG><FG label="Goal" C={C}><Inp C={C} value={f.danceGoal} onChange={e=>set("danceGoal",e.target.value)} placeholder="e.g. Arangetram 2026"/></FG></G2>;}
 function CollegeF({f,set,err,C}){return<G2><FG label="Dept Group" C={C}><Sel C={C} value={f.deptGroup} onChange={e=>{set("deptGroup",e.target.value);set("department","");}}>{Object.keys(DEPARTMENTS).map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Department *" err={err.department} C={C}><Sel C={C} value={f.department} onChange={e=>set("department",e.target.value)}><option value="">-- Select --</option>{DEPARTMENTS[f.deptGroup].map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Year" C={C}><Sel C={C} value={f.year} onChange={e=>set("year",e.target.value)}>{["1st Year","2nd Year","3rd Year","4th Year","PG 1st Year","PG 2nd Year"].map(y=><option key={y}>{y}</option>)}</Sel></FG><FG label="Section" C={C}><Sel C={C} value={f.section} onChange={e=>set("section",e.target.value)}>{["A","B","C","D"].map(s=><option key={s}>{s}</option>)}</Sel></FG><FG label="Roll Number" C={C}><Inp C={C} value={f.rollNo} onChange={e=>set("rollNo",e.target.value)} placeholder="22CS001"/></FG><FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate} onChange={e=>set("admissionDate",e.target.value)}/></FG><FG label="Hostel" C={C}><Sel C={C} value={f.hostel} onChange={e=>set("hostel",e.target.value)}>{["Day Scholar","Hosteller"].map(h=><option key={h}>{h}</option>)}</Sel></FG><FG label="Scholarship" C={C}><Sel C={C} value={f.scholarship} onChange={e=>set("scholarship",e.target.value)}>{["None","BC/MBC","SC/ST","Merit","Sports"].map(s=><option key={s}>{s}</option>)}</Sel></FG></G2>;}
 function SchoolF({f,set,C}){return<G2><FG label="Class" C={C}><Sel C={C} value={f.class} onChange={e=>set("class",e.target.value)}>{SCHOOL_CLASSES.map(c=><option key={c}>{c}</option>)}</Sel></FG><FG label="Section" C={C}><Sel C={C} value={f.section} onChange={e=>set("section",e.target.value)}>{SCHOOL_SECTIONS.map(s=><option key={s}>{s}</option>)}</Sel></FG><FG label="Roll No" C={C}><Inp C={C} value={f.rollNo} onChange={e=>set("rollNo",e.target.value)} placeholder="01"/></FG><FG label="Medium" C={C}><Sel C={C} value={f.medium} onChange={e=>set("medium",e.target.value)}>{["Tamil Medium","English Medium"].map(m=><option key={m}>{m}</option>)}</Sel></FG><FG label="Group" C={C}><Sel C={C} value={f.group} onChange={e=>set("group",e.target.value)}>{["N/A","Maths-Biology","Maths-CS","Commerce","Arts"].map(g=><option key={g}>{g}</option>)}</Sel></FG><FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate} onChange={e=>set("admissionDate",e.target.value)}/></FG></G2>;}
-function CompF({f,set,C}){return<G2><FG label="Course" C={C}><Sel C={C} value={f.course} onChange={e=>set("course",e.target.value)}>{COMP_COURSES.map(c=><option key={c}>{c}</option>)}</Sel></FG><FG label="Duration" C={C}><Sel C={C} value={f.duration} onChange={e=>set("duration",e.target.value)}>{["1 Month","3 Months","6 Months","1 Year"].map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Batch" C={C}><Sel C={C} value={f.batch} onChange={e=>set("batch",e.target.value)}>{["Morning","Afternoon","Evening","Weekend"].map(b=><option key={b}>{b}</option>)}</Sel></FG><FG label="Timing" C={C}><Inp C={C} value={f.timing} onChange={e=>set("timing",e.target.value)} placeholder="9AM-11AM"/></FG><FG label="Enrollment No" C={C}><Inp C={C} value={f.rollNo} onChange={e=>set("rollNo",e.target.value)} placeholder="CI2025001"/></FG><FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate} onChange={e=>set("admissionDate",e.target.value)}/></FG></G2>;}
-function PersonalF({f,set,err,color,C}){return<div><div style={{display:"flex",justifyContent:"center",marginBottom:16}}><div><LBL C={C}>Student Photo</LBL><PhotoUpload photo={f.photo} onChange={v=>set("photo",v)} color={color} C={C} size={80}/></div></div><G2><FG label="Full Name *" err={err?.name} C={C}><Inp C={C} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Full name"/></FG><FG label="Date of Birth *" err={err?.dob} C={C}><Inp C={C} type="date" value={f.dob} onChange={e=>set("dob",e.target.value)}/></FG><FG label="Gender" C={C}><Sel C={C} value={f.gender} onChange={e=>set("gender",e.target.value)}>{["Male","Female","Other"].map(g=><option key={g}>{g}</option>)}</Sel></FG><FG label="Blood Group" C={C}><Sel C={C} value={f.blood||"--"} onChange={e=>set("blood",e.target.value)}>{["--","A+","A-","B+","B-","AB+","AB-","O+","O-"].map(b=><option key={b}>{b}</option>)}</Sel></FG><FG label="Aadhaar" C={C}><Inp C={C} value={f.aadhaar} onChange={e=>set("aadhaar",e.target.value)} placeholder="12-digit" maxLength={12}/></FG><FG label="Religion" C={C}><Inp C={C} value={f.religion} onChange={e=>set("religion",e.target.value)} placeholder="e.g. Hindu"/></FG><FG label="Address" span C={C}><Txt C={C} value={f.address} onChange={e=>set("address",e.target.value)} rows={2} placeholder="Full address"/></FG></G2></div>;}
+function CompF({f,set,courses,C}){const courseList=[...new Set([...(courses||[]),...COMP_COURSES])];return<G2><FG label="Course" C={C}><Sel C={C} value={f.course} onChange={e=>set("course",e.target.value)}>{courseList.map(c=><option key={c}>{c}</option>)}</Sel></FG><FG label="Duration" C={C}><Sel C={C} value={f.duration} onChange={e=>set("duration",e.target.value)}>{["1 Month","3 Months","6 Months","1 Year"].map(d=><option key={d}>{d}</option>)}</Sel></FG><FG label="Batch" C={C}><Sel C={C} value={f.batch} onChange={e=>set("batch",e.target.value)}>{["Morning","Afternoon","Evening","Weekend"].map(b=><option key={b}>{b}</option>)}</Sel></FG><FG label="Timing" C={C}><Inp C={C} value={f.timing} onChange={e=>set("timing",e.target.value)} placeholder="9AM-11AM"/></FG><FG label="Enrollment No" C={C}><Inp C={C} value={f.rollNo} onChange={e=>set("rollNo",e.target.value)} placeholder="CI2025001"/></FG><FG label="Admission Date" C={C}><Inp C={C} type="date" value={f.admissionDate} onChange={e=>set("admissionDate",e.target.value)}/></FG></G2>;}
+function PersonalF({f,set,err,color,C}){return<div><div style={{display:"flex",justifyContent:"center",marginBottom:16}}><div><LBL C={C}>Student Photo</LBL><PhotoUpload photo={f.photo} onChange={v=>set("photo",v)} color={color} C={C} size={80}/></div></div><G2><FG label="Full Name *" err={err?.name} C={C}><Inp C={C} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Full name"/></FG><FG label="Date of Birth *" err={err?.dob} C={C}><Inp C={C} type="date" value={f.dob} onChange={e=>set("dob",e.target.value)}/></FG><FG label="Gender" C={C}><Sel C={C} value={f.gender} onChange={e=>set("gender",e.target.value)}>{["Male","Female","Other"].map(g=><option key={g}>{g}</option>)}</Sel></FG><FG label="Blood Group" C={C}><Sel C={C} value={f.blood||"--"} onChange={e=>set("blood",e.target.value)}>{["--","A+","A-","B+","B-","AB+","AB-","O+","O-"].map(b=><option key={b}>{b}</option>)}</Sel></FG><FG label="Aadhaar" C={C}><Inp C={C} value={f.aadhaar} onChange={e=>set("aadhaar",e.target.value)} placeholder="12-digit" maxLength={12}/></FG><FG label="Religion" C={C}><Inp C={C} value={f.religion} onChange={e=>set("religion",e.target.value)} placeholder="e.g. Hindu"/></FG><FG label="Enrollment Status" C={C}><Sel C={C} value={f.status||"Studying"} onChange={e=>set("status",e.target.value)}>{STUDENT_STATUS.map(s=><option key={s}>{s}</option>)}</Sel></FG>{(f.status==="Completed"||f.status==="Dropout")&&<FG label={f.status==="Completed"?"Date of Completion":"Date of Dropout"} C={C}><Inp C={C} type="date" value={f.completionDate||""} onChange={e=>set("completionDate",e.target.value)}/></FG>}<FG label="Address" span C={C}><Txt C={C} value={f.address} onChange={e=>set("address",e.target.value)} rows={2} placeholder="Full address"/></FG></G2></div>;}
 function ContactF({f,set,err,C}){return<G2><FG label="Phone *" err={err?.phone} C={C}><Inp C={C} value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="10-digit" maxLength={10}/></FG><FG label="Email" C={C}><Inp C={C} value={f.email} onChange={e=>set("email",e.target.value)} placeholder="email@example.com"/></FG><FG label="Parent/Guardian" C={C}><Inp C={C} value={f.parent} onChange={e=>set("parent",e.target.value)} placeholder="Parent name"/></FG><FG label="Parent Phone" C={C}><Inp C={C} value={f.parentPhone} onChange={e=>set("parentPhone",e.target.value)} placeholder="Parent mobile" maxLength={10}/></FG><FG label="Occupation" C={C}><Inp C={C} value={f.occupation} onChange={e=>set("occupation",e.target.value)} placeholder="e.g. Farmer"/></FG><FG label="Annual Income" C={C}><Inp C={C} value={f.income} onChange={e=>set("income",e.target.value)} placeholder="e.g. 1,50,000"/></FG></G2>;}
 
 function InstAttend({students,color,onUpdate,notify,C}){
@@ -2609,17 +2931,96 @@ function InstReports({students,inst,color,C}){
 }
 
 // ─── PHASE 1: AI TOOLS HUB ────────────────────────────────────────────────────
+// ─── AI ENGINE ──────────────────────────────────────────────────────────────
+// A deployed web app CANNOT call api.anthropic.com directly from the browser
+// (CORS + the API key would be exposed to every visitor). To use a real LLM,
+// set AI_PROXY_URL to your own serverless proxy (Firebase Function / Cloudflare
+// Worker / Vercel route) that keeps the key server-side, accepts {prompt} via
+// POST and returns {text}. When left empty, the built-in offline generator runs
+// so every AI tool still produces useful output with no backend or key.
+const AI_PROXY_URL="";
 async function callAI(prompt){
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})});
+  if(!AI_PROXY_URL) throw new Error("AI_OFFLINE");
+  const res=await fetch(AI_PROXY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})});
+  if(!res.ok) throw new Error("AI_HTTP_"+res.status);
   const d=await res.json();
-  return d.content?.[0]?.text||"No response";
+  return d.text||d.content?.[0]?.text||d.output||"No response";
+}
+
+// Offline generator — homework / quiz / assignment / MCQs / project
+function aiHomeworkLocal({instName,subject,topic,standard,type}){
+  const T=type||"Homework";const lvl=standard?` · ${standard}`:"";
+  const hr="─".repeat(46);
+  const head=`${T.toUpperCase()} — ${subject}\nTopic: ${topic}${lvl}\n${instName}\n${hr}\n`;
+  if(T==="MCQs"||T==="Quiz"){
+    const qs=Array.from({length:6},(_,i)=>`Q${i+1}. With respect to "${topic}" in ${subject}, which option is correct?\n    a) ____________   b) ____________\n    c) ____________   d) ____________\n`);
+    return head+`Answer all questions. Each carries equal marks.\nFill in the four options and mark the correct one before sharing.\n\n`+qs.join("\n");
+  }
+  if(T==="Project"){
+    return head+`Project Brief\n\nObjective: Build a small project that demonstrates "${topic}".\n\nTasks:\n1. Research the basics of ${topic} and write a short summary (1 page).\n2. Plan your approach — list the steps and tools you will use.\n3. Build / prepare the project applying ${topic} concepts from ${subject}.\n4. Document what you did, with screenshots or examples.\n5. Prepare a 5-minute presentation of your results.\n\nDeliverables: report + working project + presentation.\nEvaluation: understanding (30%), application (40%), presentation (30%).`;
+  }
+  const tasks=[
+    `Define "${topic}" in your own words and list its key features.`,
+    `Explain how ${topic} works, with one clear example from ${subject}.`,
+    `Solve a problem that uses ${topic}. Show every step of your working.`,
+    `Compare ${topic} with a closely related concept — note similarities and differences.`,
+    `Identify a common mistake students make with ${topic} and how to avoid it.`,
+    `Create your own example/question on ${topic} and provide the full solution.`,
+  ];
+  return head+`Instructions: Attempt all tasks neatly. Write in your own words.\n\n`+tasks.map((t,i)=>`${i+1}. ${t}`).join("\n\n");
+}
+
+// Offline generator — report card comments (3 lengths)
+function aiReportCommentLocal({name,att,avgMarks,hwPct}){
+  const f=name.split(" ")[0]||name;
+  const attTxt=att>=90?"excellent and consistent":att>=75?"good":att>=60?"irregular and needs improvement":"a serious concern";
+  const acadTxt=avgMarks==null?"is yet to sit for assessments":avgMarks>=80?"is performing at a high academic level":avgMarks>=60?"shows steady academic progress":avgMarks>=40?"is making an effort but needs more support":"requires focused academic support";
+  const hwTxt=hwPct==null?"":hwPct>=80?" Homework is completed reliably.":hwPct>=50?" Homework completion can be more consistent.":" Homework completion needs significant improvement.";
+  const short=`${f} ${acadTxt} with ${attTxt} attendance (${att}%).`;
+  const medium=`${name} has shown ${attTxt} attendance this term at ${att}%, and ${acadTxt}${avgMarks!=null?` (average ${avgMarks}%)`:""}.${hwTxt} With continued effort, further progress is well within reach.`;
+  const detailed=`${name} has maintained ${attTxt} attendance (${att}%) during this assessment period and ${acadTxt}${avgMarks!=null?`, achieving an average of ${avgMarks}%`:""}.${hwTxt} ${f} is encouraged to ${att<75?"attend classes more regularly, ":""}${avgMarks!=null&&avgMarks<60?"revise core concepts daily, and seek help when needed":"keep building on these strengths and aim higher each week"}. We are confident ${f} will continue to grow with consistent effort and support from home.`;
+  return `▸ SHORT\n${short}\n\n▸ MEDIUM\n${medium}\n\n▸ DETAILED\n${detailed}`;
+}
+
+// Offline generator — attendance insights
+function aiInsightsLocal({total,avg,low,critical,lowNames}){
+  const health=avg>=90?"Excellent":avg>=80?"Healthy":avg>=70?"Fair — watch closely":"Needs urgent attention";
+  const lines=[];
+  lines.push(`1. OVERALL HEALTH: ${health} — average attendance is ${avg}% across ${total} students.`);
+  lines.push(`2. NEEDS ATTENTION: ${low} student(s) are below 75%${critical?`, of which ${critical} are critical (below 60%)`:""}.`);
+  if(lowNames&&lowNames.length)lines.push(`   At-risk: ${lowNames.slice(0,12).join(", ")}${lowNames.length>12?` +${lowNames.length-12} more`:""}.`);
+  lines.push(`3. TRENDS: ${avg>=85?"Most students attend regularly; the cohort is stable.":avg>=70?"A noticeable group is slipping below the 75% threshold.":"Attendance is widely inconsistent and trending low."}`);
+  lines.push(`4. RECOMMENDATIONS:\n   • Auto-notify parents when a student crosses below 75%.\n   • Hold a short counselling session for critical cases.\n   • Recognise/​reward students above 95% to reinforce the habit.\n   • Review timetable clashes or transport issues affecting the at-risk group.`);
+  lines.push(`5. ACTION PLAN (low attendance):\n   Week 1: Personal call to each at-risk student/parent.\n   Week 2: Set a 90% target and track daily.\n   Week 3: Review progress; escalate persistent cases to mentor.`);
+  return lines.join("\n");
+}
+
+// Offline generator — exam MCQ scaffolds (editable starting questions)
+function aiExamLocal({subject,topic}){
+  return Array.from({length:5},(_,i)=>({
+    question:`(${subject} · ${topic}) Sample question ${i+1} — replace with your question`,
+    options:["Option A","Option B","Option C","Option D"],
+    correct:0,marks:5,
+  }));
+}
+
+// Offline responder — student chatbot
+function aiChatLocal(q,d){
+  const t=q.toLowerCase();
+  if(/\b(hi|hello|hey|vanakkam)\b/.test(t))return `Hi ${d.name}! 👋 Ask me about your attendance, fees, homework, marks or course.`;
+  if(/(attend|present|absent)/.test(t))return `Your attendance is ${d.att}% across ${d.attCount} recorded class(es). ${d.att>=75?"That's above the 75% requirement — keep it up! ✅":"That's below the 75% mark — try to attend regularly. ⚠️"}`;
+  if(/(fee|due|pay|payment|balance)/.test(t))return d.due>0?`Your total fee is ₹${d.total.toLocaleString()}, paid ₹${d.paid.toLocaleString()}, and ₹${d.due.toLocaleString()} is still pending. Please clear it at the office.`:`Your fees are fully paid (₹${d.paid.toLocaleString()}). Nothing pending — thank you! ✅`;
+  if(/(homework|hw|assignment)/.test(t))return d.hwPending>0?`You have ${d.hwPending} pending homework item(s). Check the Homework section for details and due dates.`:`No pending homework right now. 🎉`;
+  if(/(mark|exam|result|grade|score|percent)/.test(t)){if(!d.exams.length)return "No exam marks have been recorded yet.";const avg=Math.round(d.exams.reduce((a,e)=>a+(e.maxMarks>0?e.marks/e.maxMarks*100:Number(e.percentage)||0),0)/d.exams.length);return `You have ${d.exams.length} exam(s) recorded with an average of ${avg}%. ${avg>=60?"Good work — keep improving!":"Let's focus on revising weaker topics."}`;}
+  if(/(course|class|subject|study)/.test(t))return `You are enrolled in: ${d.course}. Let me know what you'd like to know about your studies.`;
+  return `I can help with your attendance (${d.att}%), fees (₹${d.due.toLocaleString()} due), homework (${d.hwPending} pending) and exam marks. Try asking "What is my attendance?" or "How much fee is due?".`;
 }
 
 function InstAIHub({students,inst,color,onUpdate,notify,C}){
   const [subTab,setSubTab]=useState("homework");
   const SUB=[{k:"homework",i:"📚",l:"Homework Gen"},{k:"comments",i:"💬",l:"Report Comments"},{k:"insights",i:"📊",l:"Attendance Insights"}];
   return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <PH title="🤖 AI Tools" sub="Powered by Claude AI" C={C}/>
+    <PH title="🤖 AI Tools" sub="Smart assistant — works offline, no setup needed" C={C}/>
     <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
       {SUB.map(t=><button key={t.k} onClick={()=>setSubTab(t.k)} style={{padding:"8px 18px",borderRadius:20,border:`1px solid ${subTab===t.k?color:C.border}`,background:subTab===t.k?color:"transparent",color:subTab===t.k?"#fff":C.muted,fontWeight:subTab===t.k?700:500,fontSize:12,cursor:"pointer"}}>{t.i} {t.l}</button>)}
     </div>
@@ -2638,7 +3039,9 @@ function AIHomeworkGen({inst,color,C}){
     setLoading(true);setResult("");
     try{
       const prompt=`You are a teacher at ${inst.name} (${inst.type}). Generate ${form.type} for:\nSubject: ${form.subject}\nTopic: ${form.topic}\nClass/Standard: ${form.standard||"General"}\n\nProvide clear, structured ${form.type} with 5-8 questions/tasks appropriate for students. Format nicely.`;
-      const text=await callAI(prompt);
+      let text;
+      try{text=await callAI(prompt);}
+      catch(e){text=aiHomeworkLocal({instName:inst.name,subject:form.subject,topic:form.topic,standard:form.standard,type:form.type});}
       setResult(text);
     }catch(e){setResult("Error generating. Please try again.");}
     setLoading(false);
@@ -2678,7 +3081,9 @@ function AIReportComments({students,color,C}){
     const hw=stu.homeworks||[];const hwDone=hw.filter(h=>h.status==="Submitted").length;
     try{
       const prompt=`Generate a professional report card teacher comment for this student:\nName: ${stu.name}\nAttendance: ${att}%\nAverage Marks: ${avgMarks!==null?avgMarks+"%":"No exams yet"}\nHomework completion: ${hw.length?Math.round(hwDone/hw.length*100)+"%":"N/A"}\n\nWrite 3 different comment options (short, medium, detailed). Be constructive and professional.`;
-      const text=await callAI(prompt);
+      let text;
+      try{text=await callAI(prompt);}
+      catch(e){text=aiReportCommentLocal({name:stu.name,att,avgMarks,hwPct:hw.length?Math.round(hwDone/hw.length*100):null});}
       setResult(prev=>({...prev,[sel]:text}));
     }catch(e){setResult(prev=>({...prev,[sel]:"Error generating comment."}));}
     setLoading(false);
@@ -2722,7 +3127,9 @@ function AIAttendanceInsights({students,color,C}){
     const data=students.map(s=>({name:s.name,att:attPct(s.attendance||[]),total:s.attendance?.length||0}));
     try{
       const prompt=`Analyze attendance data for ${students.length} students:\n${JSON.stringify(data.slice(0,30))}\n\nProvide:\n1. Overall attendance health assessment\n2. Students needing immediate attention (list names)\n3. Trends and patterns you notice\n4. Specific recommendations for the institution\n5. Action plan for low-attendance students\n\nBe concise and actionable.`;
-      const text=await callAI(prompt);
+      let text;
+      try{text=await callAI(prompt);}
+      catch(e){text=aiInsightsLocal({total:students.length,avg,low:low.length,critical:critical.length,lowNames:low.map(s=>s.name)});}
       setResult(text);
     }catch(e){setResult("Error generating insights.");}
     setLoading(false);
@@ -2886,9 +3293,9 @@ function ExamCreator({onSave,color,C}){
     setAiLoading(true);
     try{
       const prompt=`Generate 5 MCQ questions for an exam:\nSubject: ${form.subject}\nTopic: ${form.title}\n\nReturn ONLY valid JSON array, no markdown:\n[{"question":"...","options":["A","B","C","D"],"correct":0,"marks":5}]\ncorrect is 0-indexed position of correct answer.`;
-      const text=await callAI(prompt);
-      const clean=text.replace(/```json|```/g,"").trim();
-      const parsed=JSON.parse(clean);
+      let parsed;
+      try{const text=await callAI(prompt);const clean=text.replace(/```json|```/g,"").trim();parsed=JSON.parse(clean);}
+      catch(e){parsed=aiExamLocal({subject:form.subject,topic:form.title});}
       setQuestions(qs=>[...qs,...parsed.map(q=>({...q,id:uid()}))]);
     }catch(e){console.error(e);}
     setAiLoading(false);
@@ -2949,7 +3356,7 @@ function ExamResults({exam,students,color,C,onUpdate}){
 
 // ─── PHASE 1: CERTIFICATE GENERATOR ─────────────────────────────────────────
 function InstCertificates({students,inst,color,C}){
-  const [sel,setSel]=useState(null);const [type,setType]=useState("completion");const [custom,setCustom]=useState({title:"",body:""});
+  const [sel,setSel]=useState(null);const [type,setType]=useState("completion");
   const TYPES=[{k:"completion",l:"Course Completion"},{k:"achievement",l:"Achievement"},{k:"participation",l:"Participation"},{k:"topperr",l:"Top Performer"}];
   const CERT_META={completion:{title:"Certificate of Completion",body:(s,i)=>`This is to certify that ${s.name} has successfully completed the prescribed course of study at ${i.name} and has fulfilled all requirements with dedication and commitment.`},achievement:{title:"Certificate of Achievement",body:(s,i)=>`This is to certify that ${s.name} has demonstrated exceptional performance and outstanding achievement at ${i.name}, showing exemplary dedication to academic excellence.`},participation:{title:"Certificate of Participation",body:(s,i)=>`This is to certify that ${s.name} has actively participated in the academic programs conducted at ${i.name} and contributed positively to the learning environment.`},topperr:{title:"Certificate of Excellence — Top Performer",body:(s,i)=>{const exams=s.exams||[];const avg=exams.length?Math.round(exams.reduce((a,e)=>a+(e.maxMarks>0?e.marks/e.maxMarks*100:0),0)/exams.length):0;return`This is to certify that ${s.name} has achieved the distinction of Top Performer at ${i.name} with an outstanding academic average of ${avg}%, reflecting exceptional hard work and intellectual merit.`;}}};
   function print(){window.print();}
@@ -3020,10 +3427,14 @@ function StuAIChat({stu,inst,C}){
     setInput("");setMsgs(m=>[...m,{role:"user",text:q}]);setLoading(true);
     const ctx=`You are a helpful AI assistant for student ${stu.name} at ${inst?.name||"the institution"}. Answer ONLY based on this student data:\n- Attendance: ${att}% (${stu.attendance?.length||0} classes recorded)\n- Fee: Total ₹${totalFee}, Paid ₹${paidFee}, Due ₹${dueFee}\n- Homework pending: ${hwPending}\n- Exams: ${JSON.stringify((stu.exams||[]).slice(0,5))}\n- Homework: ${JSON.stringify((stu.homeworks||[]).slice(0,5))}\n- Class/Course: ${stu.class||stu.course||stu.department||stu.danceStyle||"N/A"}\nBe friendly, brief, and helpful. If asked something not in data, say you don't have that info.`;
     try{
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,system:ctx,messages:[...msgs.filter(m=>m.role==="user").slice(-4).map(m=>({role:"user",content:m.text})),{role:"user",content:q}]})});
+      const res=await fetch(AI_PROXY_URL||"about:blank",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:ctx+"\n\nQuestion: "+q})});
+      if(!AI_PROXY_URL||!res.ok)throw new Error("offline");
       const d=await res.json();
-      setMsgs(m=>[...m,{role:"assistant",text:d.content?.[0]?.text||"Sorry, I couldn't respond. Try again."}]);
-    }catch(e){setMsgs(m=>[...m,{role:"assistant",text:"Network error. Please check connection."}]);}
+      setMsgs(m=>[...m,{role:"assistant",text:d.text||d.content?.[0]?.text||"Sorry, I couldn't respond. Try again."}]);
+    }catch(e){
+      const ans=aiChatLocal(q,{name:stu.name,att,attCount:stu.attendance?.length||0,total:totalFee,paid:paidFee,due:dueFee,hwPending,exams:stu.exams||[],course:stu.class||stu.course||stu.department||stu.danceStyle||"your course"});
+      setMsgs(m=>[...m,{role:"assistant",text:ans}]);
+    }
     setLoading(false);
   }
   return <div style={{animation:"fadeUp 0.4s ease"}}>
