@@ -4201,31 +4201,17 @@ function ExamResults({exam,students,color,C,onUpdate}){
 
 // ─── PHASE 1: CERTIFICATE GENERATOR ─────────────────────────────────────────
 function InstCertificates({students,inst,color,C}){
-  const [sel,setSel]=useState(null);const [type,setType]=useState("achievement");const [design,setDesign]=useState("allbee");
+  const [sel,setSel]=useState(null);const [type,setType]=useState("completion");
   const TYPES=[{k:"completion",l:"Course Completion"},{k:"achievement",l:"Achievement"},{k:"participation",l:"Participation"},{k:"topperr",l:"Top Performer"}];
   const CERT_META={completion:{title:"Certificate of Completion",body:(s,i)=>`This is to certify that ${s.name} has successfully completed the prescribed course of study at ${i.name} and has fulfilled all requirements with dedication and commitment.`},achievement:{title:"Certificate of Achievement",body:(s,i)=>`This is to certify that ${s.name} has demonstrated exceptional performance and outstanding achievement at ${i.name}, showing exemplary dedication to academic excellence.`},participation:{title:"Certificate of Participation",body:(s,i)=>`This is to certify that ${s.name} has actively participated in the academic programs conducted at ${i.name} and contributed positively to the learning environment.`},topperr:{title:"Certificate of Excellence — Top Performer",body:(s,i)=>{const exams=s.exams||[];const avg=exams.length?Math.round(exams.reduce((a,e)=>a+(e.maxMarks>0?e.marks/e.maxMarks*100:0),0)/exams.length):0;return`This is to certify that ${s.name} has achieved the distinction of Top Performer at ${i.name} with an outstanding academic average of ${avg}%, reflecting exceptional hard work and intellectual merit.`;}}};
   function print(){window.print();}
   const stu=students.find(s=>s.id===sel);
   const certMeta=CERT_META[type];
-  const issueDate=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"long",year:"numeric"});
-  const ALLBEE_SUB={completion:"Of Completion",achievement:"Of Achievement",participation:"Of Participation",topperr:"Of Excellence"};
-  const subTitle=ALLBEE_SUB[type]||"Of Achievement";
-  // Allbee Solutions brand palette (matches the uploaded certificate)
-  const A={dark:"#0b3b4c",deep:"#082a36",cyan:"#1ab8c5",steel:"#1f5b74",gold:"#caa23a",wash:"#eef1f4"};
-  // laurel leaves + star generator for the achievement seal (drawn in a 0-100 space)
-  const sealLeaves=[...Array.from({length:11},(_,i)=>({t:130+12*i,k:"L"+i})),...Array.from({length:11},(_,i)=>({t:50-12*i,k:"R"+i}))].map(o=>{const r=o.t*Math.PI/180;return{x:50+37*Math.cos(r),y:50-37*Math.sin(r),rot:-o.t,k:o.k};});
-  const star=(cx,cy,s)=>{let p=[];for(let i=0;i<10;i++){const a=(-90+i*36)*Math.PI/180,rr=i%2?s*0.42:s;p.push((cx+rr*Math.cos(a)).toFixed(1)+","+(cy-rr*Math.sin(a)).toFixed(1));}return p.join(" ");};
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <PH title="🏆 Certificate Generator" sub="Generate and print certificates for students" C={C}/>
     <div style={{display:"grid",gridTemplateColumns:"300px 1fr",gap:20}}>
-      <div className="no-print" style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,height:"fit-content"}}>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,height:"fit-content"}}>
         <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Settings</div>
-        <FG label="Certificate Design" C={C} style={{marginBottom:12}}>
-          <Sel C={C} value={design} onChange={e=>setDesign(e.target.value)}>
-            <option value="allbee">Allbee Solutions</option>
-            <option value="classic">Classic Border</option>
-          </Sel>
-        </FG>
         <FG label="Certificate Type" C={C} style={{marginBottom:12}}>
           <Sel C={C} value={type} onChange={e=>setType(e.target.value)}>
             {TYPES.map(t=><option key={t.k} value={t.k}>{t.l}</option>)}
@@ -4241,15 +4227,10 @@ function InstCertificates({students,inst,color,C}){
           <Btn onClick={print} C={C} color="teal" disabled={!sel} style={{width:"100%"}}>🖨️ Print Certificate</Btn>
         </div>
         <div style={{marginTop:10,fontSize:11,color:C.muted,textAlign:"center"}}>Use browser Print → Save as PDF</div>
-        <div style={{marginTop:16,padding:"12px 14px",borderRadius:10,background:tb(C,"teal"),border:`1px solid ${tc(C,"teal")}33`}}>
-          <div style={{fontSize:12,fontWeight:700,color:tc(C,"teal")}}>🎥 Free Online Webinars</div>
-          <div style={{fontSize:11,color:C.muted,marginTop:4,lineHeight:1.5}}>Allbee Solutions conducts <b>free webinars online</b> for all students and alumni. The invite is printed on every certificate.</div>
-        </div>
       </div>
       <div>
-        <style>{`@media print{.no-print{display:none!important;}.cert-box{box-shadow:none!important;border:3px double #666!important;}.allbee-cert{box-shadow:none!important;}.allbee-cert *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}@page{size:A4 landscape;margin:8mm;}}`}</style>
-        {!stu&&<div style={{background:C.surface,borderRadius:12,border:`2px dashed ${C.border}`,padding:"60px 40px",textAlign:"center",color:C.muted}}><div style={{fontSize:40,marginBottom:12}}>🏆</div><div style={{fontSize:14,fontWeight:600}}>Select a student to preview the certificate</div><div style={{fontSize:11,marginTop:6}}>Then print or save as PDF</div></div>}
-        {stu&&design==="classic"&&<div className="cert-box" style={{background:"#fff",border:`3px double ${color}`,borderRadius:4,padding:"60px 70px",textAlign:"center",boxShadow:C.shadowL,minHeight:500,position:"relative",overflow:"hidden"}}>
+        <style>{`@media print{.no-print{display:none!important;}.cert-box{box-shadow:none!important;border:3px double #666!important;}}`}</style>
+        {stu?<div className="cert-box" style={{background:"#fff",border:`3px double ${color}`,borderRadius:4,padding:"60px 70px",textAlign:"center",boxShadow:C.shadowL,minHeight:500,position:"relative",overflow:"hidden"}}>
           <div style={{position:"absolute",top:0,left:0,right:0,height:8,background:`linear-gradient(90deg,${color},${color}88,${color})`}}/>
           <div style={{position:"absolute",bottom:0,left:0,right:0,height:8,background:`linear-gradient(90deg,${color},${color}88,${color})`}}/>
           <div style={{position:"absolute",top:0,left:0,bottom:0,width:8,background:`linear-gradient(180deg,${color},${color}88,${color})`}}/>
@@ -4262,80 +4243,13 @@ function InstCertificates({students,inst,color,C}){
           <div style={{fontSize:36,fontWeight:900,color:"#111",margin:"10px 0",fontStyle:"italic",letterSpacing:"0.02em"}}>{stu.name}</div>
           <div style={{fontSize:12,color:"#777",marginBottom:24}}>{stu.rollNo&&`Roll No: ${stu.rollNo} · `}{stu.course||stu.department||stu.class||stu.danceStyle||""}</div>
           <div style={{fontSize:14,color:"#444",lineHeight:1.8,maxWidth:480,margin:"0 auto 28px",fontStyle:"italic"}}>"{certMeta.body(stu,inst)}"</div>
-          <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 14px",borderRadius:99,background:tc(C,"teal"),color:"#fff",fontSize:11,fontWeight:700,marginBottom:24}}>🎥 We also conduct FREE webinars online — join us to keep learning!</div>
           <div style={{width:80,height:2,background:"#ddd",margin:"0 auto 24px",borderRadius:2}}/>
           <div style={{display:"flex",justifyContent:"space-around",marginTop:10}}>
             <div style={{textAlign:"center"}}><div style={{borderTop:"1px solid #333",width:120,paddingTop:6}}><div style={{fontSize:11,color:"#555"}}>Principal / Director</div><div style={{fontSize:10,color:"#999",marginTop:2}}>{inst.name}</div></div></div>
-            <div style={{textAlign:"center"}}><div style={{borderTop:"1px solid #333",width:120,paddingTop:6}}><div style={{fontSize:11,color:"#555"}}>Date of Issue</div><div style={{fontSize:10,color:"#999",marginTop:2}}>{issueDate}</div></div></div>
+            <div style={{textAlign:"center"}}><div style={{borderTop:"1px solid #333",width:120,paddingTop:6}}><div style={{fontSize:11,color:"#555"}}>Date of Issue</div><div style={{fontSize:10,color:"#999",marginTop:2}}>{new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"long",year:"numeric"})}</div></div></div>
           </div>
           <div style={{marginTop:20,fontSize:9,color:"#bbb",letterSpacing:"0.1em"}}>POWERED BY ALLBEE EDUSPHERE · {inst.name.toUpperCase()}</div>
-        </div>}
-        {stu&&design==="allbee"&&<div className="allbee-cert" style={{position:"relative",width:"100%",maxWidth:880,margin:"0 auto",aspectRatio:"2048 / 1304",background:"#fff",borderRadius:4,boxShadow:C.shadowL,overflow:"hidden",fontFamily:"Georgia,'Times New Roman',serif"}}>
-          <svg viewBox="0 0 2048 1304" preserveAspectRatio="xMidYMid slice" style={{position:"absolute",inset:0,width:"100%",height:"100%"}}>
-            <polygon points="470,360 640,455 640,645 470,740 300,645 300,455" fill={A.wash}/>
-            <polygon points="1520,470 1700,565 1700,765 1520,860 1340,765 1340,565" fill={A.wash}/>
-            <rect x="1140" y="-80" width="430" height="150" rx="75" fill={A.dark}/>
-            <polygon points="60,440 250,525 250,695 60,780 -130,695 -130,525" fill={A.dark}/>
-            <polygon points="430,400 600,500 600,660 430,760 260,660 260,500" fill="none" stroke={A.cyan} strokeWidth="22"/>
-            <polygon points="-60,1304 -60,1180 130,1304" fill={A.deep}/>
-            <polygon points="-60,1090 230,1175 320,1304 -60,1304" fill={A.cyan}/>
-            <path d="M1800 690 L2035 875 L1800 1060" fill="none" stroke={A.dark} strokeWidth="52" strokeLinecap="round" strokeLinejoin="round"/>
-            <polygon points="2108,1090 1818,1175 1730,1304 2108,1304" fill={A.cyan}/>
-            <path d="M958 1304 L1024 1085 L1090 1304" fill="none" stroke={A.dark} strokeWidth="7" strokeLinejoin="round"/>
-            <g transform="translate(1668 64) scale(3.0)">
-              {sealLeaves.map(L=><ellipse key={L.k} cx="0" cy="0" rx="3" ry="8" fill={A.cyan} transform={`translate(${L.x.toFixed(1)} ${L.y.toFixed(1)}) rotate(${L.rot.toFixed(1)})`}/>)}
-              <polygon points={star(38,20,5)} fill={A.dark}/>
-              <polygon points={star(50,13,7)} fill={A.dark}/>
-              <polygon points={star(62,20,5)} fill={A.dark}/>
-              <path d="M40 40 C32 40 32 50 40 50" fill="none" stroke={A.dark} strokeWidth="2.4"/>
-              <path d="M60 40 C68 40 68 50 60 50" fill="none" stroke={A.dark} strokeWidth="2.4"/>
-              <rect x="39" y="35" width="22" height="4" rx="1" fill={A.dark}/>
-              <path d="M40 39 C41 53 48 58 50 58 C52 58 59 53 60 39 Z" fill={A.dark}/>
-              <path d="M40 39 C41 52 47 57 50 57" fill="none" stroke={A.gold} strokeWidth="1.1"/>
-              <rect x="47.5" y="58" width="5" height="6" fill={A.dark}/>
-              <rect x="43" y="64" width="14" height="3" rx="1" fill={A.dark}/>
-              <rect x="40" y="67" width="20" height="3" rx="1" fill={A.dark}/>
-              <text x="50" y="84" textAnchor="middle" fontFamily="Georgia,serif" fontWeight="700" fontSize="9" fill={A.dark} letterSpacing="0.4">ACHIEVEMENT</text>
-              <text x="50" y="92" textAnchor="middle" fontFamily="Georgia,serif" fontSize="5.4" fill={A.steel}>Of Course Completion</text>
-            </g>
-          </svg>
-          <div style={{position:"absolute",inset:0,zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",padding:"0 9%"}}>
-            <div style={{position:"absolute",top:"6%",left:"5%",display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:34,height:34,borderRadius:7,background:A.dark,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:20,color:"#fff",fontFamily:"Arial,sans-serif",boxShadow:`0 0 0 3px ${A.cyan}55`}}>B</div>
-              <div style={{lineHeight:1}}>
-                <div style={{fontFamily:"Arial,sans-serif",fontWeight:900,fontSize:20,color:A.dark,letterSpacing:"0.04em"}}>ALLBEE</div>
-                <div style={{fontFamily:"Arial,sans-serif",fontWeight:700,fontSize:10,color:A.cyan,letterSpacing:"0.42em",marginTop:1}}>SOLUTIONS</div>
-              </div>
-            </div>
-            <div style={{height:"12.5%",flexShrink:0}}/>
-            <div style={{fontWeight:800,fontSize:"clamp(28px,5.4vw,58px)",color:A.dark,letterSpacing:"0.04em",lineHeight:1.02,fontFamily:"Arial,'Helvetica Neue',sans-serif"}}>CERTIFICATE</div>
-            <div style={{fontWeight:600,fontSize:"clamp(15px,2.4vw,26px)",color:A.steel,marginTop:2,fontFamily:"Arial,'Helvetica Neue',sans-serif"}}>{subTitle}</div>
-            <div style={{height:"5.5%",flexShrink:0}}/>
-            <div style={{fontSize:"clamp(11px,1.5vw,16px)",color:A.steel,fontWeight:600}}>This Certificate is Proudly Presented to</div>
-            <div style={{height:"4.5%",flexShrink:0}}/>
-            <div style={{width:"82%",textAlign:"center"}}>
-              <div style={{fontSize:"clamp(20px,3.4vw,38px)",fontWeight:700,color:A.dark,fontStyle:"italic",letterSpacing:"0.01em",minHeight:"1.2em"}}>{stu.name}</div>
-              <div style={{borderBottom:`1.5px solid ${C.border2||"#cfd8dc"}`,marginTop:6}}/>
-              <div style={{fontSize:"clamp(9px,1.2vw,12px)",color:A.steel,marginTop:6}}>{[stu.rollNo&&("Roll No: "+stu.rollNo),stu.course||stu.department||stu.class||stu.danceStyle].filter(Boolean).join("  ·  ")}</div>
-            </div>
-            <div style={{height:"2.5%",flexShrink:0}}/>
-            <div style={{fontSize:"clamp(9px,1.25vw,13px)",color:"#5b6b72",lineHeight:1.6,maxWidth:"72%",textAlign:"center",fontStyle:"italic"}}>{certMeta.body(stu,inst)}</div>
-            <div style={{height:"2%",flexShrink:0}}/>
-            <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 14px",borderRadius:99,background:A.cyan,color:"#fff",fontSize:"clamp(8px,1.05vw,11px)",fontWeight:700,fontFamily:"Arial,sans-serif",boxShadow:"0 2px 6px rgba(0,0,0,0.12)"}}>🎥 We also conduct FREE webinars online — join us to keep learning!</div>
-            <div style={{flexGrow:1,minHeight:10}}/>
-            <div style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"flex-end",padding:"0 12% 7% 9%"}}>
-              <div style={{textAlign:"center",width:"24%"}}>
-                <div style={{fontSize:"clamp(9px,1.2vw,13px)",color:A.dark,fontStyle:"italic",fontWeight:600,minHeight:"1.2em"}}>{issueDate}</div>
-                <div style={{borderTop:`2px solid ${A.dark}`,marginTop:4,paddingTop:5,fontFamily:"Arial,sans-serif",fontWeight:800,fontSize:"clamp(9px,1.1vw,13px)",letterSpacing:"0.12em",color:A.dark}}>DATE</div>
-              </div>
-              <div style={{textAlign:"center",width:"26%"}}>
-                <div style={{minHeight:"1.2em"}}/>
-                <div style={{borderTop:`2px solid ${A.dark}`,marginTop:4,paddingTop:5,fontFamily:"Arial,sans-serif",fontWeight:800,fontSize:"clamp(9px,1.1vw,13px)",letterSpacing:"0.12em",color:A.dark}}>SIGNATURE</div>
-                <div style={{fontSize:"clamp(7px,0.95vw,10px)",color:A.steel,marginTop:2}}>{inst.name}</div>
-              </div>
-            </div>
-          </div>
-        </div>}
+        </div>:<div style={{background:C.surface,borderRadius:12,border:`2px dashed ${C.border}`,padding:"60px 40px",textAlign:"center",color:C.muted}}><div style={{fontSize:40,marginBottom:12}}>🏆</div><div style={{fontSize:14,fontWeight:600}}>Select a student to preview the certificate</div><div style={{fontSize:11,marginTop:6}}>Then print or save as PDF</div></div>}
       </div>
     </div>
   </div>;
