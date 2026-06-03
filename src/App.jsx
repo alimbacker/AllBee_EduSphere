@@ -37,6 +37,9 @@ const DARK={
   inputBg:"#1e2426",
 };
 
+// AllBee Solutions — Computer Skills AI launcher URL
+const CS_AI_URL="https://ai.alimsahib.in/";
+
 const INST_TYPES=["College","School","Computer Institute","Dance School"];
 const TYPE_META={"College":{icon:"🎓"},"School":{icon:"🏫"},"Computer Institute":{icon:"💻"},"Dance School":{icon:"💃"}};
 const DEPARTMENTS={"Arts & Science":["Tamil","English","Mathematics","Physics","Chemistry","Computer Science","Economics","Commerce"],"Engineering":["CSE","ECE","EEE","Mechanical","Civil","IT","AIDS","AIML","Cyber Security"],"Medical":["MBBS","BDS","Nursing","Pharmacy","Physiotherapy"],"Management":["BBA","MBA","Finance","Marketing","HR"],"Law":["BA LLB","BBA LLB","LLM"]};
@@ -270,6 +273,17 @@ export default function App(){
 
   function notify(msg,type="success"){setToast({msg,type});setTimeout(()=>setToast(null),3000);}
   function login(u,p,portalType){
+    if(portalType==="parent"){
+      // parent logs in with the child's Roll No + the parent phone number on record
+      const roll=String(u||"").trim().toLowerCase();
+      const ph=String(p||"").replace(/\D/g,"");
+      if(!roll||!ph)return"Enter your child's Roll Number and your registered phone number.";
+      const stu=db.students.find(s=>String(s.rollNo||"").trim().toLowerCase()===roll&&String(s.parentPhone||"").replace(/\D/g,"")!==""&&String(s.parentPhone||"").replace(/\D/g,"")===ph);
+      if(!stu)return"No match found. Check the Roll Number and the parent phone number recorded for the student.";
+      const inst=db.institutions.find(i=>i.id===stu.instId);
+      setUser({id:"parent_"+stu.id,name:stu.parent||stu.parentName||("Parent of "+(stu.name||"")),role:"parent",studentId:stu.id,instId:stu.instId,instName:inst?.name});
+      return null;
+    }
     if(portalType==="student"){
       // student logs in with rollNo + password (DOB as default)
       const stu=db.students.find(s=>s.rollNo===u&&(s.loginPass||s.dob)===p);
@@ -308,7 +322,7 @@ export default function App(){
     {!user&&<LoginPage onLogin={login} onRegister={register} db={db} C={C} dark={dark} setDark={setDark}/>}
     {user?.role==="superadmin"&&<SuperAdmin db={db} saveDb={saveDb} onLogout={logout} notify={notify} user={user} C={C} dark={dark} setDark={setDark}/>}
     {(user?.role==="admin"||user?.role==="staff"||user?.role==="accountant")&&myInst&&<InstDash db={db} saveDb={saveDb} onLogout={logout} notify={notify} user={user} inst={myInst} C={C} dark={dark} setDark={setDark}/>}
-    {user?.role==="student"&&<StudentPortal db={db} saveDb={saveDb} onLogout={logout} notify={notify} user={user} C={C} dark={dark} setDark={setDark}/>}
+    {(user?.role==="student"||user?.role==="parent")&&<StudentPortal db={db} saveDb={saveDb} onLogout={logout} notify={notify} user={user} C={C} dark={dark} setDark={setDark} isParent={user?.role==="parent"}/>}
   </div>;
 }
 
@@ -325,10 +339,10 @@ function LoginPage({onLogin,onRegister,db,C,dark,setDark}){
     {key:"admin",icon:"🛡",label:"Admin",color:"teal",sub:"Admin & Accountant"},
     {key:"staff",icon:"👨‍🏫",label:"Staff",color:"blue",sub:"Staff & Teacher"},
   ];
-  const pColor=portal==="admin"?C.teal:portal==="staff"?C.blue:C.purple;
-  const pBg=portal==="admin"?C.tealL:portal==="staff"?C.blueL:C.purpleL;
-  const userLabel=portal==="student"?"Roll Number":"Username";
-  const passLabel=portal==="student"?"Date of Birth (YYYY-MM-DD)":"Password";
+  const pColor=portal==="admin"?C.teal:portal==="staff"?C.blue:portal==="parent"?C.gold:C.purple;
+  const pBg=portal==="admin"?C.tealL:portal==="staff"?C.blueL:portal==="parent"?C.goldL:C.purpleL;
+  const userLabel=(portal==="student"||portal==="parent")?"Roll Number":"Username";
+  const passLabel=portal==="parent"?"Parent Phone Number":portal==="student"?"Date of Birth (YYYY-MM-DD)":"Password";
   function go(){const e=onLogin(u,p,portal);if(e)setErr(e);else setErr("");}
   function sw(k){setPortal(k);setU("");setP("");setErr("");}
   return(
@@ -374,8 +388,16 @@ function LoginPage({onLogin,onRegister,db,C,dark,setDark}){
           <div style={{textAlign:"center",marginBottom:20}}>
             <img src={LOGO_SRC} alt="AllBee EduSphere" style={{width:72,height:72,objectFit:"contain",margin:"0 auto 8px",display:"block",filter:"drop-shadow(0 0 14px #00bcd4bb)"}}/> 
             <div style={{fontSize:18,fontWeight:800,color:C.text}}>AllBee EduSphere</div>
-            <div style={{fontSize:11,color:C.muted,marginTop:3}}>{portal==="student"?"Student Portal — Sign in below":"Staff Portal"}</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:3}}>{portal==="parent"?"Parent Portal — Track your child's progress":portal==="student"?"Student Portal — Sign in below":"Staff Portal"}</div>
           </div>
+
+          {/* Student / Parent segmented toggle */}
+          {(portal==="student"||portal==="parent")&&!regMode&&<div style={{display:"flex",gap:8,marginBottom:14}}>
+            {[{k:"student",icon:"🎓",label:"Student",c:C.purple,b:C.purpleL},{k:"parent",icon:"👪",label:"Parent",c:C.gold,b:C.goldL}].map(o=>{const active=portal===o.k;return(
+              <button key={o.k} onClick={()=>sw(o.k)} style={{flex:1,padding:"11px 6px",borderRadius:11,border:`2px solid ${active?o.c:C.border}`,background:active?o.b:C.surface,color:active?o.c:C.muted,fontWeight:active?700:500,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6,cursor:"pointer",transition:"all 0.18s"}}>
+                <span style={{fontSize:17}}>{o.icon}</span><span>{o.label}</span>
+              </button>);})}
+          </div>}
 
           {/* Student login card — default */}
           {portal==="student"&&!regMode&&<div className="login-card" style={{background:C.surface,border:`2px solid ${C.purple}33`,boxShadow:C.shadowL}}>
@@ -406,6 +428,28 @@ function LoginPage({onLogin,onRegister,db,C,dark,setDark}){
           {/* Student self-registration form */}
           {portal==="student"&&regMode&&<StudentRegister db={db} onRegister={onRegister} onBack={()=>{setRegMode(false);setErr("");}} C={C}/>}
 
+          {/* Parent login card */}
+          {portal==="parent"&&!regMode&&<div className="login-card" style={{background:C.surface,border:`2px solid ${C.gold}33`,boxShadow:C.shadowL}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,padding:"9px 13px",background:C.goldL,borderRadius:9}}>
+              <span style={{fontSize:20}}>👪</span>
+              <div><div style={{fontWeight:800,fontSize:13,color:C.gold}}>Parent Portal</div><div style={{fontSize:10,color:C.muted}}>Track your child's progress</div></div>
+            </div>
+            <div style={{marginBottom:12}}>
+              <LBL C={C}>Child's Roll Number</LBL>
+              <Inp C={C} value={u} onChange={e=>setU(e.target.value)} placeholder="Enter your child's roll number" onKeyDown={e=>e.key==="Enter"&&go()} autoComplete="off"/>
+            </div>
+            <div style={{marginBottom:16}}>
+              <LBL C={C}>Parent Phone Number</LBL>
+              <div style={{position:"relative"}}>
+                <Inp C={C} type={show?"text":"password"} value={p} onChange={e=>setP(e.target.value)} placeholder="Registered parent mobile number" onKeyDown={e=>e.key==="Enter"&&go()} style={{paddingRight:40}} autoComplete="off"/>
+                <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.muted,fontSize:14,padding:4}}>{show?"🙈":"👁"}</button>
+              </div>
+              <div style={{fontSize:10,color:C.muted,marginTop:4}}>💡 Use the phone number registered with your child's admission</div>
+            </div>
+            {err&&<div style={{background:C.redL,border:`1px solid ${C.red}44`,borderRadius:8,padding:"9px 13px",fontSize:12,color:C.red,marginBottom:14}}>⚠ {err}</div>}
+            <button className="sign-btn" onClick={go} style={{background:`linear-gradient(135deg,${C.gold},${C.gold}cc)`,color:"#fff",boxShadow:`0 4px 12px ${C.gold}44`}}>View Progress →</button>
+          </div>}
+
           {/* Staff/Admin panel — shown when expanded */}
           {portal!=="student"&&<div className="login-card" style={{background:C.surface,border:`2px solid ${pColor}33`,boxShadow:C.shadowL}}>
             <div style={{display:"flex",gap:8,marginBottom:16}}>
@@ -431,13 +475,16 @@ function LoginPage({onLogin,onRegister,db,C,dark,setDark}){
 
           {/* Small staff toggle link */}
           {!regMode&&<div style={{textAlign:"center",marginTop:12}}>
-            {portal==="student"
+            {(portal==="student"||portal==="parent")
               ? <button onClick={()=>{setShowStaff(true);sw("admin");}} style={{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",textDecoration:"underline",opacity:0.7}}>Staff / Admin Login</button>
               : <button onClick={()=>{setShowStaff(false);sw("student");}} style={{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",textDecoration:"underline",opacity:0.7}}>← Back to Student Login</button>
             }
           </div>}
 
-          <div style={{textAlign:"center",marginTop:14,fontSize:10,color:C.muted}}>Powered by AllBee Solutions</div>
+          <div style={{textAlign:"center",marginTop:14,fontSize:10,color:C.muted}}>Powered by <a href={CS_AI_URL} target="_blank" rel="noopener noreferrer" style={{color:C.teal,fontWeight:700,textDecoration:"none"}}>AllBee Solutions</a></div>
+          <div style={{textAlign:"center",marginTop:8}}>
+            <a href={CS_AI_URL} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:20,background:C.tealL,color:C.teal,fontSize:11,fontWeight:700,textDecoration:"none",border:`1px solid ${C.teal}33`}}>💻 Computer Skills AI ↗</a>
+          </div>
         </div>
       </div>
     </div>
@@ -1054,7 +1101,7 @@ function SAReports({db,C}){
 
 
 // ─── Student Portal ──────────────────────────────────────────────────────────
-function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark}){
+function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark,isParent}){
   const [tab,setTab]=useState("home");
   const stu=db.students.find(s=>s.id===user.studentId);
   const inst=db.institutions.find(i=>i.id===user.instId);
@@ -1069,7 +1116,7 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark}){
   const totalFee=stu.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;
   const paidFee=stu.fees?.reduce((a,f)=>a+Number(f.paid||0),0)||0;
   const dueFee=totalFee-paidFee;
-  const STABS=[{k:"home",i:"🏠",l:"Home"},{k:"notifs",i:"🔔",l:"Notifications"},{k:"attendance",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"marks",i:"📝",l:"Exam Marks"},{k:"homework",i:"📚",l:"Homework"},{k:"assignments",i:"📋",l:"Assignments"},{k:"updates",i:"📰",l:"Daily Updates"},{k:"classlinks",i:"🎥",l:"Class Links"},{k:"aichat",i:"🤖",l:"AI Assistant"},{k:"leave",i:"🏖",l:"Leave"},{k:"settings",i:"⚙️",l:"Settings"}];
+  const STABS=[{k:"home",i:"🏠",l:"Home"},{k:"notifs",i:"🔔",l:"Notifications"},{k:"attendance",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"marks",i:"📝",l:"Exam Marks"},{k:"homework",i:"📚",l:"Homework"},{k:"assignments",i:"📋",l:"Assignments"},{k:"updates",i:"📰",l:"Daily Updates"},{k:"classlinks",i:"🎥",l:"Class Links"},{k:"aichat",i:"🤖",l:"AI Assistant"},{k:"leave",i:"🏖",l:"Leave"},{k:"settings",i:"⚙️",l:"Settings"}].filter(t=>!(isParent&&t.k==="settings"));
   const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:`1px solid ${C.border}`,background:C.bg||"#f2f4f6"};
   const TD={padding:"10px 14px",fontSize:13,color:C.text,borderBottom:`1px solid ${C.border}`};
   const [sideOpen,setSideOpen]=useState(false);
@@ -1099,7 +1146,7 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark}){
           <Avatar name={stu.name} photo={stu.photo} color={color} size={52} style={{margin:"0 auto 8px"}}/>
           <div style={{fontWeight:700,fontSize:12,color:C.text}}>{stu.name}</div>
           <div style={{fontSize:10,color:C.muted,fontFamily:"monospace"}}>{stu.rollNo}</div>
-          <div style={{marginTop:6}}><Badge label="Student" color="purple" C={C}/></div>
+          <div style={{marginTop:6}}><Badge label={isParent?"Parent":"Student"} color={isParent?"gold":"purple"} C={C}/></div>
         </div>
         {STABS.map(t=><button key={t.k} className="tab-btn" onClick={()=>{setTab(t.k);setSideOpen(false);if(t.k==="notifs")markAllRead();}}
           style={{background:tab===t.k?C.activeTab:"transparent",color:tab===t.k?C.activeTabText:C.muted,fontWeight:tab===t.k?600:400,borderRadius:8}}>
@@ -1118,13 +1165,22 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark}){
         </div>
         {/* HOME */}
         {tab==="home"&&<div style={{animation:"fadeUp 0.4s ease"}}>
-          <PH title={`👋 Welcome, ${stu.name.split(" ")[0]}!`} sub={`${inst?.name} · ${stu.class||stu.course||""}`} C={C}/>
+          <PH title={isParent?`👨‍👩‍👧 ${stu.name}`:`👋 Welcome, ${stu.name.split(" ")[0]}!`} sub={isParent?`Parent View · ${inst?.name} · ${stu.class||stu.course||""}`:`${inst?.name} · ${stu.class||stu.course||""}`} C={C}/>
           <div className="stat-grid-4">
             <StatCard icon="📅" label="Attendance" value={`${att}%`} color={att>=75?"green":"red"} C={C} onClick={()=>setTab("attendance")}/>
             <StatCard icon="💰" label="Fee Due" value={`₹${dueFee.toLocaleString()}`} color={dueFee>0?"pink":"green"} C={C} onClick={()=>setTab("fees")}/>
             <StatCard icon="📚" label="HW Pending" value={stu.homeworks?.filter(h=>h.status==="Pending").length||0} color="purple" C={C} onClick={()=>setTab("homework")}/>
             <StatCard icon="📝" label="Exams Done" value={stu.exams?.length||0} color="blue" C={C} onClick={()=>setTab("marks")}/>
           </div>
+          {/* Computer Skills AI launcher */}
+          <a href={CS_AI_URL} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:14,padding:"16px 18px",borderRadius:12,marginBottom:16,textDecoration:"none",background:`linear-gradient(135deg,${C.teal},${C.tealD||C.teal})`,boxShadow:`0 4px 14px ${C.teal}44`}}>
+            <span style={{fontSize:30,flexShrink:0}}>💻</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:800,fontSize:15,color:"#fff"}}>Computer Skills AI</div>
+              <div style={{fontSize:11,color:"#ffffffdd",marginTop:2}}>Practice & learn with the AllBee Solutions AI tutor</div>
+            </div>
+            <span style={{flexShrink:0,padding:"7px 14px",borderRadius:20,background:"#ffffff2e",color:"#fff",fontSize:12,fontWeight:700}}>Open ↗</span>
+          </a>
           {/* Recent attendance */}
           <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:18,marginBottom:16,boxShadow:C.shadow}}>
             <div style={{fontWeight:700,fontSize:13,marginBottom:12,color:C.text}}>📅 Recent Attendance</div>
@@ -1221,7 +1277,7 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark}){
         {tab==="updates"&&<StuDailyUpdates db={db} saveDb={saveDb} stu={stu} inst={inst} C={C} notify={notify}/>}
 
         {/* SETTINGS / CHANGE PASSWORD */}
-        {tab==="settings"&&<StuSettings db={db} saveDb={saveDb} stu={stu} user={user} C={C} notify={notify}/>}
+        {tab==="settings"&&!isParent&&<StuSettings db={db} saveDb={saveDb} stu={stu} user={user} C={C} notify={notify}/>}
         {tab==="aichat"&&<StuAIChat stu={stu} inst={inst} C={C}/>}
         {tab==="leave"&&<StuLeaveView db={db} saveDb={saveDb} stu={stu} inst={inst} C={C} notify={notify}/>}
       </div>
@@ -2091,6 +2147,214 @@ function StaffEditModal({staff,onSaveData,onClose,editForm,setEditForm,C,color})
 }
 
 
+// ─── Accounts Import (Excel / Google Sheets) ─────────────────────────────────
+const ACC_FIELDS=[
+  {key:"date",label:"Date",syn:["date","txndate","transactiondate","day","on","dated","entrydate","paymentdate"]},
+  {key:"type",label:"Type (Income/Expense)",syn:["type","kind","txntype","transactiontype","inout","incomeexpense","creditdebit","drcr","crdr","nature","direction"]},
+  {key:"category",label:"Category",syn:["category","cat","head","account","accounthead","particulars","group","ledger","item"]},
+  {key:"description",label:"Description",syn:["description","desc","details","note","notes","narration","remarks","remark","memo","purpose","comment","forwhat"]},
+  {key:"amount",label:"Amount *",syn:["amount","amt","value","total","money","rs","inr","rupees","price","sum","netamount","grandtotal"]},
+  {key:"ref",label:"Reference / Bill No",syn:["ref","reference","refno","referenceno","bill","billno","billnumber","invoice","invoiceno","voucher","voucherno","receipt","receiptno","chequeno","txnid","transactionid"]},
+];
+function accAutoMap(headers){const map={};headers.forEach((h,idx)=>{const n=impNormHeader(h);const f=ACC_FIELDS.find(f=>f.syn.includes(n));if(f&&map[f.key]===undefined)map[f.key]=idx;});return map;}
+function accMoney(v){
+  let s=String(v==null?"":v).trim();
+  if(!s)return {n:0,neg:false};
+  let neg=false;
+  if(/^\(.*\)$/.test(s)){neg=true;s=s.slice(1,-1);}      // (1,200) → negative
+  if(/^-/.test(s)){neg=true;}
+  s=s.replace(/[₹$€£,\s]/g,"").replace(/[^0-9.]/g,"");    // strip currency symbols/commas/letters
+  const n=parseFloat(s);
+  if(isNaN(n))return {n:0,neg:false};
+  return {n:Math.abs(n),neg};
+}
+function accType(v,negAmount,fallback){
+  const n=String(v==null?"":v).toLowerCase();
+  if(/(^|[^a-z])(expense|expenditure|debit|\bdr\b|paid|payment|spend|spent|outflow|out|withdraw|purchase|cost|bill|salary|rent)([^a-z]|$)/.test(n))return"expense";
+  if(/(^|[^a-z])(income|revenue|credit|\bcr\b|received|receipt|inflow|\bin\b|deposit|collection|fee|fees|donation|grant|sale|earning)([^a-z]|$)/.test(n))return"income";
+  if(negAmount)return"expense";
+  return fallback||"income";
+}
+function AccountsImport({db,saveDb,inst,notify,C,incomeCats,expenseCats,onDone}){
+  const [headers,setHeaders]=useState([]);
+  const [rows,setRows]=useState([]);
+  const [map,setMap]=useState({});
+  const [paste,setPaste]=useState("");
+  const [err,setErr]=useState("");
+  const [done,setDone]=useState(0);
+  const [defType,setDefType]=useState("income");
+  const [gUrl,setGUrl]=useState("");
+  const [gBusy,setGBusy]=useState(false);
+  const fileRef=useRef(null);
+
+  function ingest(aoa){
+    setErr("");setDone(0);
+    const clean=(aoa||[]).filter(r=>r&&r.some(c=>String(c).trim()!==""));
+    if(clean.length<2){setErr("Need a header row plus at least one data row.");setHeaders([]);setRows([]);return;}
+    const hdr=clean[0].map(h=>String(h).trim());
+    setHeaders(hdr);setRows(clean.slice(1));setMap(accAutoMap(hdr));
+  }
+  function doPaste(){ingest(impParse(paste));}
+  async function fetchGSheet(){
+    const url=gUrl.trim();
+    const m=url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if(!m){setErr("That doesn't look like a Google Sheets link. Paste the full URL from your browser's address bar.");return;}
+    const gidM=url.match(/[#&?]gid=(\d+)/);
+    const gid=gidM?gidM[1]:"0";
+    const csvUrl=`https://docs.google.com/spreadsheets/d/${m[1]}/gviz/tq?tqx=out:csv&gid=${gid}`;
+    setGBusy(true);setErr("");
+    try{
+      const res=await fetch(csvUrl);
+      if(!res.ok)throw new Error("http "+res.status);
+      const text=await res.text();
+      if(/^\s*</.test(text)||/google-site-verification|accounts\.google\.com/i.test(text))throw new Error("not public");
+      ingest(impParse(text));
+    }catch(ex){
+      setErr("Couldn't read that sheet. In Google Sheets click Share → General access → \"Anyone with the link\" (Viewer), then try again. Or use the file upload / copy-paste options below.");
+    }finally{setGBusy(false);}
+  }
+  async function handleFile(e){
+    const file=e.target.files?.[0];if(!file)return;
+    const ext=file.name.split(".").pop().toLowerCase();
+    if(ext==="xlsx"||ext==="xls"){
+      try{const XLSX=await loadXLSX();const buf=await file.arrayBuffer();const wb=XLSX.read(buf,{type:"array"});const ws=wb.Sheets[wb.SheetNames[0]];ingest(XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:""}));}
+      catch(ex){setErr("Couldn't read that Excel file (you may be offline). Export it as CSV, or open it and copy-paste the cells into the box below.");}
+    }else{const text=await file.text();ingest(impParse(text));}
+    e.target.value="";
+  }
+  const get=(r,key)=>map[key]!=null&&map[key]!==""?String(r[map[key]]??"").trim():"";
+  function rowInfo(r){
+    const money=accMoney(get(r,"amount"));
+    const type=accType(get(r,"type"),money.neg,defType);
+    return {money,type,
+      date:impDate(get(r,"date"))||today(),
+      category:get(r,"category")||(type==="income"?"Other Income":"Other Expense"),
+      description:get(r,"description"),
+      ref:get(r,"ref")};
+  }
+  const allInfo=rows.map(r=>({r,...rowInfo(r)}));
+  const validRows=allInfo.filter(x=>x.money.n>0);
+  const sumIncome=validRows.filter(x=>x.type==="income").reduce((a,x)=>a+x.money.n,0);
+  const sumExpense=validRows.filter(x=>x.type==="expense").reduce((a,x)=>a+x.money.n,0);
+  const net=sumIncome-sumExpense;
+
+  function doImport(){
+    if(map.amount==null){setErr("Please map the Amount column — it's required.");return;}
+    if(!validRows.length){setErr("No rows with a positive amount to import. Check the Amount column mapping.");return;}
+    const txs=validRows.map(x=>({
+      id:uid(),instId:inst.id,type:x.type,category:x.category,
+      description:x.description,amount:x.money.n,date:x.date,ref:x.ref,
+      createdAt:new Date().toISOString(),imported:true,
+    }));
+    saveDb({accounts:[...(db.accounts||[]),...txs]});
+    const msg=`✅ Imported ${txs.length} transaction${txs.length!==1?"s":""} (₹${sumIncome.toLocaleString()} in, ₹${sumExpense.toLocaleString()} out).`;
+    setDone(txs.length);notify(msg);
+    setHeaders([]);setRows([]);setMap({});setPaste("");setGUrl("");
+    if(onDone)setTimeout(onDone,1200);
+  }
+  function downloadTemplate(){
+    const h=["Date","Type","Category","Description","Amount","Reference"];
+    const samples=[
+      ["2025-09-01","Income","Fee Collection","September fees - batch A","25000","RCT-1001"],
+      ["2025-09-03","Expense","Salary","Teacher salary - Sept","18000","VCH-2001"],
+      ["2025-09-05","Expense","Electricity","EB bill September","2400","BILL-307"],
+    ];
+    const esc=x=>/[",\n]/.test(x)?`"${x}"`:x;
+    const csv=h.join(",")+"\n"+samples.map(r=>r.map(esc).join(",")).join("\n");
+    const url=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+    const a=document.createElement("a");a.href=url;a.download="accounts_import_template.csv";a.click();URL.revokeObjectURL(url);
+  }
+  const loaded=headers.length>0;
+
+  return <div style={{animation:"fadeUp 0.4s ease",maxWidth:1000}}>
+    <PH title="📥 Import Income & Expenses" sub="Bring in your accounts from Excel or Google Sheets" C={C}/>
+
+    {done>0&&<div style={{background:C.greenL,color:C.green,borderRadius:10,padding:"12px 16px",marginBottom:16,fontWeight:700,fontSize:13}}>✅ {done} transaction(s) imported. Check the Dashboard, Income & Expenses tabs.</div>}
+    {err&&<div style={{background:C.redL,color:C.red,borderRadius:10,padding:"12px 16px",marginBottom:16,fontSize:13}}>{err}</div>}
+
+    {!loaded&&<>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,marginBottom:16}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:6,color:C.text}}>Option 1 — Upload a file</div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>Choose a <b>.xlsx</b>, <b>.xls</b> or <b>.csv</b> file exported from Excel or Google Sheets (File → Download). Columns it understands: Date, Type, Category, Description, Amount, Reference.</div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{display:"none"}}/>
+          <Btn onClick={()=>fileRef.current?.click()} C={C} color="teal">📂 Choose File</Btn>
+          <Btn onClick={downloadTemplate} C={C} color="gold" outline>⬇ Download Template (CSV)</Btn>
+        </div>
+      </div>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:6,color:C.text}}>Option 2 — Copy & paste</div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>In Google Sheets/Excel select your cells (including the header row), copy, and paste below. The first row must be the column titles.</div>
+        <Txt C={C} value={paste} onChange={e=>setPaste(e.target.value)} rows={7} placeholder={"Date\tType\tCategory\tDescription\tAmount\n2025-09-01\tIncome\tFee Collection\tSept fees\t25000\n2025-09-03\tExpense\tSalary\tStaff salary\t18000\n..."} style={{fontFamily:"monospace",fontSize:12}}/>
+        <div style={{marginTop:12}}><Btn onClick={doPaste} C={C} color="teal" disabled={!paste.trim()}>Preview Data →</Btn></div>
+      </div>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,marginTop:16}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:6,color:C.text}}>Option 3 — Link a Google Sheet</div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>Paste the link to your Google Sheet. First, in the sheet click <b>Share → General access → "Anyone with the link" (Viewer)</b> so it can be read.</div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+          <Inp C={C} value={gUrl} onChange={e=>setGUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0" style={{flex:1,minWidth:240}}/>
+          <Btn onClick={fetchGSheet} C={C} color="purple" disabled={!gUrl.trim()||gBusy}>{gBusy?"Loading…":"Load Sheet →"}</Btn>
+        </div>
+      </div>
+    </>}
+
+    {loaded&&<>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
+          <div style={{fontWeight:700,fontSize:13,color:C.text}}>Match your columns</div>
+          <div style={{fontSize:12,color:C.muted}}>{rows.length} row(s) found · {validRows.length} with an amount</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10}}>
+          {ACC_FIELDS.map(f=><div key={f.key}>
+            <LBL C={C}>{f.label}</LBL>
+            <Sel C={C} value={map[f.key]??""} onChange={e=>setMap(m=>({...m,[f.key]:e.target.value===""?null:Number(e.target.value)}))}>
+              <option value="">— not in my file —</option>
+              {headers.map((h,i)=><option key={i} value={i}>{h||`Column ${i+1}`}</option>)}
+            </Sel>
+          </div>)}
+        </div>
+        <div style={{marginTop:16,paddingTop:14,borderTop:`1px solid ${C.border}`,maxWidth:340}}>
+          <LBL C={C}>If a row's Type is blank, treat it as</LBL>
+          <Sel C={C} value={defType} onChange={e=>setDefType(e.target.value)}>
+            <option value="income">💰 Income</option>
+            <option value="expense">💸 Expense</option>
+          </Sel>
+          <div style={{fontSize:10,color:C.muted,marginTop:4}}>Rows with words like "expense", "debit", "paid" or a negative/(bracketed) amount are detected automatically.</div>
+        </div>
+      </div>
+
+      <div className="stat-grid-3" style={{marginBottom:16}}>
+        <StatCard icon="💰" label="Income to import" value={`₹${sumIncome.toLocaleString()}`} color="green" C={C}/>
+        <StatCard icon="💸" label="Expense to import" value={`₹${sumExpense.toLocaleString()}`} color="pink" C={C}/>
+        <StatCard icon="⚖️" label="Net" value={`₹${net.toLocaleString()}`} color={net>=0?"teal":"red"} C={C}/>
+      </div>
+
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,boxShadow:C.shadow,overflow:"hidden",marginBottom:16}}>
+        <div style={{padding:"12px 16px",fontWeight:700,fontSize:13,color:C.text,borderBottom:`1px solid ${C.border}`}}>Preview (first 100 rows)</div>
+        <div style={{overflowX:"auto",maxHeight:420,overflowY:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr>{["Date","Type","Category","Description","Amount","Ref"].map(h=><th key={h} style={{padding:"8px 12px",textAlign:h==="Amount"?"right":"left",color:C.muted,fontSize:10,textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:`1px solid ${C.border}`,background:C.bg,position:"sticky",top:0}}>{h}</th>)}</tr></thead>
+            <tbody>{allInfo.slice(0,100).map((x,i)=>{const dim=x.money.n<=0;return<tr key={i} style={{borderBottom:`1px solid ${C.border}`,opacity:dim?0.4:1}}>
+              <td style={{padding:"8px 12px",color:C.muted,whiteSpace:"nowrap"}}>{x.date?fmt(x.date):"—"}</td>
+              <td style={{padding:"8px 12px"}}><Badge label={x.type==="income"?"Income":"Expense"} color={x.type==="income"?"green":"pink"} C={C}/></td>
+              <td style={{padding:"8px 12px",color:C.text}}>{x.category}</td>
+              <td style={{padding:"8px 12px",color:C.muted,maxWidth:240,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.description||"—"}</td>
+              <td style={{padding:"8px 12px",textAlign:"right",fontWeight:700,color:dim?C.muted:x.type==="income"?C.green:C.red}}>{dim?"—":`₹${x.money.n.toLocaleString()}`}</td>
+              <td style={{padding:"8px 12px",color:C.muted}}>{x.ref||"—"}</td>
+            </tr>;})}</tbody>
+          </table>
+        </div>
+        {rows.length>100&&<div style={{padding:"8px 16px",fontSize:11,color:C.muted,borderTop:`1px solid ${C.border}`}}>…and {rows.length-100} more row(s). All valid rows will be imported.</div>}
+      </div>
+
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        <Btn onClick={doImport} C={C} color="green">✅ Import {validRows.length} Transaction{validRows.length!==1?"s":""}</Btn>
+        <Btn onClick={()=>{setHeaders([]);setRows([]);setMap({});setPaste("");setGUrl("");setErr("");}} C={C} color="red" outline>Cancel</Btn>
+      </div>
+    </>}
+  </div>;
+}
+
 // ─── Accounts Manager ────────────────────────────────────────────────────────
 function InstAccounts({db,saveDb,inst,color,isAdmin,notify,C}){
   const [subTab,setSubTab]=useState("dashboard");
@@ -2135,7 +2399,7 @@ function InstAccounts({db,saveDb,inst,color,isAdmin,notify,C}){
   const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:`1px solid ${C.border}`,background:C.bg||"#f2f4f6"};
   const TD={padding:"10px 14px",fontSize:13,color:C.text,borderBottom:`1px solid ${C.border}`};
 
-  const SUBTABS=[{k:"dashboard",l:"📊 Dashboard"},{k:"income",l:"💰 Income"},{k:"expense",l:"💸 Expenses"},{k:"daily",l:"📅 Daily"},{k:"fees",l:"🧾 Fees Summary"}];
+  const SUBTABS=[{k:"dashboard",l:"📊 Dashboard"},{k:"income",l:"💰 Income"},{k:"expense",l:"💸 Expenses"},{k:"daily",l:"📅 Daily"},{k:"fees",l:"🧾 Fees Summary"},{k:"import",l:"📥 Import"}];
 
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
@@ -2184,7 +2448,7 @@ function InstAccounts({db,saveDb,inst,color,isAdmin,notify,C}){
     </div>
 
     {/* Month filter */}
-    {subTab!=="dashboard"&&subTab!=="fees"&&<div style={{display:"flex",gap:10,marginBottom:14,alignItems:"center"}}>
+    {subTab!=="dashboard"&&subTab!=="fees"&&subTab!=="import"&&<div style={{display:"flex",gap:10,marginBottom:14,alignItems:"center"}}>
       <Inp C={C} type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} style={{width:"auto"}}/>
       <span style={{fontSize:12,color:C.muted}}>{monthTx.length} transactions</span>
     </div>}
@@ -2273,6 +2537,9 @@ function InstAccounts({db,saveDb,inst,color,isAdmin,notify,C}){
         </table>
       </div>;})}
     </div>}
+
+    {/* ACCOUNTS IMPORT */}
+    {subTab==="import"&&<AccountsImport db={db} saveDb={saveDb} inst={inst} notify={notify} C={C} incomeCats={INCOME_CATS} expenseCats={EXPENSE_CATS} onDone={()=>setSubTab("dashboard")}/>}
 
     {/* FEES SUMMARY */}
     {subTab==="fees"&&<div>
@@ -3775,712 +4042,4 @@ function InstAnalytics({students,inst,color,db,C}){
     {feeByMonth.length>0&&<div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,marginBottom:18,boxShadow:C.shadow}}>
       <div style={{fontWeight:700,fontSize:13,marginBottom:16,color:C.text}}>💰 Fee Collection by Month</div>
       <div style={{display:"flex",alignItems:"flex-end",gap:8,height:140,overflowX:"auto",paddingBottom:4}}>
-        {feeByMonth.map(x=><div key={x.m} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,minWidth:40,flex:1}}>
-          <div style={{fontSize:9,color:C.muted,fontWeight:600}}>₹{Math.round(x.paid/1000)}k</div>
-          <div style={{width:"100%",display:"flex",flexDirection:"column",justifyContent:"flex-end",height:110,gap:2}}>
-            <div style={{width:"100%",height:`${Math.round(x.paid/maxFee*100)}%`,background:C.green,borderRadius:"4px 4px 0 0",minHeight:4,position:"relative"}}>
-              <div style={{position:"absolute",bottom:0,left:0,right:0,height:`${Math.round((x.total-x.paid)/x.total*100)}%`,background:C.red+"88",borderRadius:"4px 4px 0 0"}}/>
-            </div>
-          </div>
-          <div style={{fontSize:9,color:C.muted,textAlign:"center"}}>{x.m}</div>
-        </div>)}
-      </div>
-      <div style={{display:"flex",gap:16,marginTop:8,justifyContent:"center"}}>
-        {[{c:C.green,l:"Collected"},{c:C.red+"88",l:"Pending"}].map(x=><div key={x.l} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:C.muted}}><div style={{width:12,height:12,borderRadius:3,background:x.c}}/>{x.l}</div>)}
-      </div>
-    </div>}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18,marginBottom:18}}>
-      {/* Attendance Distribution */}
-      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
-        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>📅 Attendance Distribution</div>
-        {attDist.map(b=><div key={b.l} style={{marginBottom:12}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,fontWeight:600,color:b.c}}>{b.l}</span><span style={{fontSize:12,fontWeight:700,color:b.c}}>{b.count} students</span></div>
-          <div style={{height:8,background:C.bg,borderRadius:99,overflow:"hidden",border:`1px solid ${C.border}`}}><div style={{height:"100%",width:students.length?`${Math.round(b.count/students.length*100)}%`:"0%",background:b.c,borderRadius:99,transition:"width 0.5s"}}/></div>
-        </div>)}
-        {!students.length&&<Empty msg="No student data" C={C}/>}
-      </div>
-      {/* Top Performers */}
-      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
-        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>🏆 Top Performers</div>
-        {performers.length>0?performers.map((s,i)=><div key={s.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"8px 10px",background:i===0?C.goldL:C.bg,borderRadius:9,border:`1px solid ${C.border}`}}>
-          <div style={{width:22,height:22,borderRadius:"50%",background:i===0?C.gold:i===1?C.muted:color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:"#fff",flexShrink:0}}>{i+1}</div>
-          <Avatar name={s.name} photo={s.photo} color={color} size={28} C={C}/>
-          <div style={{flex:1}}><div style={{fontWeight:600,fontSize:12,color:C.text}}>{s.name}</div><div style={{fontSize:10,color:C.muted}}>{s.rollNo}</div></div>
-          <div style={{fontWeight:800,fontSize:14,color:s.avg>=75?C.green:C.gold}}>{s.avg}%</div>
-        </div>):<Empty msg="No exam data yet" C={C}/>}
-      </div>
-    </div>
-    {/* Subject Performance */}
-    {subPerf.length>0&&<div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
-      <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>📚 Subject Performance</div>
-      {subPerf.map(s=><div key={s.sub} style={{marginBottom:12}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,fontWeight:600,color:C.text}}>{s.sub}</span><div style={{display:"flex",gap:12,alignItems:"center"}}><span style={{fontSize:10,color:C.muted}}>{s.count} exams</span><span style={{fontSize:12,fontWeight:700,color:s.avg>=75?C.green:s.avg>=50?C.gold:C.red}}>{s.avg}%</span></div></div>
-        <div style={{height:8,background:C.bg,borderRadius:99,overflow:"hidden",border:`1px solid ${C.border}`}}><div style={{height:"100%",width:`${s.avg}%`,background:s.avg>=75?C.green:s.avg>=50?C.gold:C.red,borderRadius:99,transition:"width 0.5s"}}/></div>
-      </div>)}
-    </div>}
-  </div>;
-}
-
-// ─── PHASE 1: ONLINE EXAM SYSTEM ────────────────────────────────────────────
-function InstOnlineExams({students,inst,color,onUpdate,notify,C}){
-  const STORE_KEY=`exams_${inst.id}`;
-  const [exams,setExams]=useState(()=>lsGet(STORE_KEY,[]));
-  const [view,setView]=useState("list");
-  const [editExam,setEditExam]=useState(null);
-  const [grading,setGrading]=useState(null);
-  function saveExams(e){setExams(e);lsSet(STORE_KEY,e);}
-  function createExam(ex){saveExams([...exams,{...ex,id:uid(),createdAt:today(),submissions:[]}]);setView("list");notify("✅ Exam created!");}
-  function deleteExam(id){if(!window.confirm("Delete exam?"))return;saveExams(exams.filter(e=>e.id!==id));notify("Deleted","error");}
-  return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-      <PH title="💻 Online Exams" sub={`${exams.length} exam${exams.length!==1?"s":""} created`} C={C}/>
-      {view==="list"&&<Btn onClick={()=>setView("create")} C={C} color="teal">+ Create Exam</Btn>}
-      {view!=="list"&&<Btn onClick={()=>{setView("list");setEditExam(null);}} C={C} color="red" outline>← Back</Btn>}
-    </div>
-    {view==="list"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
-      {exams.map(ex=>{const subs=ex.submissions||[];return<div key={ex.id} style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:18,boxShadow:C.shadow,borderLeft:`4px solid ${color}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
-          <div><div style={{fontWeight:700,fontSize:14,color:C.text}}>{ex.title}</div><div style={{fontSize:11,color:C.muted,marginTop:3}}>{ex.subject} · {ex.questions?.length||0} questions · {ex.duration} min · {ex.totalMarks} marks</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>Created: {fmt(ex.createdAt)}</div></div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            <div style={{textAlign:"center",padding:"6px 14px",background:C.bg,borderRadius:8,border:`1px solid ${C.border}`}}><div style={{fontWeight:800,fontSize:16,color}}>{subs.length}</div><div style={{fontSize:9,color:C.muted}}>Submitted</div></div>
-            <div style={{textAlign:"center",padding:"6px 14px",background:C.bg,borderRadius:8,border:`1px solid ${C.border}`}}><div style={{fontWeight:800,fontSize:16,color:C.green}}>{subs.filter(s=>s.score!==undefined).length}</div><div style={{fontSize:9,color:C.muted}}>Graded</div></div>
-          </div>
-        </div>
-        <div style={{display:"flex",gap:8,marginTop:12}}>
-          <Btn onClick={()=>{setGrading(ex);setView("results");}} C={C} color="blue" size="sm" outline>📊 Results</Btn>
-          <Btn onClick={()=>deleteExam(ex.id)} C={C} color="red" size="sm" outline>Delete</Btn>
-        </div>
-      </div>;})}
-      {!exams.length&&<Empty msg="No exams yet — create your first exam above" C={C}/>}
-    </div>}
-    {view==="create"&&<ExamCreator onSave={createExam} color={color} C={C}/>}
-    {view==="results"&&grading&&<ExamResults exam={grading} students={students} color={color} C={C} onUpdate={(id,subs)=>{const updated=exams.map(e=>e.id===id?{...e,submissions:subs}:e);saveExams(updated);setGrading(updated.find(e=>e.id===id));}}/>}
-  </div>;
-}
-
-function ExamCreator({onSave,color,C}){
-  const [form,setForm]=useState({title:"",subject:"",duration:30,totalMarks:100,description:""});
-  const [questions,setQuestions]=useState([]);
-  const [qForm,setQForm]=useState({question:"",options:["","","",""],correct:0,marks:5});
-  const [aiLoading,setAiLoading]=useState(false);
-  function addQ(){if(!qForm.question.trim()||!qForm.options[qForm.correct].trim())return;setQuestions(qs=>[...qs,{...qForm,id:uid()}]);setQForm({question:"",options:["","","",""],correct:0,marks:5});}
-  function removeQ(id){setQuestions(qs=>qs.filter(q=>q.id!==id));}
-  function save(){if(!form.title||!form.subject||!questions.length){return;}const total=questions.reduce((a,q)=>a+Number(q.marks),0);onSave({...form,questions,totalMarks:total});}
-  async function generateWithAI(){
-    if(!form.subject||!form.title)return;
-    setAiLoading(true);
-    try{
-      const prompt=`Generate 5 MCQ questions for an exam:\nSubject: ${form.subject}\nTopic: ${form.title}\n\nReturn ONLY valid JSON array, no markdown:\n[{"question":"...","options":["A","B","C","D"],"correct":0,"marks":5}]\ncorrect is 0-indexed position of correct answer.`;
-      let parsed;
-      try{const text=await callAI(prompt);const clean=text.replace(/```json|```/g,"").trim();parsed=JSON.parse(clean);}
-      catch(e){parsed=aiExamLocal({subject:form.subject,topic:form.title});}
-      setQuestions(qs=>[...qs,...parsed.map(q=>({...q,id:uid()}))]);
-    }catch(e){console.error(e);}
-    setAiLoading(false);
-  }
-  return <div>
-    <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,marginBottom:18,boxShadow:C.shadow}}>
-      <div style={{fontWeight:700,fontSize:14,marginBottom:14,color:C.text}}>Exam Details</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
-        <FG label="Exam Title *" C={C} span><Inp C={C} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Unit 1 Test - Mathematics"/></FG>
-        <FG label="Subject *" C={C}><Inp C={C} value={form.subject} onChange={e=>setForm(f=>({...f,subject:e.target.value}))} placeholder="Subject"/></FG>
-        <FG label="Duration (min)" C={C}><Inp C={C} type="number" value={form.duration} onChange={e=>setForm(f=>({...f,duration:Number(e.target.value)}))} min={5}/></FG>
-      </div>
-    </div>
-    <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,marginBottom:18,boxShadow:C.shadow}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-        <div style={{fontWeight:700,fontSize:14,color:C.text}}>Questions ({questions.length})</div>
-        <Btn onClick={generateWithAI} C={C} color="purple" size="sm" disabled={aiLoading||!form.subject||!form.title}>{aiLoading?"⏳ Generating...":"🤖 AI Generate 5 MCQs"}</Btn>
-      </div>
-      {questions.map((q,i)=><div key={q.id} style={{padding:"10px 14px",background:C.bg,borderRadius:9,marginBottom:8,border:`1px solid ${C.border}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div style={{flex:1}}><div style={{fontWeight:600,fontSize:12,color:C.text}}>Q{i+1}. {q.question}</div><div style={{fontSize:11,color:C.muted,marginTop:4}}>{q.options.map((o,oi)=><span key={oi} style={{marginRight:12,color:oi===q.correct?C.green:C.muted,fontWeight:oi===q.correct?700:400}}>{String.fromCharCode(65+oi)}. {o}</span>)}</div></div><div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}><span style={{fontSize:11,color:color,fontWeight:700}}>{q.marks}m</span><Btn onClick={()=>removeQ(q.id)} C={C} color="red" size="sm" outline>✕</Btn></div></div>
-      </div>)}
-      <div style={{background:C.bg,borderRadius:9,padding:14,border:`1px solid ${C.border}`,marginTop:12}}>
-        <div style={{fontWeight:600,fontSize:12,marginBottom:10,color:C.text}}>Add Question</div>
-        <Txt C={C} value={qForm.question} onChange={e=>setQForm(f=>({...f,question:e.target.value}))} placeholder="Enter question..." rows={2} style={{marginBottom:8}}/>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-          {qForm.options.map((o,i)=><div key={i} style={{display:"flex",gap:6,alignItems:"center"}}>
-            <button onClick={()=>setQForm(f=>({...f,correct:i}))} style={{width:22,height:22,borderRadius:"50%",border:`2px solid ${qForm.correct===i?C.green:C.border}`,background:qForm.correct===i?C.greenL:"transparent",cursor:"pointer",flexShrink:0,fontSize:10,fontWeight:700,color:qForm.correct===i?C.green:C.muted}}>{String.fromCharCode(65+i)}</button>
-            <Inp C={C} value={o} onChange={e=>setQForm(f=>({...f,options:f.options.map((x,j)=>j===i?e.target.value:x)}))} placeholder={`Option ${String.fromCharCode(65+i)}`} style={{marginBottom:0}}/>
-          </div>)}
-        </div>
-        <div style={{display:"flex",gap:10,alignItems:"center"}}><span style={{fontSize:12,color:C.muted}}>Marks:</span><Inp C={C} type="number" value={qForm.marks} onChange={e=>setQForm(f=>({...f,marks:Number(e.target.value)}))} style={{width:70,marginBottom:0}} min={1}/><Btn onClick={addQ} C={C} color="teal" size="sm">+ Add</Btn></div>
-      </div>
-    </div>
-    <Btn onClick={save} C={C} color="green" disabled={!form.title||!form.subject||!questions.length}>💾 Save Exam ({questions.length} questions, {questions.reduce((a,q)=>a+Number(q.marks),0)} marks)</Btn>
-  </div>;
-}
-
-function ExamResults({exam,students,color,C,onUpdate}){
-  const subs=exam.submissions||[];
-  const avgScore=subs.length?Math.round(subs.reduce((a,s)=>a+(s.score||0),0)/subs.length):0;
-  const passCount=subs.filter(s=>s.score>=exam.totalMarks*0.35).length;
-  return <div>
-    <div style={{fontWeight:700,fontSize:16,marginBottom:4,color:C.text}}>{exam.title}</div>
-    <div style={{fontSize:11,color:C.muted,marginBottom:20}}>{exam.subject} · {exam.questions?.length} questions · {exam.totalMarks} marks · {exam.duration} min</div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:18}}>
-      <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:16,textAlign:"center"}}><div style={{fontSize:22,fontWeight:800,color}}>{subs.length}</div><div style={{fontSize:11,color:C.muted}}>Submitted</div></div>
-      <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:16,textAlign:"center"}}><div style={{fontSize:22,fontWeight:800,color:C.green}}>{passCount}</div><div style={{fontSize:11,color:C.muted}}>Passed</div></div>
-      <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:16,textAlign:"center"}}><div style={{fontSize:22,fontWeight:800,color:C.blue}}>{avgScore}</div><div style={{fontSize:11,color:C.muted}}>Avg Score</div></div>
-    </div>
-    {subs.length===0&&<Empty msg="No submissions yet. Share the exam code with students." C={C}/>}
-    {subs.map(sub=>{const stu=students.find(s=>s.id===sub.studentId);const pct=exam.totalMarks>0?Math.round(sub.score/exam.totalMarks*100):0;return<div key={sub.id} style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:"14px 18px",marginBottom:10,display:"flex",alignItems:"center",gap:14,boxShadow:C.shadow}}>
-      <Avatar name={stu?.name||sub.name||"?"} color={color} size={36} C={C}/>
-      <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13,color:C.text}}>{stu?.name||sub.name||"Unknown"}</div><div style={{fontSize:11,color:C.muted}}>Submitted: {fmt(sub.submittedAt)}</div></div>
-      <div style={{textAlign:"right"}}><div style={{fontSize:18,fontWeight:800,color:pct>=75?C.green:pct>=35?C.gold:C.red}}>{sub.score}/{exam.totalMarks}</div><div style={{fontSize:10,color:pct>=35?C.green:C.red}}>{pct>=35?"Pass":"Fail"} · {pct}%</div></div>
-    </div>;})}
-  </div>;
-}
-
-// ─── PHASE 1: CERTIFICATE GENERATOR ─────────────────────────────────────────
-function InstCertificates({students,inst,color,C}){
-  const [sel,setSel]=useState(null);const [type,setType]=useState("completion");
-  const TYPES=[{k:"completion",l:"Course Completion"},{k:"achievement",l:"Achievement"},{k:"participation",l:"Participation"},{k:"topperr",l:"Top Performer"}];
-  const CERT_META={completion:{title:"Certificate of Completion",body:(s,i)=>`This is to certify that ${s.name} has successfully completed the prescribed course of study at ${i.name} and has fulfilled all requirements with dedication and commitment.`},achievement:{title:"Certificate of Achievement",body:(s,i)=>`This is to certify that ${s.name} has demonstrated exceptional performance and outstanding achievement at ${i.name}, showing exemplary dedication to academic excellence.`},participation:{title:"Certificate of Participation",body:(s,i)=>`This is to certify that ${s.name} has actively participated in the academic programs conducted at ${i.name} and contributed positively to the learning environment.`},topperr:{title:"Certificate of Excellence — Top Performer",body:(s,i)=>{const exams=s.exams||[];const avg=exams.length?Math.round(exams.reduce((a,e)=>a+(e.maxMarks>0?e.marks/e.maxMarks*100:0),0)/exams.length):0;return`This is to certify that ${s.name} has achieved the distinction of Top Performer at ${i.name} with an outstanding academic average of ${avg}%, reflecting exceptional hard work and intellectual merit.`;}}};
-  function print(){window.print();}
-  const stu=students.find(s=>s.id===sel);
-  const certMeta=CERT_META[type];
-  return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <PH title="🏆 Certificate Generator" sub="Generate and print certificates for students" C={C}/>
-    <div style={{display:"grid",gridTemplateColumns:"300px 1fr",gap:20}}>
-      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,height:"fit-content"}}>
-        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Settings</div>
-        <FG label="Certificate Type" C={C} style={{marginBottom:12}}>
-          <Sel C={C} value={type} onChange={e=>setType(e.target.value)}>
-            {TYPES.map(t=><option key={t.k} value={t.k}>{t.l}</option>)}
-          </Sel>
-        </FG>
-        <FG label="Student" C={C}>
-          <Sel C={C} value={sel||""} onChange={e=>setSel(e.target.value)}>
-            <option value="">-- Select Student --</option>
-            {students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-          </Sel>
-        </FG>
-        <div style={{marginTop:16}}>
-          <Btn onClick={print} C={C} color="teal" disabled={!sel} style={{width:"100%"}}>🖨️ Print Certificate</Btn>
-        </div>
-        <div style={{marginTop:10,fontSize:11,color:C.muted,textAlign:"center"}}>Use browser Print → Save as PDF</div>
-      </div>
-      <div>
-        <style>{`@media print{.no-print{display:none!important;}.cert-box{box-shadow:none!important;border:3px double #666!important;}}`}</style>
-        {stu?<div className="cert-box" style={{background:"#fff",border:`3px double ${color}`,borderRadius:4,padding:"60px 70px",textAlign:"center",boxShadow:C.shadowL,minHeight:500,position:"relative",overflow:"hidden"}}>
-          <div style={{position:"absolute",top:0,left:0,right:0,height:8,background:`linear-gradient(90deg,${color},${color}88,${color})`}}/>
-          <div style={{position:"absolute",bottom:0,left:0,right:0,height:8,background:`linear-gradient(90deg,${color},${color}88,${color})`}}/>
-          <div style={{position:"absolute",top:0,left:0,bottom:0,width:8,background:`linear-gradient(180deg,${color},${color}88,${color})`}}/>
-          <div style={{position:"absolute",top:0,right:0,bottom:0,width:8,background:`linear-gradient(180deg,${color},${color}88,${color})`}}/>
-          <div style={{marginBottom:6,fontSize:26,color:color}}>🏆</div>
-          <div style={{fontSize:11,letterSpacing:"0.3em",color:"#888",textTransform:"uppercase",marginBottom:8}}>AllBee EduSphere Presents</div>
-          <div style={{fontSize:28,fontWeight:900,color:"#111",marginBottom:4,letterSpacing:"0.05em"}}>{certMeta.title}</div>
-          <div style={{width:80,height:3,background:color,margin:"12px auto 28px",borderRadius:2}}/>
-          <div style={{fontSize:13,color:"#555",marginBottom:6,letterSpacing:"0.1em",textTransform:"uppercase"}}>This is to proudly certify that</div>
-          <div style={{fontSize:36,fontWeight:900,color:"#111",margin:"10px 0",fontStyle:"italic",letterSpacing:"0.02em"}}>{stu.name}</div>
-          <div style={{fontSize:12,color:"#777",marginBottom:24}}>{stu.rollNo&&`Roll No: ${stu.rollNo} · `}{stu.course||stu.department||stu.class||stu.danceStyle||""}</div>
-          <div style={{fontSize:14,color:"#444",lineHeight:1.8,maxWidth:480,margin:"0 auto 28px",fontStyle:"italic"}}>"{certMeta.body(stu,inst)}"</div>
-          <div style={{width:80,height:2,background:"#ddd",margin:"0 auto 24px",borderRadius:2}}/>
-          <div style={{display:"flex",justifyContent:"space-around",marginTop:10}}>
-            <div style={{textAlign:"center"}}><div style={{borderTop:"1px solid #333",width:120,paddingTop:6}}><div style={{fontSize:11,color:"#555"}}>Principal / Director</div><div style={{fontSize:10,color:"#999",marginTop:2}}>{inst.name}</div></div></div>
-            <div style={{textAlign:"center"}}><div style={{borderTop:"1px solid #333",width:120,paddingTop:6}}><div style={{fontSize:11,color:"#555"}}>Date of Issue</div><div style={{fontSize:10,color:"#999",marginTop:2}}>{new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"long",year:"numeric"})}</div></div></div>
-          </div>
-          <div style={{marginTop:20,fontSize:9,color:"#bbb",letterSpacing:"0.1em"}}>POWERED BY ALLBEE EDUSPHERE · {inst.name.toUpperCase()}</div>
-        </div>:<div style={{background:C.surface,borderRadius:12,border:`2px dashed ${C.border}`,padding:"60px 40px",textAlign:"center",color:C.muted}}><div style={{fontSize:40,marginBottom:12}}>🏆</div><div style={{fontSize:14,fontWeight:600}}>Select a student to preview the certificate</div><div style={{fontSize:11,marginTop:6}}>Then print or save as PDF</div></div>}
-      </div>
-    </div>
-  </div>;
-}
-
-// ─── PHASE 1: STUDENT AI CHAT ASSISTANT ─────────────────────────────────────
-function StuAIChat({stu,inst,C}){
-  const [msgs,setMsgs]=useState([{role:"assistant",text:`Hi ${stu.name}! 👋 I'm your AI assistant. I can answer questions about your attendance, fees, homework, exams, and more. How can I help you today?`}]);
-  const [input,setInput]=useState("");const [loading,setLoading]=useState(false);
-  const endRef=useRef(null);
-  useEffect(()=>endRef.current?.scrollIntoView({behavior:"smooth"}),[msgs]);
-  const att=attPct(stu.attendance||[]);
-  const totalFee=stu.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;
-  const paidFee=stu.fees?.reduce((a,f)=>a+Number(f.paid||0),0)||0;
-  const dueFee=totalFee-paidFee;
-  const hwPending=(stu.homeworks||[]).filter(h=>h.status==="Pending").length;
-  const QUICK=[{l:"My attendance?",q:"What is my attendance percentage?"},{l:"Fee due?",q:"How much fee is pending for me?"},{l:"Homework?",q:"What homework is pending?"},{l:"My marks?",q:"Show me my exam marks and performance"}];
-  async function send(text){
-    const q=text||input.trim();if(!q||loading)return;
-    setInput("");setMsgs(m=>[...m,{role:"user",text:q}]);setLoading(true);
-    const ctx=`You are a helpful AI assistant for student ${stu.name} at ${inst?.name||"the institution"}. Answer ONLY based on this student data:\n- Attendance: ${att}% (${stu.attendance?.length||0} classes recorded)\n- Fee: Total ₹${totalFee}, Paid ₹${paidFee}, Due ₹${dueFee}\n- Homework pending: ${hwPending}\n- Exams: ${JSON.stringify((stu.exams||[]).slice(0,5))}\n- Homework: ${JSON.stringify((stu.homeworks||[]).slice(0,5))}\n- Class/Course: ${stu.class||stu.course||stu.department||stu.danceStyle||"N/A"}\nBe friendly, brief, and helpful. If asked something not in data, say you don't have that info.`;
-    try{
-      const res=await fetch(AI_PROXY_URL||"about:blank",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:ctx+"\n\nQuestion: "+q})});
-      if(!AI_PROXY_URL||!res.ok)throw new Error("offline");
-      const d=await res.json();
-      setMsgs(m=>[...m,{role:"assistant",text:d.text||d.content?.[0]?.text||"Sorry, I couldn't respond. Try again."}]);
-    }catch(e){
-      const ans=aiChatLocal(q,{name:stu.name,att,attCount:stu.attendance?.length||0,total:totalFee,paid:paidFee,due:dueFee,hwPending,exams:stu.exams||[],course:stu.class||stu.course||stu.department||stu.danceStyle||"your course"});
-      setMsgs(m=>[...m,{role:"assistant",text:ans}]);
-    }
-    setLoading(false);
-  }
-  return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <PH title="🤖 AI Assistant" sub="Ask anything about your studies, fees, attendance" C={C}/>
-    {/* Quick actions */}
-    <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
-      {QUICK.map(q=><button key={q.l} onClick={()=>send(q.q)} style={{padding:"6px 14px",borderRadius:20,border:`1px solid ${C.border}`,background:C.surface,color:C.muted,fontSize:11,cursor:"pointer",transition:"all 0.15s"}} onMouseOver={e=>{e.target.style.borderColor=C.teal;e.target.style.color=C.teal;}} onMouseOut={e=>{e.target.style.borderColor=C.border;e.target.style.color=C.muted;}}>{q.l}</button>)}
-    </div>
-    {/* Chat window */}
-    <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,boxShadow:C.shadow,overflow:"hidden"}}>
-      <div style={{height:380,overflowY:"auto",padding:16,display:"flex",flexDirection:"column",gap:12}}>
-        {msgs.map((m,i)=><div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start",gap:8}}>
-          {m.role==="assistant"&&<div style={{width:28,height:28,borderRadius:"50%",background:C.tealL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>🤖</div>}
-          <div style={{maxWidth:"75%",padding:"10px 14px",borderRadius:m.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.role==="user"?C.teal:C.bg,color:m.role==="user"?"#fff":C.text,fontSize:13,lineHeight:1.5,border:m.role==="user"?"none":`1px solid ${C.border}`}}>
-            {m.text}
-          </div>
-          {m.role==="user"&&<Avatar name={stu.name} photo={stu.photo} color={C.teal} size={28} C={C}/>}
-        </div>)}
-        {loading&&<div style={{display:"flex",gap:8,alignItems:"center"}}><div style={{width:28,height:28,borderRadius:"50%",background:C.tealL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🤖</div><div style={{padding:"10px 14px",background:C.bg,borderRadius:"16px 16px 16px 4px",border:`1px solid ${C.border}`,fontSize:13,color:C.muted}}>Thinking...</div></div>}
-        <div ref={endRef}/>
-      </div>
-      <div style={{borderTop:`1px solid ${C.border}`,padding:12,display:"flex",gap:10}}>
-        <Inp C={C} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()} placeholder="Ask about attendance, fees, homework..." style={{marginBottom:0,flex:1}}/>
-        <Btn onClick={()=>send()} C={C} color="teal" disabled={!input.trim()||loading}>Send →</Btn>
-      </div>
-    </div>
-  </div>;
-}
-
-
-// PHASE 2 FEATURES
-
-// PHASE 2 FEATURES
-
-// ─── LIBRARY MANAGEMENT ───────────────────────────────────────────────────────
-function InstLibrary({db,saveDb,inst,color,isAdmin,notify,C}){
-  const KEY="lib_"+inst.id;
-  const [books,setBooks]=useState(()=>lsGet(KEY,[]));
-  const [subTab,setSubTab]=useState("catalog");
-  const [showAdd,setShowAdd]=useState(false);
-  const blank={title:"",author:"",isbn:"",category:"",totalCopies:1,description:""};
-  const [form,setForm]=useState(blank);
-  const [search,setSearch]=useState("");
-  const [issueFor,setIssueFor]=useState(null);
-  const [issueStudent,setIssueStudent]=useState("");
-  const myStudents=(db.students||[]).filter(s=>s.instId===inst.id);
-  const CATS=["Mathematics","Science","English","History","Computer","Fiction","Reference","Other"];
-  function saveBooks(b){setBooks(b);lsSet(KEY,b);}
-  function addBook(){if(!form.title||!form.author)return;saveBooks([...books,{...form,id:uid(),totalCopies:Number(form.totalCopies)||1,available:Number(form.totalCopies)||1,issues:[],addedAt:today()}]);setForm(blank);setShowAdd(false);notify("Book added!");}
-  function delBook(id){if(!window.confirm("Delete book?"))return;saveBooks(books.filter(b=>b.id!==id));notify("Deleted","error");}
-  function issueBook(bookId){const stu=myStudents.find(s=>s.id===issueStudent);if(!stu){notify("Select a student","error");return;}const book=books.find(b=>b.id===bookId);if(!book||book.available<1){notify("No copies available","error");return;}const due=new Date(Date.now()+14*86400000).toISOString().slice(0,10);const issue={id:uid(),studentId:stu.id,studentName:stu.name,rollNo:stu.rollNo,issuedAt:today(),dueDate:due,returned:false};saveBooks(books.map(b=>b.id===bookId?{...b,available:b.available-1,issues:[...(b.issues||[]),issue]}:b));setIssueFor(null);setIssueStudent("");notify("Issued to "+stu.name+"!");}
-  function returnBook(bookId,issueId){saveBooks(books.map(b=>b.id===bookId?{...b,available:b.available+1,issues:b.issues.map(i=>i.id===issueId?{...i,returned:true,returnedAt:today()}:i)}:b));notify("Book returned!");}
-  const filtered=books.filter(b=>[b.title,b.author,b.isbn,b.category].some(v=>v&&v.toLowerCase().includes(search.toLowerCase())));
-  const overdue=books.flatMap(b=>(b.issues||[]).filter(i=>!i.returned&&i.dueDate<today()).map(i=>({...i,bookTitle:b.title,bookId:b.id})));
-  const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",borderBottom:"1px solid "+C.border,background:C.bg};
-  const TD={padding:"10px 14px",fontSize:12,color:C.text,borderBottom:"1px solid "+C.border};
-  const SUB=[{k:"catalog",l:"Catalog"},{k:"issued",l:"Issued"},{k:"overdue",l:"Overdue"+(overdue.length?" ("+overdue.length+")":"")}];
-  return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
-      <PH title="Library Management" sub={books.length+" books, "+books.reduce((a,b)=>a+b.available,0)+" available"} C={C}/>
-      {isAdmin&&<Btn onClick={()=>setShowAdd(s=>!s)} C={C} color="teal">+ Add Book</Btn>}
-    </div>
-    {showAdd&&isAdmin&&<div style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:20,marginBottom:18,boxShadow:C.shadow}}>
-      <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>New Book</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
-        <FG label="Title *" C={C} span><Inp C={C} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="Book title"/></FG>
-        <FG label="Author *" C={C}><Inp C={C} value={form.author} onChange={e=>setForm(f=>({...f,author:e.target.value}))} placeholder="Author name"/></FG>
-        <FG label="ISBN" C={C}><Inp C={C} value={form.isbn} onChange={e=>setForm(f=>({...f,isbn:e.target.value}))} placeholder="ISBN number"/></FG>
-        <FG label="Category" C={C}><Sel C={C} value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}><option value="">-- Select --</option>{CATS.map(c=><option key={c}>{c}</option>)}</Sel></FG>
-        <FG label="Total Copies" C={C}><Inp C={C} type="number" value={form.totalCopies} onChange={e=>setForm(f=>({...f,totalCopies:e.target.value}))} min={1}/></FG>
-      </div>
-      <div style={{display:"flex",gap:10}}><Btn onClick={addBook} C={C} color="green">Add Book</Btn><Btn onClick={()=>setShowAdd(false)} C={C} color="red" outline>Cancel</Btn></div>
-    </div>}
-    <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-      {SUB.map(t=><button key={t.k} onClick={()=>setSubTab(t.k)} style={{padding:"7px 16px",borderRadius:20,border:"1px solid "+(subTab===t.k?color:C.border),background:subTab===t.k?color:"transparent",color:subTab===t.k?"#fff":C.muted,fontWeight:700,fontSize:12,cursor:"pointer"}}>{t.l}</button>)}
-      {subTab==="catalog"&&<Inp C={C} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search books..." style={{flex:1,minWidth:160,marginBottom:0}}/>}
-    </div>
-    {subTab==="catalog"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {filtered.map(book=><div key={book.id} style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:"14px 18px",boxShadow:C.shadow}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
-          <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13,color:C.text}}>{book.title}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>by {book.author}{book.isbn?" · ISBN: "+book.isbn:""}{book.category?" · "+book.category:""}</div></div>
-          <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
-            <div style={{textAlign:"center",padding:"5px 12px",background:book.available>0?C.greenL:C.redL,borderRadius:8}}><div style={{fontWeight:800,fontSize:14,color:book.available>0?C.green:C.red}}>{book.available}/{book.totalCopies}</div><div style={{fontSize:9,color:C.muted}}>Available</div></div>
-            {isAdmin&&<Btn onClick={()=>{setIssueFor(book.id);setIssueStudent("");}} C={C} color="blue" size="sm" disabled={book.available<1}>Issue</Btn>}
-            {isAdmin&&<Btn onClick={()=>delBook(book.id)} C={C} color="red" size="sm" outline>Del</Btn>}
-          </div>
-        </div>
-        {issueFor===book.id&&<div style={{marginTop:12,padding:12,background:C.bg,borderRadius:8,border:"1px solid "+C.border,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-          <Sel C={C} value={issueStudent} onChange={e=>setIssueStudent(e.target.value)} style={{flex:1,minWidth:160,marginBottom:0}}><option value="">-- Select Student --</option>{myStudents.map(s=><option key={s.id} value={s.id}>{s.name} ({s.rollNo||"No Roll"})</option>)}</Sel>
-          <Btn onClick={()=>issueBook(book.id)} C={C} color="green" size="sm" disabled={!issueStudent}>Confirm Issue</Btn>
-          <Btn onClick={()=>setIssueFor(null)} C={C} color="red" size="sm" outline>Cancel</Btn>
-        </div>}
-      </div>)}
-      {!filtered.length&&<Empty msg={books.length?"No books match search":"No books added yet"} C={C}/>}
-    </div>}
-    {subTab==="issued"&&<div style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,overflow:"auto",boxShadow:C.shadow}}>
-      <table style={{width:"100%",borderCollapse:"collapse",minWidth:500}}>
-        <thead><tr>{["Book","Student","Issued","Due","Status","Action"].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
-        <tbody>
-          {books.flatMap(b=>(b.issues||[]).filter(i=>!i.returned).map(i=>{const od=i.dueDate<today();return<tr key={i.id}><td style={TD}><div style={{fontWeight:600}}>{b.title}</div></td><td style={TD}><div>{i.studentName}</div><div style={{fontSize:10,color:C.muted}}>{i.rollNo}</div></td><td style={TD}>{fmt(i.issuedAt)}</td><td style={{...TD,color:od?C.red:C.text,fontWeight:od?700:400}}>{fmt(i.dueDate)}{od?" !":""}</td><td style={TD}><Badge label={od?"Overdue":"Active"} color={od?"red":"green"} C={C}/></td><td style={TD}><Btn onClick={()=>returnBook(b.id,i.id)} C={C} color="teal" size="sm">Return</Btn></td></tr>;}))
-          }
-          {!books.flatMap(b=>(b.issues||[]).filter(i=>!i.returned)).length&&<tr><td colSpan={6}><Empty msg="No active issues" C={C}/></td></tr>}
-        </tbody>
-      </table>
-    </div>}
-    {subTab==="overdue"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {overdue.map(i=><div key={i.id} style={{background:C.surface,borderRadius:10,border:"1px solid "+C.red+"44",padding:"14px 18px",boxShadow:C.shadow,borderLeft:"4px solid "+C.red}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-          <div><div style={{fontWeight:700,fontSize:13,color:C.text}}>{i.bookTitle}</div><div style={{fontSize:12,color:C.muted}}>{i.studentName} - {i.rollNo}</div><div style={{fontSize:11,color:C.red,marginTop:4}}>Due: {fmt(i.dueDate)} - {Math.round((Date.now()-new Date(i.dueDate))/86400000)} days overdue</div></div>
-          <Btn onClick={()=>returnBook(i.bookId,i.id)} C={C} color="teal" size="sm">Mark Returned</Btn>
-        </div>
-      </div>)}
-      {!overdue.length&&<Empty msg="No overdue books" C={C}/>}
-    </div>}
-  </div>;
-}
-
-// ─── HR & PAYROLL ─────────────────────────────────────────────────────────────
-function InstPayroll({db,saveDb,inst,color,notify,C}){
-  const KEY="payroll_"+inst.id;
-  const [records,setRecords]=useState(()=>lsGet(KEY,[]));
-  const [showAdd,setShowAdd]=useState(false);
-  const [month,setMonth]=useState(new Date().toISOString().slice(0,7));
-  const staff=(db.users||[]).filter(u=>u.instId===inst.id&&u.role!=="admin"&&u.role!=="accountant");
-  const ALLOWANCES=["HRA","Travel","Medical","Performance","Other"];
-  const DEDUCTIONS=["PF","ESI","TDS","Advance","Other"];
-  const [payForm,setPayForm]=useState({staffId:"",baseSalary:"",allowances:[],deductions:[],note:""});
-  function saveRecords(r){setRecords(r);lsSet(KEY,r);}
-  function addRecord(){
-    if(!payForm.staffId||!payForm.baseSalary)return;
-    const s=staff.find(u=>u.id===payForm.staffId);
-    const gross=Number(payForm.baseSalary)+payForm.allowances.reduce((a,x)=>a+Number(x.amount||0),0);
-    const deduct=payForm.deductions.reduce((a,x)=>a+Number(x.amount||0),0);
-    const net=gross-deduct;
-    saveRecords([...records,{id:uid(),staffId:payForm.staffId,staffName:s&&s.name,role:s&&s.role,month,baseSalary:Number(payForm.baseSalary),allowances:payForm.allowances,deductions:payForm.deductions,gross,net,note:payForm.note,paidAt:today(),status:"Paid"}]);
-    setPayForm({staffId:"",baseSalary:"",allowances:[],deductions:[],note:""});
-    setShowAdd(false);notify("Salary recorded for "+(s&&s.name));
-  }
-  const monthRecords=records.filter(r=>r.month===month);
-  const totalPaid=monthRecords.reduce((a,r)=>a+r.net,0);
-  const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",borderBottom:"1px solid "+C.border,background:C.bg};
-  const TD={padding:"10px 14px",fontSize:12,color:C.text,borderBottom:"1px solid "+C.border};
-  return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
-      <PH title="HR & Payroll" sub={staff.length+" staff members"} C={C}/>
-      <div style={{display:"flex",gap:10,alignItems:"center"}}>
-        <Inp C={C} type="month" value={month} onChange={e=>setMonth(e.target.value)} style={{width:"auto",marginBottom:0}}/>
-        <Btn onClick={()=>setShowAdd(s=>!s)} C={C} color="green">+ Add Salary</Btn>
-      </div>
-    </div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:20}}>
-      <StatCard icon="👨‍🏫" label="Total Staff" value={staff.length} color="teal" C={C}/>
-      <StatCard icon="💵" label="Paid This Month" value={monthRecords.length} color="green" C={C}/>
-      <StatCard icon="💰" label="Total Payroll" value={"Rs "+totalPaid.toLocaleString()} color="gold" C={C}/>
-    </div>
-    {showAdd&&<div style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:20,marginBottom:18,boxShadow:C.shadow}}>
-      <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Record Salary Payment - {month}</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
-        <FG label="Staff Member *" C={C}><Sel C={C} value={payForm.staffId} onChange={e=>setPayForm(f=>({...f,staffId:e.target.value}))}><option value="">-- Select Staff --</option>{staff.map(s=><option key={s.id} value={s.id}>{s.name} ({s.role})</option>)}</Sel></FG>
-        <FG label="Base Salary (Rs) *" C={C}><Inp C={C} type="number" value={payForm.baseSalary} onChange={e=>setPayForm(f=>({...f,baseSalary:e.target.value}))} placeholder="Monthly salary"/></FG>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:12}}>
-        <div><div style={{fontWeight:600,fontSize:12,color:C.text,marginBottom:8}}>Allowances (+)</div>
-          {payForm.allowances.map((a,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:6}}><Sel C={C} value={a.type} onChange={e=>setPayForm(f=>({...f,allowances:f.allowances.map((x,j)=>j===i?{...x,type:e.target.value}:x)}))} style={{flex:1,marginBottom:0}}>{ALLOWANCES.map(t=><option key={t}>{t}</option>)}</Sel><Inp C={C} type="number" value={a.amount} onChange={e=>setPayForm(f=>({...f,allowances:f.allowances.map((x,j)=>j===i?{...x,amount:e.target.value}:x)}))} placeholder="Rs" style={{width:90,marginBottom:0}}/><Btn onClick={()=>setPayForm(f=>({...f,allowances:f.allowances.filter((_,j)=>j!==i)}))} C={C} color="red" size="sm" outline>X</Btn></div>)}
-          <Btn onClick={()=>setPayForm(f=>({...f,allowances:[...f.allowances,{type:"HRA",amount:""}]}))} C={C} color="green" size="sm" outline>+ Add</Btn>
-        </div>
-        <div><div style={{fontWeight:600,fontSize:12,color:C.text,marginBottom:8}}>Deductions (-)</div>
-          {payForm.deductions.map((d,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:6}}><Sel C={C} value={d.type} onChange={e=>setPayForm(f=>({...f,deductions:f.deductions.map((x,j)=>j===i?{...x,type:e.target.value}:x)}))} style={{flex:1,marginBottom:0}}>{DEDUCTIONS.map(t=><option key={t}>{t}</option>)}</Sel><Inp C={C} type="number" value={d.amount} onChange={e=>setPayForm(f=>({...f,deductions:f.deductions.map((x,j)=>j===i?{...x,amount:e.target.value}:x)}))} placeholder="Rs" style={{width:90,marginBottom:0}}/><Btn onClick={()=>setPayForm(f=>({...f,deductions:f.deductions.filter((_,j)=>j!==i)}))} C={C} color="red" size="sm" outline>X</Btn></div>)}
-          <Btn onClick={()=>setPayForm(f=>({...f,deductions:[...f.deductions,{type:"PF",amount:""}]}))} C={C} color="red" size="sm" outline>+ Add</Btn>
-        </div>
-      </div>
-      {payForm.baseSalary&&<div style={{padding:"10px 14px",background:C.greenL,borderRadius:8,marginBottom:12,fontSize:12,color:C.green,fontWeight:700}}>Net Pay: Rs {(Number(payForm.baseSalary)+payForm.allowances.reduce((a,x)=>a+Number(x.amount||0),0)-payForm.deductions.reduce((a,x)=>a+Number(x.amount||0),0)).toLocaleString()}</div>}
-      <FG label="Note" C={C}><Inp C={C} value={payForm.note} onChange={e=>setPayForm(f=>({...f,note:e.target.value}))} placeholder="Optional note"/></FG>
-      <div style={{display:"flex",gap:10,marginTop:10}}><Btn onClick={addRecord} C={C} color="green">Save Payment</Btn><Btn onClick={()=>setShowAdd(false)} C={C} color="red" outline>Cancel</Btn></div>
-    </div>}
-    <div style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,overflow:"auto",boxShadow:C.shadow}}>
-      <table style={{width:"100%",borderCollapse:"collapse",minWidth:600}}>
-        <thead><tr>{["Staff","Role","Base","Allowances","Deductions","Net Pay","Paid On","Action"].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
-        <tbody>
-          {monthRecords.map(r=><tr key={r.id}>
-            <td style={TD}><div style={{fontWeight:600}}>{r.staffName}</div></td>
-            <td style={TD}><Badge label={r.role} color="teal" C={C}/></td>
-            <td style={TD}>Rs {r.baseSalary&&r.baseSalary.toLocaleString()}</td>
-            <td style={{...TD,color:C.green}}>+Rs {r.allowances&&r.allowances.reduce((a,x)=>a+Number(x.amount||0),0).toLocaleString()}</td>
-            <td style={{...TD,color:C.red}}>-Rs {r.deductions&&r.deductions.reduce((a,x)=>a+Number(x.amount||0),0).toLocaleString()}</td>
-            <td style={{...TD,fontWeight:800,color:C.teal}}>Rs {r.net&&r.net.toLocaleString()}</td>
-            <td style={TD}>{fmt(r.paidAt)}</td>
-            <td style={TD}><Btn onClick={()=>{if(window.confirm("Delete?"))saveRecords(records.filter(x=>x.id!==r.id));}} C={C} color="red" size="sm" outline>Del</Btn></td>
-          </tr>)}
-          {!monthRecords.length&&<tr><td colSpan={8}><Empty msg={"No salary records for "+month} C={C}/></td></tr>}
-        </tbody>
-      </table>
-    </div>
-  </div>;
-}
-
-// ─── LEAVE MANAGEMENT ─────────────────────────────────────────────────────────
-function InstLeave({db,saveDb,user,inst,color,isAdmin,notify,C}){
-  const KEY="leave_"+inst.id;
-  const [leaves,setLeaves]=useState(()=>lsGet(KEY,[]));
-  const [subTab,setSubTab]=useState(isAdmin?"all":"apply");
-  const [form,setForm]=useState({type:"Sick Leave",from:"",to:"",reason:""});
-  const TYPES=["Sick Leave","Casual Leave","Emergency Leave","Medical Leave","Personal Leave"];
-  function saveLeaves(l){setLeaves(l);lsSet(KEY,l);}
-  function applyLeave(){if(!form.from||!form.to||!form.reason.trim())return;const days=Math.round((new Date(form.to)-new Date(form.from))/86400000)+1;saveLeaves([...leaves,{...form,id:uid(),applicantId:user.id,applicantName:user.name,role:user.role,days,status:"Pending",appliedAt:today()}]);setForm({type:"Sick Leave",from:"",to:"",reason:""});notify("Leave applied!");}
-  function approve(id){saveLeaves(leaves.map(l=>l.id===id?{...l,status:"Approved",reviewedAt:today(),reviewedBy:user.name}:l));notify("Leave approved!");}
-  function reject(id){saveLeaves(leaves.map(l=>l.id===id?{...l,status:"Rejected",reviewedAt:today(),reviewedBy:user.name}:l));notify("Leave rejected","error");}
-  const allLeaves=leaves.slice().sort((a,b)=>b.appliedAt.localeCompare(a.appliedAt));
-  const pending=allLeaves.filter(l=>l.status==="Pending");
-  const myLeaves=leaves.filter(l=>l.applicantId===user.id);
-  const statusColor=s=>s==="Approved"?C.green:s==="Rejected"?C.red:C.gold;
-  const SUB=isAdmin?[{k:"all",l:"All Leaves"},{k:"pending",l:"Pending"+(pending.length?" ("+pending.length+")":"")},{k:"apply",l:"+ Apply"}]:[{k:"apply",l:"+ Apply Leave"},{k:"my",l:"My Leaves"}];
-  return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <PH title="Leave Management" sub={pending.length+" pending approval"} C={C}/>
-    <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
-      {SUB.map(t=><button key={t.k} onClick={()=>setSubTab(t.k)} style={{padding:"7px 16px",borderRadius:20,border:"1px solid "+(subTab===t.k?color:C.border),background:subTab===t.k?color:"transparent",color:subTab===t.k?"#fff":C.muted,fontWeight:700,fontSize:12,cursor:"pointer"}}>{t.l}</button>)}
-    </div>
-    {subTab==="apply"&&<div style={{background:C.surface,borderRadius:12,border:"1px solid "+C.border,padding:22,maxWidth:520,boxShadow:C.shadow}}>
-      <div style={{fontWeight:700,fontSize:13,marginBottom:16,color:C.text}}>Apply for Leave</div>
-      <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        <FG label="Leave Type" C={C}><Sel C={C} value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>{TYPES.map(t=><option key={t}>{t}</option>)}</Sel></FG>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <FG label="From Date" C={C}><Inp C={C} type="date" value={form.from} onChange={e=>setForm(f=>({...f,from:e.target.value}))}/></FG>
-          <FG label="To Date" C={C}><Inp C={C} type="date" value={form.to} onChange={e=>setForm(f=>({...f,to:e.target.value}))}/></FG>
-        </div>
-        {form.from&&form.to&&form.to>=form.from&&<div style={{padding:"8px 12px",background:C.blueL||C.tealL,borderRadius:8,fontSize:12,color:C.blue||C.teal,fontWeight:700}}>{Math.round((new Date(form.to)-new Date(form.from))/86400000)+1} day(s) leave</div>}
-        <FG label="Reason *" C={C}><Txt C={C} value={form.reason} onChange={e=>setForm(f=>({...f,reason:e.target.value}))} placeholder="Reason for leave..." rows={3}/></FG>
-        <Btn onClick={applyLeave} C={C} color="teal">Submit Leave Application</Btn>
-      </div>
-    </div>}
-    {(subTab==="all"||subTab==="pending")&&isAdmin&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {(subTab==="pending"?pending:allLeaves).map(l=><div key={l.id} style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:"14px 18px",boxShadow:C.shadow,borderLeft:"4px solid "+statusColor(l.status)}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
-          <div><div style={{fontWeight:700,fontSize:13,color:C.text}}>{l.applicantName} <Badge label={l.role} color="teal" C={C}/></div><div style={{fontSize:12,color:C.muted,marginTop:3}}>{l.type} - {fmt(l.from)} to {fmt(l.to)} - {l.days} day(s)</div><div style={{fontSize:11,color:C.muted,marginTop:2,fontStyle:"italic"}}>{l.reason}</div></div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <Badge label={l.status} color={l.status==="Approved"?"green":l.status==="Rejected"?"red":"gold"} C={C}/>
-            {l.status==="Pending"&&<><Btn onClick={()=>approve(l.id)} C={C} color="green" size="sm">Approve</Btn><Btn onClick={()=>reject(l.id)} C={C} color="red" size="sm" outline>Reject</Btn></>}
-            <Btn onClick={()=>saveLeaves(leaves.filter(x=>x.id!==l.id))} C={C} color="red" size="sm" outline>Del</Btn>
-          </div>
-        </div>
-        {l.reviewedBy&&<div style={{fontSize:10,color:C.muted,marginTop:8}}>Reviewed by {l.reviewedBy} on {fmt(l.reviewedAt)}</div>}
-      </div>)}
-      {!(subTab==="pending"?pending:allLeaves).length&&<Empty msg={subTab==="pending"?"No pending leaves":"No leave records"} C={C}/>}
-    </div>}
-    {subTab==="my"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {myLeaves.map(l=><div key={l.id} style={{background:C.surface,borderRadius:10,border:"1px solid "+statusColor(l.status)+"44",padding:"14px 18px",boxShadow:C.shadow}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-          <div><div style={{fontWeight:700,fontSize:13,color:C.text}}>{l.type}</div><div style={{fontSize:11,color:C.muted}}>{fmt(l.from)} to {fmt(l.to)} - {l.days} day(s)</div><div style={{fontSize:11,color:C.muted,fontStyle:"italic",marginTop:2}}>{l.reason}</div></div>
-          <Badge label={l.status} color={l.status==="Approved"?"green":l.status==="Rejected"?"red":"gold"} C={C}/>
-        </div>
-      </div>)}
-      {!myLeaves.length&&<Empty msg="No leave applications yet" C={C}/>}
-    </div>}
-  </div>;
-}
-
-function StuLeaveView({db,saveDb,stu,inst,C,notify}){
-  const KEY="leave_stu_"+inst.id;
-  const [leaves,setLeaves]=useState(()=>lsGet(KEY,[]));
-  const [form,setForm]=useState({type:"Sick Leave",from:"",to:"",reason:""});
-  const TYPES=["Sick Leave","Casual Leave","Emergency Leave","Medical Leave","Other"];
-  function saveLeaves(l){setLeaves(l);lsSet(KEY,l);}
-  function apply(){if(!form.from||!form.to||!form.reason.trim())return;const days=Math.round((new Date(form.to)-new Date(form.from))/86400000)+1;saveLeaves([...leaves,{...form,id:uid(),studentId:stu.id,studentName:stu.name,rollNo:stu.rollNo,days,status:"Pending",appliedAt:today()}]);setForm({type:"Sick Leave",from:"",to:"",reason:""});notify("Leave application submitted!");}
-  const myLeaves=leaves.filter(l=>l.studentId===stu.id).slice().sort((a,b)=>b.appliedAt.localeCompare(a.appliedAt));
-  return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <PH title="Leave Application" sub="Apply and track your leave requests" C={C}/>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-      <div style={{background:C.surface,borderRadius:12,border:"1px solid "+C.border,padding:20,boxShadow:C.shadow}}>
-        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Apply for Leave</div>
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <FG label="Type" C={C}><Sel C={C} value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>{TYPES.map(t=><option key={t}>{t}</option>)}</Sel></FG>
-          <FG label="From" C={C}><Inp C={C} type="date" value={form.from} onChange={e=>setForm(f=>({...f,from:e.target.value}))}/></FG>
-          <FG label="To" C={C}><Inp C={C} type="date" value={form.to} onChange={e=>setForm(f=>({...f,to:e.target.value}))}/></FG>
-          <FG label="Reason *" C={C}><Txt C={C} value={form.reason} onChange={e=>setForm(f=>({...f,reason:e.target.value}))} rows={3} placeholder="Reason..."/></FG>
-          <Btn onClick={apply} C={C} color="teal">Submit Application</Btn>
-        </div>
-      </div>
-      <div style={{background:C.surface,borderRadius:12,border:"1px solid "+C.border,padding:20,boxShadow:C.shadow}}>
-        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>My Applications</div>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {myLeaves.map(l=><div key={l.id} style={{padding:"10px 14px",background:C.bg,borderRadius:9,border:"1px solid "+C.border}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:600,fontSize:12,color:C.text}}>{l.type}</div><div style={{fontSize:10,color:C.muted}}>{fmt(l.from)} to {fmt(l.to)} - {l.days}d</div></div><Badge label={l.status} color={l.status==="Approved"?"green":l.status==="Rejected"?"red":"gold"} C={C}/></div>
-          </div>)}
-          {!myLeaves.length&&<Empty msg="No applications yet" C={C}/>}
-        </div>
-      </div>
-    </div>
-  </div>;
-}
-
-// ─── DOCUMENT MANAGEMENT ─────────────────────────────────────────────────────
-function InstDocs({db,saveDb,inst,color,isAdmin,notify,C}){
-  const KEY="docs_"+inst.id;
-  const [docs,setDocs]=useState(()=>lsGet(KEY,[]));
-  const [showAdd,setShowAdd]=useState(false);
-  const [form,setForm]=useState({title:"",category:"",description:"",url:"",studentId:""});
-  const [filter,setFilter]=useState("all");
-  const [search,setSearch]=useState("");
-  const CATS=["TC","Marksheet","Aadhaar","Birth Certificate","Character Certificate","Fee Receipt","Bonafide","Other"];
-  const myStudents=(db.students||[]).filter(s=>s.instId===inst.id);
-  function saveDocs(d){setDocs(d);lsSet(KEY,d);}
-  function addDoc(){if(!form.title||!form.category)return;saveDocs([...docs,{...form,id:uid(),uploadedAt:today()}]);setForm({title:"",category:"",description:"",url:"",studentId:""});setShowAdd(false);notify("Document added!");}
-  function delDoc(id){if(!window.confirm("Delete document?"))return;saveDocs(docs.filter(d=>d.id!==id));notify("Deleted","error");}
-  const filtered=docs.filter(d=>{const matchCat=filter==="all"||d.category===filter;const matchQ=[d.title,d.description,d.category].some(v=>v&&v.toLowerCase().includes(search.toLowerCase()));return matchCat&&matchQ;});
-  return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
-      <PH title="Document Management" sub={docs.length+" documents stored"} C={C}/>
-      {isAdmin&&<Btn onClick={()=>setShowAdd(s=>!s)} C={C} color="teal">+ Upload Document</Btn>}
-    </div>
-    {showAdd&&<div style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:20,marginBottom:18,boxShadow:C.shadow}}>
-      <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Add Document</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-        <FG label="Document Title *" C={C}><Inp C={C} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Aadhaar Card - Rahul"/></FG>
-        <FG label="Category *" C={C}><Sel C={C} value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}><option value="">-- Select --</option>{CATS.map(c=><option key={c}>{c}</option>)}</Sel></FG>
-        <FG label="Link to Student (optional)" C={C}><Sel C={C} value={form.studentId} onChange={e=>setForm(f=>({...f,studentId:e.target.value}))}><option value="">-- General Document --</option>{myStudents.map(s=><option key={s.id} value={s.id}>{s.name} ({s.rollNo})</option>)}</Sel></FG>
-        <FG label="File URL (Google Drive link)" C={C}><Inp C={C} value={form.url} onChange={e=>setForm(f=>({...f,url:e.target.value}))} placeholder="https://drive.google.com/..."/></FG>
-        <FG label="Notes" C={C} span><Inp C={C} value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Optional notes..."/></FG>
-      </div>
-      <div style={{display:"flex",gap:10}}><Btn onClick={addDoc} C={C} color="green">Save</Btn><Btn onClick={()=>setShowAdd(false)} C={C} color="red" outline>Cancel</Btn></div>
-    </div>}
-    <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-      <Inp C={C} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search documents..." style={{flex:1,minWidth:160,marginBottom:0}}/>
-      <Sel C={C} value={filter} onChange={e=>setFilter(e.target.value)} style={{width:"auto",marginBottom:0}}><option value="all">All Categories</option>{CATS.map(c=><option key={c}>{c}</option>)}</Sel>
-    </div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
-      {filtered.map(doc=>{const stu=myStudents.find(s=>s.id===doc.studentId);return<div key={doc.id} style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:16,boxShadow:C.shadow}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-          <div style={{fontSize:26}}>📄</div><Badge label={doc.category} color="blue" C={C}/>
-        </div>
-        <div style={{fontWeight:700,fontSize:13,color:C.text,marginBottom:4}}>{doc.title}</div>
-        {stu&&<div style={{fontSize:11,color:C.muted,marginBottom:4}}>{stu.name} - {stu.rollNo}</div>}
-        {doc.description&&<div style={{fontSize:11,color:C.muted,marginBottom:8}}>{doc.description}</div>}
-        <div style={{fontSize:10,color:C.muted,marginBottom:10}}>Added: {fmt(doc.uploadedAt)}</div>
-        <div style={{display:"flex",gap:8}}>
-          {doc.url&&<a href={doc.url} target="_blank" rel="noreferrer" style={{flex:1,padding:"6px 12px",borderRadius:7,background:color,color:"#fff",fontSize:11,fontWeight:700,textAlign:"center",textDecoration:"none"}}>Open File</a>}
-          {isAdmin&&<Btn onClick={()=>delDoc(doc.id)} C={C} color="red" size="sm" outline>Del</Btn>}
-        </div>
-      </div>;})}
-      {!filtered.length&&<div style={{gridColumn:"1/-1"}}><Empty msg="No documents found" C={C}/></div>}
-    </div>
-  </div>;
-}
-
-// ─── ADMISSION CRM ────────────────────────────────────────────────────────────
-function InstCRM({db,saveDb,inst,color,notify,C}){
-  const KEY="crm_"+inst.id;
-  const [leads,setLeads]=useState(()=>lsGet(KEY,[]));
-  const [showAdd,setShowAdd]=useState(false);
-  const [subTab,setSubTab]=useState("board");
-  const blank={name:"",phone:"",email:"",course:"",source:"Walk-in",notes:"",status:"New Inquiry"};
-  const [form,setForm]=useState(blank);
-  const STATUSES=["New Inquiry","Contacted","Follow-up","Demo Scheduled","Enrolled","Not Interested","Lost"];
-  const SOURCES=["Walk-in","Phone Call","WhatsApp","Reference","Social Media","Website","Other"];
-  const SCOL={"New Inquiry":"teal","Contacted":"blue","Follow-up":"gold","Demo Scheduled":"purple","Enrolled":"green","Not Interested":"red","Lost":"red"};
-  function saveLeads(l){setLeads(l);lsSet(KEY,l);}
-  function addLead(){if(!form.name||!form.phone)return;saveLeads([...leads,{...form,id:uid(),createdAt:today(),updatedAt:today()}]);setForm(blank);setShowAdd(false);notify("Lead added!");}
-  function updateStatus(id,status){saveLeads(leads.map(l=>l.id===id?{...l,status,updatedAt:today()}:l));}
-  function addNote(id,note){saveLeads(leads.map(l=>l.id===id?{...l,notes:(l.notes?l.notes+"\n":"")+today()+": "+note,updatedAt:today()}:l));}
-  function delLead(id){if(!window.confirm("Delete lead?"))return;saveLeads(leads.filter(l=>l.id!==id));notify("Deleted","error");}
-  const convRate=leads.length?Math.round(leads.filter(l=>l.status==="Enrolled").length/leads.length*100):0;
-  const week=new Date(Date.now()-7*86400000).toISOString().slice(0,10);
-  return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
-      <PH title="Admission CRM" sub={leads.length+" leads - "+convRate+"% conversion"} C={C}/>
-      <Btn onClick={()=>setShowAdd(s=>!s)} C={C} color="teal">+ Add Lead</Btn>
-    </div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
-      {[{l:"Total Leads",v:leads.length,c:"teal"},{l:"This Week",v:leads.filter(l=>l.createdAt>=week).length,c:"blue"},{l:"Enrolled",v:leads.filter(l=>l.status==="Enrolled").length,c:"green"},{l:"Conversion",v:convRate+"%",c:"gold"}].map(x=><div key={x.l} style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:14,textAlign:"center",boxShadow:C.shadow}}><div style={{fontSize:20,fontWeight:800,color:tc(C,x.c)}}>{x.v}</div><div style={{fontSize:10,color:C.muted}}>{x.l}</div></div>)}
-    </div>
-    {showAdd&&<div style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:20,marginBottom:18,boxShadow:C.shadow}}>
-      <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>New Inquiry / Lead</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
-        <FG label="Name *" C={C}><Inp C={C} value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Prospect name"/></FG>
-        <FG label="Phone *" C={C}><Inp C={C} value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} placeholder="Mobile number"/></FG>
-        <FG label="Email" C={C}><Inp C={C} value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="Email (optional)"/></FG>
-        <FG label="Course Interest" C={C}><Inp C={C} value={form.course} onChange={e=>setForm(f=>({...f,course:e.target.value}))} placeholder="e.g. Python, Class 6"/></FG>
-        <FG label="Source" C={C}><Sel C={C} value={form.source} onChange={e=>setForm(f=>({...f,source:e.target.value}))}>{SOURCES.map(s=><option key={s}>{s}</option>)}</Sel></FG>
-        <FG label="Status" C={C}><Sel C={C} value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>{STATUSES.map(s=><option key={s}>{s}</option>)}</Sel></FG>
-        <FG label="Notes" C={C} span><Inp C={C} value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Initial notes..."/></FG>
-      </div>
-      <div style={{display:"flex",gap:10}}><Btn onClick={addLead} C={C} color="green">Save Lead</Btn><Btn onClick={()=>setShowAdd(false)} C={C} color="red" outline>Cancel</Btn></div>
-    </div>}
-    <div style={{display:"flex",gap:8,marginBottom:18}}>
-      {["board","list"].map(v=><button key={v} onClick={()=>setSubTab(v)} style={{padding:"7px 16px",borderRadius:20,border:"1px solid "+(subTab===v?color:C.border),background:subTab===v?color:"transparent",color:subTab===v?"#fff":C.muted,fontWeight:700,fontSize:12,cursor:"pointer"}}>{v==="board"?"Kanban Board":"List View"}</button>)}
-    </div>
-    {subTab==="board"&&<div style={{display:"flex",gap:12,overflowX:"auto",paddingBottom:8}}>
-      {STATUSES.map(status=>{const col=tc(C,SCOL[status]||"teal");const bg=tb(C,SCOL[status]||"teal");const items=leads.filter(l=>l.status===status);return<div key={status} style={{minWidth:200,background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:12,flexShrink:0}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:col,textTransform:"uppercase"}}>{status}</div><span style={{background:bg,color:col,borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:700}}>{items.length}</span></div>
-        {items.map(lead=><LeadCard key={lead.id} lead={lead} STATUSES={STATUSES} SCOL={SCOL} onStatusChange={updateStatus} onDelete={delLead} onNote={addNote} C={C}/>)}
-        {!items.length&&<div style={{textAlign:"center",padding:"12px 0",color:C.muted,fontSize:11,opacity:0.6}}>Empty</div>}
-      </div>;})}
-    </div>}
-    {subTab==="list"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {leads.slice().sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(lead=><LeadCard key={lead.id} lead={lead} STATUSES={STATUSES} SCOL={SCOL} onStatusChange={updateStatus} onDelete={delLead} onNote={addNote} C={C} full/>)}
-      {!leads.length&&<Empty msg="No leads yet. Add your first inquiry above." C={C}/>}
-    </div>}
-  </div>;
-}
-
-function LeadCard({lead,STATUSES,SCOL,onStatusChange,onDelete,onNote,C,full}){
-  const [showNotes,setShowNotes]=useState(false);const [newNote,setNewNote]=useState("");
-  const col=tc(C,SCOL[lead.status]||"teal");
-  return <div style={{background:C.bg,borderRadius:9,border:"1px solid "+C.border,padding:12,marginBottom:8}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-      <div style={{flex:1}}><div style={{fontWeight:700,fontSize:12,color:C.text}}>{lead.name}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{lead.phone}{lead.course?" - "+lead.course:""}</div>{lead.source&&<div style={{fontSize:9,color:C.muted,marginTop:1}}>via {lead.source}</div>}</div>
-      <div style={{display:"flex",gap:4,flexShrink:0}}>
-        <button onClick={()=>setShowNotes(s=>!s)} style={{background:"none",border:"none",fontSize:13,cursor:"pointer",padding:"2px 4px"}} title="Notes">📝</button>
-        <button onClick={()=>onDelete(lead.id)} style={{background:"none",border:"none",fontSize:12,cursor:"pointer",padding:"2px 4px",color:C.red}}>✕</button>
-      </div>
-    </div>
-    {full&&<div style={{marginTop:8}}><Sel C={C} value={lead.status} onChange={e=>onStatusChange(lead.id,e.target.value)} style={{fontSize:11,padding:"4px 8px",marginBottom:0}}>{STATUSES.map(s=><option key={s}>{s}</option>)}</Sel></div>}
-    {!full&&<div style={{display:"flex",gap:4,marginTop:8,flexWrap:"wrap"}}>{STATUSES.slice(0,4).map(s=><button key={s} onClick={()=>onStatusChange(lead.id,s)} style={{fontSize:9,padding:"2px 6px",borderRadius:20,border:"1px solid "+tc(C,SCOL[s]||"teal")+"44",background:lead.status===s?tc(C,SCOL[s]||"teal"):C.surface,color:lead.status===s?"#fff":tc(C,SCOL[s]||"teal"),cursor:"pointer"}}>{s}</button>)}</div>}
-    {showNotes&&<div style={{marginTop:10,borderTop:"1px solid "+C.border,paddingTop:10}}>
-      {lead.notes&&<pre style={{fontSize:10,color:C.muted,whiteSpace:"pre-wrap",marginBottom:8,maxHeight:80,overflowY:"auto"}}>{lead.notes}</pre>}
-      <div style={{display:"flex",gap:6}}><Inp C={C} value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="Add note..." style={{flex:1,fontSize:11,marginBottom:0}}/><Btn onClick={()=>{if(newNote.trim()){onNote(lead.id,newNote);setNewNote("");}}} C={C} color="teal" size="sm">Add</Btn></div>
-    </div>}
-  </div>;
-}
-
-// ─── GAMIFICATION ─────────────────────────────────────────────────────────────
-function InstGamification({students,inst,color,onUpdate,notify,C}){
-  const BADGES=[
-    {id:"perfect_att",icon:"🌟",name:"Perfect Attendance",desc:"100% attendance",check:s=>attPct(s.attendance||[])===100},
-    {id:"good_att",icon:"✅",name:"Good Attendance",desc:">=90% attendance",check:s=>attPct(s.attendance||[])>=90},
-    {id:"top_scorer",icon:"🏆",name:"Top Scorer",desc:">=90% avg marks",check:s=>{const e=s.exams||[];return e.length>=2&&Math.round(e.reduce((a,x)=>a+(x.maxMarks>0?x.marks/x.maxMarks*100:0),0)/e.length)>=90;}},
-    {id:"hw_champion",icon:"📚",name:"HW Champion",desc:"All homework submitted",check:s=>{const h=s.homeworks||[];return h.length>=3&&h.every(x=>x.status==="Submitted");}},
-    {id:"fast_learner",icon:"⚡",name:"Fast Learner",desc:"5+ exams completed",check:s=>(s.exams||[]).length>=5},
-    {id:"scholar",icon:"🎓",name:"Scholar",desc:">=75% in 3+ exams",check:s=>{const e=s.exams||[];return e.length>=3&&e.filter(x=>x.maxMarks>0&&x.marks/x.maxMarks>=0.75).length>=3;}},
-  ];
-  function getPoints(s){let pts=0;pts+=Math.min(attPct(s.attendance||[]),100);const e=s.exams||[];if(e.length)pts+=Math.round(e.reduce((a,x)=>a+(x.maxMarks>0?x.marks/x.maxMarks*100:0),0)/e.length);const h=s.homeworks||[];if(h.length)pts+=Math.round(h.filter(x=>x.status==="Submitted").length/h.length*100);pts+=BADGES.filter(b=>b.check(s)).length*50;return pts;}
-  function awardBadge(sid,badgeId){const stu=students.find(s=>s.id===sid);if(!stu)return;const cur=stu.badges||[];if(cur.includes(badgeId)){onUpdate(sid,{badges:cur.filter(b=>b!==badgeId)});notify("Badge removed");}else{onUpdate(sid,{badges:[...cur,badgeId]});notify("Badge awarded!");}}
-  const ranked=students.map(s=>({...s,points:getPoints(s),earnedBadges:BADGES.filter(b=>b.check(s))})).sort((a,b)=>b.points-a.points);
-  const MEDAL=["🥇","🥈","🥉"];
-  return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <PH title="Gamification" sub="Points, badges and leaderboard" C={C}/>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20}}>
-      <div style={{background:C.surface,borderRadius:12,border:"1px solid "+C.border,padding:20,boxShadow:C.shadow}}>
-        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Available Badges</div>
-        {BADGES.map(b=><div key={b.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"8px 10px",background:C.bg,borderRadius:9,border:"1px solid "+C.border}}>
-          <div style={{fontSize:22,flexShrink:0}}>{b.icon}</div>
-          <div style={{flex:1}}><div style={{fontWeight:700,fontSize:12,color:C.text}}>{b.name}</div><div style={{fontSize:10,color:C.muted}}>{b.desc}</div></div>
-          <div style={{fontWeight:800,fontSize:12,color}}>{students.filter(s=>b.check(s)).length} earned</div>
-        </div>)}
-      </div>
-      <div style={{background:C.surface,borderRadius:12,border:"1px solid "+C.border,padding:20,boxShadow:C.shadow}}>
-        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Leaderboard</div>
-        {ranked.slice(0,10).map((s,i)=><div key={s.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"10px 12px",background:i<3?C.goldL:C.bg,borderRadius:10,border:"1px solid "+(i<3?C.gold:C.border)}}>
-          <div style={{width:26,height:26,borderRadius:"50%",background:i<3?C.gold:C.border,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,color:"#fff",flexShrink:0}}>{i<3?MEDAL[i]:i+1}</div>
-          <Avatar name={s.name} photo={s.photo} color={color} size={30} C={C}/>
-          <div style={{flex:1}}><div style={{fontWeight:700,fontSize:12,color:C.text}}>{s.name}</div><div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:2}}>{s.earnedBadges.map(b=><span key={b.id} title={b.name} style={{fontSize:13}}>{b.icon}</span>)}</div></div>
-          <div style={{textAlign:"right"}}><div style={{fontWeight:900,fontSize:16,color}}>{s.points}</div><div style={{fontSize:9,color:C.muted}}>pts</div></div>
-        </div>)}
-        {!ranked.length&&<Empty msg="No students yet" C={C}/>}
-      </div>
-    </div>
-    <div style={{background:C.surface,borderRadius:12,border:"1px solid "+C.border,padding:20,boxShadow:C.shadow}}>
-      <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>Student Badge Details</div>
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {ranked.map(s=><div key={s.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:C.bg,borderRadius:10,border:"1px solid "+C.border,flexWrap:"wrap"}}>
-          <Avatar name={s.name} photo={s.photo} color={color} size={34} C={C}/>
-          <div style={{flex:1,minWidth:120}}><div style={{fontWeight:700,fontSize:12,color:C.text}}>{s.name}</div><div style={{fontSize:10,color:C.muted}}>{s.rollNo}</div></div>
-          <div style={{fontWeight:800,fontSize:15,color,minWidth:50,textAlign:"center"}}>{s.points}pts</div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {BADGES.map(b=>{const has=b.check(s)||(s.badges||[]).includes(b.id);return<button key={b.id} onClick={()=>awardBadge(s.id,b.id)} title={b.name} style={{width:32,height:32,borderRadius:9,border:"2px solid "+(has?color:C.border),background:has?tb(C,"teal"):C.surface,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",opacity:has?1:0.35}}>{b.icon}</button>;})}
-          </div>
-        </div>)}
-        {!ranked.length&&<Empty msg="No students" C={C}/>}
-      </div>
-    </div>
-  </div>;
-}
+        {feeByMonth.map(x=><div key={x.m} style={{display:"flex",flexDir
