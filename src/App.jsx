@@ -141,7 +141,7 @@ function G2({children,style:st}){return<div style={{display:"grid",gridTemplateC
 function FG({label,children,C,span,err}){return<div style={{gridColumn:span?"1 / -1":"",marginBottom:0}}>{label&&<LBL C={C}>{label}</LBL>}{children}{err&&<div style={{fontSize:10,color:C.red,marginTop:2}}>{err}</div>}</div>;}
 function StatCard({icon,label,value,color="teal",C,onClick,sub}){const col=tc(C,color),bg=tb(C,color);return<div onClick={onClick} style={{background:C.surface,border:`1px solid ${col}33`,borderRadius:12,padding:"16px 18px",display:"flex",flexDirection:"column",gap:4,boxShadow:C.shadow,cursor:onClick?"pointer":"default",transition:"all 0.15s"}} onMouseOver={e=>{if(onClick)e.currentTarget.style.transform="translateY(-2px)";}} onMouseOut={e=>{e.currentTarget.style.transform="translateY(0)";}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><span style={{fontSize:22}}>{icon}</span><span style={{fontSize:10,fontWeight:700,color:col,background:bg,padding:"2px 8px",borderRadius:99,textTransform:"uppercase"}}>{label}</span></div><div style={{fontSize:24,fontWeight:800,color:C.text,lineHeight:1.1}}>{value}</div>{sub&&<div style={{fontSize:11,color:C.muted}}>{sub}</div>}</div>;}
 
-function TopBar({C,dark,setDark,onLogout,user,right,onMenuToggle,showMenu,onNotifClick,notifCount}){
+function TopBar({C,dark,setDark,onLogout,user,right,instLogo,onMenuToggle,showMenu,onNotifClick,notifCount}){
   const roleColor=user?.role==="admin"?C.teal:user?.role==="accountant"?C.gold:user?.role==="staff"?C.blue:user?.role==="student"?C.purple:C.teal;
   const roleBg=user?.role==="admin"?C.tealL:user?.role==="accountant"?C.goldL:user?.role==="staff"?C.blueL:user?.role==="student"?C.purpleL:C.tealL;
   return <>
@@ -164,8 +164,11 @@ function TopBar({C,dark,setDark,onLogout,user,right,onMenuToggle,showMenu,onNoti
       </button>}
       {/* Logo */}
       <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
-        <img src={LOGO_SRC} alt="AllBee" style={{width:32,height:32,objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 0 6px #00bcd4aa)"}}/>
-        <div className="tb-logo-text"><div style={{fontWeight:800,fontSize:12,color:C.teal,lineHeight:1.2}}>AllBee EduSphere</div><div style={{fontSize:8,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em"}}>Smart Student Management</div></div>
+        {instLogo
+          ?<img src={instLogo} alt="logo" style={{width:32,height:32,objectFit:"cover",borderRadius:7,flexShrink:0,border:`1px solid ${C.border}`}}/>
+          :<img src={LOGO_SRC} alt="AllBee" style={{width:32,height:32,objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 0 6px #00bcd4aa)"}}/>
+        }
+        {!instLogo&&<div className="tb-logo-text"><div style={{fontWeight:800,fontSize:12,color:C.teal,lineHeight:1.2}}>AllBee EduSphere</div><div style={{fontSize:8,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em"}}>Smart Student Management</div></div>}
       </div>
       {/* Institution name */}
       {right&&<div className="tb-inst-name" style={{borderColor:C.border,color:C.text,paddingLeft:16,fontSize:13,fontWeight:700,borderLeft:`2px solid ${C.border}`,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:200}}>{right}</div>}
@@ -454,14 +457,74 @@ function SAOverview({db,C}){
     </div>
   </div>;
 }
+// ─── ALL AVAILABLE SERVICES / MODULES ────────────────────────────────────────
+const ALL_SERVICES=[
+  {k:"students",i:"👥",l:"Students"},
+  {k:"attendance",i:"📅",l:"Attendance"},
+  {k:"fees",i:"💰",l:"Fees"},
+  {k:"marks",i:"📝",l:"Exam Marks"},
+  {k:"homework",i:"📚",l:"Homework"},
+  {k:"assignments",i:"📋",l:"Assignments"},
+  {k:"timetable",i:"📆",l:"Timetable"},
+  {k:"staff",i:"🧑‍💼",l:"Staff"},
+  {k:"library",i:"📖",l:"Library"},
+  {k:"updates",i:"📰",l:"Daily Updates"},
+  {k:"classlinks",i:"🎥",l:"Class Links"},
+  {k:"alerts",i:"🔔",l:"Alerts / SMS"},
+  {k:"gallery",i:"🖼",l:"Gallery"},
+  {k:"leave",i:"🏖",l:"Leave Management"},
+  {k:"transport",i:"🚌",l:"Transport"},
+  {k:"hostel",i:"🏠",l:"Hostel"},
+  {k:"leads",i:"🎯",l:"CRM / Leads"},
+  {k:"documents",i:"📁",l:"Documents"},
+  {k:"gamification",i:"🏆",l:"Gamification"},
+  {k:"aichat",i:"🤖",l:"AI Assistant"},
+];
+const DEFAULT_SERVICES=ALL_SERVICES.map(s=>s.k);
+
 function SAInst({db,onAdd,onUpdate,onDelete,C}){
   const [showAdd,setShowAdd]=useState(false);
-  const blank={name:"",type:"College",city:"",phone:"",email:"",color:INST_COLORS[0]};
+  const [editSvc,setEditSvc]=useState(null);
+  const blank={name:"",type:"College",city:"",phone:"",email:"",color:INST_COLORS[0],logoUrl:"",services:DEFAULT_SERVICES};
   const [form,setForm]=useState(blank);
+  const [uploading,setUploading]=useState(false);
+
+  function handleLogoUpload(e,target){
+    const file=e.target.files[0];
+    if(!file)return;
+    if(file.size>500000){alert("Logo must be under 500 KB");return;}
+    setUploading(true);
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const base64=ev.target.result;
+      if(target==="form"){setForm(f=>({...f,logoUrl:base64}));}
+      else{onUpdate(target,{logoUrl:base64});}
+      setUploading(false);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function toggleSvcInForm(k){
+    setForm(f=>{
+      const s=f.services||DEFAULT_SERVICES;
+      return {...f,services:s.includes(k)?s.filter(x=>x!==k):[...s,k]};
+    });
+  }
+
+  function toggleSvcInst(instId,k){
+    const inst=db.institutions.find(i=>i.id===instId);
+    const s=(inst.services||DEFAULT_SERVICES);
+    onUpdate(instId,{services:s.includes(k)?s.filter(x=>x!==k):[...s,k]});
+  }
+
   function submit(){if(!form.name.trim())return;onAdd(form);setForm(blank);setShowAdd(false);}
-  const TH={padding:"10px 16px",textAlign:"left",fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:`1px solid ${C.border}`,background:C.bg||"#f2f4f6"};
+
   return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><PH title="🏛 Institutions" sub={`${db.institutions.length} registered`} C={C}/><Btn onClick={()=>setShowAdd(s=>!s)} C={C} color="teal">+ Add Institution</Btn></div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+      <PH title="🏛 Institutions" sub={`${db.institutions.length} registered`} C={C}/>
+      <Btn onClick={()=>setShowAdd(s=>!s)} C={C} color="teal">+ Add Institution</Btn>
+    </div>
+
     {showAdd&&<div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:20,marginBottom:18,boxShadow:C.shadow,animation:"fadeIn 0.3s ease"}}>
       <div style={{fontWeight:700,fontSize:14,marginBottom:14,color:C.text}}>New Institution</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
@@ -470,12 +533,83 @@ function SAInst({db,onAdd,onUpdate,onDelete,C}){
         <FG label="City" C={C}><Inp C={C} value={form.city} onChange={e=>setForm(f=>({...f,city:e.target.value}))} placeholder="City"/></FG>
         <FG label="Phone" C={C}><Inp C={C} value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} placeholder="Phone"/></FG>
         <FG label="Email" C={C}><Inp C={C} value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="Email"/></FG>
-        <FG label="Color" C={C}><div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:4}}>{INST_COLORS.map(c=><button key={c} onClick={()=>setForm(f=>({...f,color:c}))} style={{width:26,height:26,borderRadius:7,background:c,border:form.color===c?"3px solid #333":"3px solid transparent",cursor:"pointer"}}/>) }</div></FG>
+        <FG label="Color" C={C}><div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:4}}>{INST_COLORS.map(c=><button key={c} onClick={()=>setForm(f=>({...f,color:c}))} style={{width:26,height:26,borderRadius:7,background:c,border:form.color===c?"3px solid #333":"3px solid transparent",cursor:"pointer"}}/>)}</div></FG>
       </div>
+
+      <FG label="Institution Logo" C={C} style={{marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          {form.logoUrl
+            ?<img src={form.logoUrl} alt="logo" style={{width:52,height:52,borderRadius:10,objectFit:"cover",border:`2px solid ${C.border}`}}/>
+            :<div style={{width:52,height:52,borderRadius:10,background:form.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:18}}>{(form.name||"?").slice(0,2).toUpperCase()}</div>
+          }
+          <label style={{cursor:"pointer",padding:"6px 14px",background:C.teal,color:"#fff",borderRadius:7,fontSize:12,fontWeight:600,display:"inline-block"}}>
+            {uploading?"⏳ Uploading…":"📷 Upload Logo"}
+            <input type="file" accept="image/*" style={{display:"none"}} disabled={uploading} onChange={e=>handleLogoUpload(e,"form")}/>
+          </label>
+          {form.logoUrl&&<button onClick={()=>setForm(f=>({...f,logoUrl:""}))} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12}}>✕ Remove</button>}
+          <span style={{fontSize:10,color:C.muted}}>PNG/JPG, max 500 KB</span>
+        </div>
+      </FG>
+
+      <FG label="Enabled Services / Modules" C={C} style={{marginBottom:14}}>
+        <div style={{display:"flex",flexWrap:"wrap",gap:7,marginTop:4}}>
+          {ALL_SERVICES.map(s=>{
+            const on=(form.services||DEFAULT_SERVICES).includes(s.k);
+            return<button key={s.k} onClick={()=>toggleSvcInForm(s.k)} style={{padding:"4px 10px",borderRadius:20,border:`1px solid ${on?C.teal:C.border}`,background:on?C.tealL:"transparent",color:on?C.teal:C.muted,fontSize:11,cursor:"pointer",fontWeight:on?700:400}}>
+              {s.i} {s.l}
+            </button>;
+          })}
+        </div>
+        <div style={{fontSize:10,color:C.muted,marginTop:5}}>{(form.services||DEFAULT_SERVICES).length}/{ALL_SERVICES.length} services enabled</div>
+      </FG>
+
       <div style={{display:"flex",gap:10}}><Btn onClick={submit} C={C} color="green">Create</Btn><Btn onClick={()=>setShowAdd(false)} C={C} color="red" outline>Cancel</Btn></div>
     </div>}
+
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {db.institutions.map(inst=>{const m=TYPE_META[inst.type]||TYPE_META["College"];const sc=db.students.filter(s=>s.instId===inst.id).length;const uc=db.users.filter(u=>u.instId===inst.id).length;return<div key={inst.id} style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:"15px 18px",display:"flex",alignItems:"center",gap:14,boxShadow:C.shadow,borderLeft:`4px solid ${inst.color}`}}><span style={{fontSize:26}}>{m.icon}</span><div style={{flex:1}}><div style={{fontWeight:700,fontSize:14,color:C.text}}>{inst.name}</div><div style={{fontSize:11,color:C.muted}}>{inst.type} - {inst.city} - {inst.phone}</div></div><div style={{display:"flex",gap:10,alignItems:"center",flexShrink:0}}><div style={{textAlign:"center",padding:"5px 12px",background:C.bg,borderRadius:8}}><div style={{fontWeight:700,fontSize:14,color:inst.color}}>{sc}</div><div style={{fontSize:9,color:C.muted}}>Students</div></div><div style={{textAlign:"center",padding:"5px 12px",background:C.bg,borderRadius:8}}><div style={{fontWeight:700,fontSize:14,color:C.purple}}>{uc}</div><div style={{fontSize:9,color:C.muted}}>Users</div></div><Badge label={inst.active?"Active":"Inactive"} color={inst.active?"green":"red"} C={C}/><Btn onClick={()=>onUpdate(inst.id,{active:!inst.active})} C={C} color={inst.active?"gold":"green"} size="sm" outline>{inst.active?"Deactivate":"Activate"}</Btn><Btn onClick={()=>onDelete(inst.id)} C={C} color="red" size="sm" outline>Delete</Btn></div></div>;})}
+      {db.institutions.map(inst=>{
+        const m=TYPE_META[inst.type]||TYPE_META["College"];
+        const sc=db.students.filter(s=>s.instId===inst.id).length;
+        const uc=db.users.filter(u=>u.instId===inst.id).length;
+        const instSvcs=(inst.services||DEFAULT_SERVICES);
+        return<div key={inst.id} style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:"15px 18px",boxShadow:C.shadow,borderLeft:`4px solid ${inst.color}`}}>
+          <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+            {inst.logoUrl
+              ?<img src={inst.logoUrl} alt="logo" style={{width:42,height:42,borderRadius:9,objectFit:"cover",border:`2px solid ${inst.color}`,flexShrink:0}}/>
+              :<span style={{fontSize:26,flexShrink:0}}>{m.icon}</span>
+            }
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,fontSize:14,color:C.text}}>{inst.name}</div>
+              <div style={{fontSize:11,color:C.muted}}>{inst.type} - {inst.city} - {inst.phone}</div>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0,flexWrap:"wrap"}}>
+              <div style={{textAlign:"center",padding:"5px 12px",background:C.bg,borderRadius:8}}><div style={{fontWeight:700,fontSize:14,color:inst.color}}>{sc}</div><div style={{fontSize:9,color:C.muted}}>Students</div></div>
+              <div style={{textAlign:"center",padding:"5px 12px",background:C.bg,borderRadius:8}}><div style={{fontWeight:700,fontSize:14,color:C.purple}}>{uc}</div><div style={{fontSize:9,color:C.muted}}>Users</div></div>
+              <Badge label={inst.active?"Active":"Inactive"} color={inst.active?"green":"red"} C={C}/>
+              <Btn onClick={()=>onUpdate(inst.id,{active:!inst.active})} C={C} color={inst.active?"gold":"green"} size="sm" outline>{inst.active?"Deactivate":"Activate"}</Btn>
+              <label style={{cursor:"pointer",padding:"5px 10px",background:C.blue,color:"#fff",borderRadius:7,fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
+                📷 Logo
+                <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>handleLogoUpload(e,inst.id)}/>
+              </label>
+              {inst.logoUrl&&<button onClick={()=>onUpdate(inst.id,{logoUrl:""})} style={{background:"none",border:`1px solid ${C.red}`,color:C.red,cursor:"pointer",fontSize:10,borderRadius:6,padding:"4px 8px"}}>✕ Logo</button>}
+              <Btn onClick={()=>setEditSvc(editSvc===inst.id?null:inst.id)} C={C} color="purple" size="sm" outline>⚙ Services ({instSvcs.length})</Btn>
+              <Btn onClick={()=>onDelete(inst.id)} C={C} color="red" size="sm" outline>Delete</Btn>
+            </div>
+          </div>
+          {editSvc===inst.id&&<div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${C.border}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.text,marginBottom:8}}>⚙ Enabled Services — toggle to control access</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+              {ALL_SERVICES.map(s=>{
+                const on=instSvcs.includes(s.k);
+                return<button key={s.k} onClick={()=>toggleSvcInst(inst.id,s.k)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${on?inst.color:C.border}`,background:on?inst.color+"22":"transparent",color:on?inst.color:C.muted,fontSize:11,cursor:"pointer",fontWeight:on?700:400}}>
+                  {s.i} {s.l}
+                </button>;
+              })}
+            </div>
+            <div style={{fontSize:10,color:C.muted,marginTop:6}}>{instSvcs.length}/{ALL_SERVICES.length} enabled · Changes saved instantly</div>
+          </div>}
+        </div>;
+      })}
       {!db.institutions.length&&<Empty msg="No institutions - add one above" C={C}/>}
     </div>
   </div>;
@@ -527,10 +661,20 @@ function SAWhiteLabel({db,onUpdate,C}){
   const [sel,setSel]=useState(db.institutions[0]?.id||"");
   const inst=db.institutions.find(i=>i.id===sel);
   const [f,setF]=useState({});
+  const [uploading,setUploading]=useState(false);
   useEffect(()=>{if(inst)setF({brandName:inst.brandName||inst.name||"",tagline:inst.tagline||"Smart Student Management",logoText:inst.logoText||(inst.name||"").slice(0,2).toUpperCase(),logoUrl:inst.logoUrl||"",color:inst.color||INST_COLORS[0]});},[sel]);
   if(!db.institutions.length)return <div style={{animation:"fadeUp 0.4s ease"}}><PH title="🎨 White Label" sub="Brand each institution" C={C}/><Empty msg="Add an institution first" C={C}/></div>;
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   function save(){onUpdate(sel,{brandName:f.brandName,tagline:f.tagline,logoText:f.logoText,logoUrl:f.logoUrl,color:f.color});}
+  function handleLogoFile(e){
+    const file=e.target.files[0];
+    if(!file)return;
+    if(file.size>500000){alert("Logo must be under 500 KB");return;}
+    setUploading(true);
+    const reader=new FileReader();
+    reader.onload=ev=>{set("logoUrl",ev.target.result);setUploading(false);};
+    reader.readAsDataURL(file);
+  }
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <PH title="🎨 White Label" sub="Customise branding per institution — logo, name, colours" C={C}/>
     <FG label="Institution" C={C} style={{marginBottom:16,maxWidth:340}}>
@@ -542,7 +686,20 @@ function SAWhiteLabel({db,onUpdate,C}){
         <FG label="Brand / Display Name" C={C} style={{marginBottom:10}}><Inp C={C} value={f.brandName||""} onChange={e=>set("brandName",e.target.value)} placeholder="e.g. AllBee Solutions"/></FG>
         <FG label="Tagline" C={C} style={{marginBottom:10}}><Inp C={C} value={f.tagline||""} onChange={e=>set("tagline",e.target.value)} placeholder="Smart Student Management"/></FG>
         <FG label="Logo Initials (fallback)" C={C} style={{marginBottom:10}}><Inp C={C} value={f.logoText||""} onChange={e=>set("logoText",e.target.value.slice(0,3))} placeholder="AB" maxLength={3}/></FG>
-        <FG label="Logo Image URL (optional)" C={C} style={{marginBottom:10}}><Inp C={C} value={f.logoUrl||""} onChange={e=>set("logoUrl",e.target.value)} placeholder="https://.../logo.png"/></FG>
+        <FG label="Logo Image" C={C} style={{marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            {f.logoUrl
+              ?<img src={f.logoUrl} alt="logo" style={{width:48,height:48,borderRadius:9,objectFit:"cover",border:`2px solid ${C.border}`}}/>
+              :<div style={{width:48,height:48,borderRadius:9,background:f.color||C.teal,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:18}}>{f.logoText||"AB"}</div>
+            }
+            <label style={{cursor:"pointer",padding:"6px 14px",background:C.teal,color:"#fff",borderRadius:7,fontSize:12,fontWeight:600,display:"inline-block"}}>
+              {uploading?"⏳ Uploading…":"📷 Upload"}
+              <input type="file" accept="image/*" style={{display:"none"}} disabled={uploading} onChange={handleLogoFile}/>
+            </label>
+            {f.logoUrl&&<button onClick={()=>set("logoUrl","")} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12}}>✕ Remove</button>}
+            <span style={{fontSize:10,color:C.muted}}>PNG/JPG, max 500 KB</span>
+          </div>
+        </FG>
         <FG label="Primary Colour" C={C}><div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:4}}>{INST_COLORS.map(c=><button key={c} onClick={()=>set("color",c)} style={{width:28,height:28,borderRadius:7,background:c,border:f.color===c?"3px solid #333":"3px solid transparent",cursor:"pointer"}}/>)}</div></FG>
         <div style={{marginTop:18}}><Btn onClick={save} C={C} color="teal">💾 Save Branding</Btn></div>
       </div>
@@ -565,7 +722,6 @@ function SAWhiteLabel({db,onUpdate,C}){
     </div>
   </div>;
 }
-
 // ─── SaaS BILLING ───────────────────────────────────────────────────────────
 const PLANS=[
   {k:"trial",l:"Free Trial",price:0,cap:"Up to 25 students · 14 days",color:"gold"},
@@ -689,7 +845,7 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark}){
       }
     `}</style>
     <style>{`:root{--sb-bg:${C.surface};--sb-border:${C.border};}`}</style>
-    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={inst?.name||""} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen} onNotifClick={()=>{setTab("notifs");setSideOpen(false);markAllRead();}} notifCount={unread}/>
+    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={inst?.name||""} instLogo={inst?.logoUrl||""} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen} onNotifClick={()=>{setTab("notifs");setSideOpen(false);markAllRead();}} notifCount={unread}/>
     <div onClick={()=>setSideOpen(false)} style={{display:sideOpen?"block":"none",position:"fixed",inset:0,top:54,background:"#0005",zIndex:140}}/>
     <div style={{display:"flex",flex:1,minHeight:0}}>
       <div className={"inst-sidebar"+(sideOpen?" open":"")} style={{"--sb-bg":C.surface,"--sb-border":C.border}}>
@@ -2049,7 +2205,17 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   function addStudent(data){const s={...data,id:uid(),instId:inst.id,createdAt:today(),attendance:[],fees:[],homeworks:[],exams:[],assignments:[]};saveDb({students:[...db.students,s]});notify("Student registered!");setTab("students");}
   function updStudent(id,patch){saveDb({students:db.students.map(s=>s.id===id?{...s,...patch}:s)});}
   function goTab(k){setTab(k);setSideOpen(false);}
-  const visibleTabs=INST_TABS.filter(t=>{if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);if(!isAdmin)return!["register","import","staff","courses","payroll","crm"].includes(t.k);if(t.k==="courses")return inst.type==="Computer Institute";return true;});
+  // Map service keys to tab keys for service-gating
+  const SVC_TAB_MAP={students:["students","register","import"],attendance:["attend"],fees:["fees","receipt"],marks:["exams","onlineexam"],homework:["homework"],assignments:["assign"],timetable:["timetable"],staff:["staff","staffatt","payroll","tasks"],library:["library"],updates:["updates"],classlinks:["classlinks"],alerts:["alerts"],gallery:[],leave:["leave"],transport:[],hostel:[],leads:["crm"],documents:["docs"],gamification:["gamify","certificates"],aichat:["ai"]};
+  const enabledSvcs=inst.services||DEFAULT_SERVICES;
+  const svcAllowedTabs=new Set(["home","accounts","reports","analytics",...enabledSvcs.flatMap(s=>SVC_TAB_MAP[s]||[])]);
+  const visibleTabs=INST_TABS.filter(t=>{
+    if(!svcAllowedTabs.has(t.k))return false;
+    if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);
+    if(!isAdmin)return!["register","import","staff","courses","payroll","crm"].includes(t.k);
+    if(t.k==="courses")return inst.type==="Computer Institute";
+    return true;
+  });
   const curTab=visibleTabs.find(t=>t.k===tab);
   return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:C.bg}}>
     <style>{`
@@ -2083,7 +2249,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
     `}</style>
     {/* CSS vars for sidebar */}
     <style>{`:root{--sb-bg:${C.surface};--sb-border:${C.border};}` + (dark ? ".inst-sidebar{color-scheme:dark;}" : "") + `}`}</style>
-    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={`${m.icon} ${inst.brandName||inst.name}`} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen}/>
+    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={`${m.icon} ${inst.brandName||inst.name}`} instLogo={inst.logoUrl||""} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen}/>
     {/* Overlay for mobile */}
     <div className={"inst-overlay"+(sideOpen?" open":"")} onClick={()=>setSideOpen(false)} style={{display:sideOpen?"block":"none",position:"fixed",inset:0,top:54,background:"#0005",zIndex:140}}/>
     <div style={{display:"flex",flex:1,minHeight:0}}>
