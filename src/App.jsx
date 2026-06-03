@@ -99,7 +99,31 @@ function seedData(){
     dailyUpdates:[],
     notifications:[],
     classLinks:[],
+    registrations:[],
+    settings:{sheetUrl:"",sheetSecret:""},
   };
+}
+
+// ─── Google Sheets sync (best-effort, fire-and-forget) ──────────────────────
+// Flatten a student into a flat row for the sheet
+function studentRow(s,instName){
+  return {
+    Institution:instName||"",Name:s.name||"",RollNo:s.rollNo||"",Phone:s.phone||"",Email:s.email||"",
+    Gender:s.gender||"",DOB:s.dob||"",Course:s.course||"",Department:s.department||"",Class:s.class||"",
+    Section:s.section||"",Year:s.year||"",DanceStyle:s.danceStyle||"",Batch:s.batch||s.danceBatch||"",
+    Status:s.status||"Studying",AdmissionDate:s.admissionDate||"",Parent:s.parent||s.parentName||"",
+    ParentPhone:s.parentPhone||"",Address:s.address||"",CreatedAt:s.createdAt||"",
+  };
+}
+// POST data to the configured Google Apps Script web-app. Uses no-cors so the
+// write succeeds without CORS pre-flight; response is opaque (we can't read it).
+function sheetPush(settings,payload){
+  const url=settings?.sheetUrl;
+  if(!url)return;
+  try{
+    fetch(url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({secret:settings.sheetSecret||"",...payload})});
+  }catch(e){/* best-effort, ignore */}
 }
 
 // shared UI helpers
@@ -262,6 +286,12 @@ export default function App(){
     setUser(x);return null;
   }
   function logout(){setUser(null);}
+  // Student self-registration — creates a PENDING request for admin approval
+  function register(data){
+    const reg={...data,id:uid(),status:"pending",createdAt:today(),requestedAt:new Date().toISOString()};
+    saveDb({registrations:[...(db.registrations||[]),reg]});
+    return null;
+  }
   const myInst=user?.instId?db?.institutions?.find(i=>i.id===user.instId):null;
   const toastBg=toast?.type==="success"?C.teal:toast?.type==="error"?C.red:C.gold;
 
@@ -275,7 +305,7 @@ export default function App(){
   return <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'Segoe UI',Inter,system-ui,sans-serif",fontSize:14,transition:"background 0.2s,color 0.2s"}}>
     <style>{`*{box-sizing:border-box;}::placeholder{color:${C.muted2};}@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes slideIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}input:focus,select:focus,textarea:focus{outline:none;border-color:${C.teal}!important;box-shadow:0 0 0 3px ${C.teal}22!important;}button{cursor:pointer;transition:all 0.15s;font-family:inherit;}button:active{transform:scale(0.97);}::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:${C.border2};border-radius:4px}`}</style>
     {toast&&<div style={{position:"fixed",top:18,right:18,zIndex:9999,padding:"12px 20px",borderRadius:10,fontWeight:600,fontSize:13,animation:"fadeIn 0.2s",boxShadow:C.shadowL,background:toastBg,color:"#fff"}}>{toast.type==="success"?"✓ ":toast.type==="error"?"✕ ":"⚠ "}{toast.msg}</div>}
-    {!user&&<LoginPage onLogin={login} db={db} C={C} dark={dark} setDark={setDark}/>}
+    {!user&&<LoginPage onLogin={login} onRegister={register} db={db} C={C} dark={dark} setDark={setDark}/>}
     {user?.role==="superadmin"&&<SuperAdmin db={db} saveDb={saveDb} onLogout={logout} notify={notify} user={user} C={C} dark={dark} setDark={setDark}/>}
     {(user?.role==="admin"||user?.role==="staff"||user?.role==="accountant")&&myInst&&<InstDash db={db} saveDb={saveDb} onLogout={logout} notify={notify} user={user} inst={myInst} C={C} dark={dark} setDark={setDark}/>}
     {user?.role==="student"&&<StudentPortal db={db} saveDb={saveDb} onLogout={logout} notify={notify} user={user} C={C} dark={dark} setDark={setDark}/>}
@@ -283,9 +313,10 @@ export default function App(){
 }
 
 // Login Page — Student first, Admin/Staff hidden
-function LoginPage({onLogin,db,C,dark,setDark}){
+function LoginPage({onLogin,onRegister,db,C,dark,setDark}){
   const [showStaff,setShowStaff]=useState(false);
   const [portal,setPortal]=useState("student");
+  const [regMode,setRegMode]=useState(false);
   const [u,setU]=useState("");
   const [p,setP]=useState("");
   const [err,setErr]=useState("");
@@ -347,7 +378,7 @@ function LoginPage({onLogin,db,C,dark,setDark}){
           </div>
 
           {/* Student login card — default */}
-          {portal==="student"&&<div className="login-card" style={{background:C.surface,border:`2px solid ${C.purple}33`,boxShadow:C.shadowL}}>
+          {portal==="student"&&!regMode&&<div className="login-card" style={{background:C.surface,border:`2px solid ${C.purple}33`,boxShadow:C.shadowL}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,padding:"9px 13px",background:C.purpleL,borderRadius:9}}>
               <span style={{fontSize:20}}>🎓</span>
               <div><div style={{fontWeight:800,fontSize:13,color:C.purple}}>Student Portal</div><div style={{fontSize:10,color:C.muted}}>Sign in with your Roll Number</div></div>
@@ -366,7 +397,14 @@ function LoginPage({onLogin,db,C,dark,setDark}){
             </div>
             {err&&<div style={{background:C.redL,border:`1px solid ${C.red}44`,borderRadius:8,padding:"9px 13px",fontSize:12,color:C.red,marginBottom:14}}>⚠ {err}</div>}
             <button className="sign-btn" onClick={go} style={{background:`linear-gradient(135deg,${C.purple},${C.purple}cc)`,color:"#fff",boxShadow:`0 4px 12px ${C.purple}44`}}>Sign In →</button>
+            <div style={{textAlign:"center",marginTop:14,paddingTop:14,borderTop:`1px solid ${C.border}`}}>
+              <span style={{fontSize:11,color:C.muted}}>New student? </span>
+              <button onClick={()=>{setRegMode(true);setErr("");}} style={{background:"none",border:"none",color:C.purple,fontSize:12,fontWeight:700,cursor:"pointer",textDecoration:"underline"}}>Register here →</button>
+            </div>
           </div>}
+
+          {/* Student self-registration form */}
+          {portal==="student"&&regMode&&<StudentRegister db={db} onRegister={onRegister} onBack={()=>{setRegMode(false);setErr("");}} C={C}/>}
 
           {/* Staff/Admin panel — shown when expanded */}
           {portal!=="student"&&<div className="login-card" style={{background:C.surface,border:`2px solid ${pColor}33`,boxShadow:C.shadowL}}>
@@ -392,12 +430,12 @@ function LoginPage({onLogin,db,C,dark,setDark}){
           </div>}
 
           {/* Small staff toggle link */}
-          <div style={{textAlign:"center",marginTop:12}}>
+          {!regMode&&<div style={{textAlign:"center",marginTop:12}}>
             {portal==="student"
               ? <button onClick={()=>{setShowStaff(true);sw("admin");}} style={{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",textDecoration:"underline",opacity:0.7}}>Staff / Admin Login</button>
               : <button onClick={()=>{setShowStaff(false);sw("student");}} style={{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",textDecoration:"underline",opacity:0.7}}>← Back to Student Login</button>
             }
-          </div>
+          </div>}
 
           <div style={{textAlign:"center",marginTop:14,fontSize:10,color:C.muted}}>Powered by AllBee Solutions</div>
         </div>
@@ -406,8 +444,91 @@ function LoginPage({onLogin,db,C,dark,setDark}){
   );
 }
 
+// Student self-registration form — creates a PENDING request an admin must approve
+function StudentRegister({db,onRegister,onBack,C}){
+  const insts=(db?.institutions||[]).filter(i=>i.active!==false);
+  const blank={instId:"",name:"",dob:"",gender:"Male",phone:"",email:"",
+    deptGroup:"Arts & Science",department:"",year:"1st Year",
+    class:"Class 1",section:"A",course:"Basic Computer",
+    danceStyle:"Bharatanatyam",danceLevel:"Beginner",
+    parent:"",parentPhone:"",address:""};
+  const [f,setF]=useState(blank);
+  const [err,setErr]=useState("");
+  const [done,setDone]=useState(false);
+  const set=(k,v)=>setF(o=>({...o,[k]:v}));
+  const selInst=insts.find(i=>i.id===f.instId);
+  const type=selInst?.type;
+
+  function submit(){
+    if(!f.instId){setErr("Please choose your institution.");return;}
+    if(!f.name.trim()){setErr("Please enter your full name.");return;}
+    if(!f.phone.trim()){setErr("Please enter your phone number.");return;}
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(f.dob)){setErr("Enter date of birth as YYYY-MM-DD — this becomes your login password.");return;}
+    setErr("");
+    const data={instId:f.instId,instName:selInst?.name||"",name:f.name.trim(),dob:f.dob,gender:f.gender,
+      phone:f.phone.trim(),email:f.email.trim(),parent:f.parent.trim(),parentPhone:f.parentPhone.trim(),address:f.address.trim()};
+    if(type==="College"){data.deptGroup=f.deptGroup;data.department=f.department;data.year=f.year;}
+    else if(type==="School"){data.class=f.class;data.section=f.section;}
+    else if(type==="Computer Institute"){data.course=f.course;}
+    else if(type==="Dance School"){data.danceStyle=f.danceStyle;data.danceLevel=f.danceLevel;}
+    onRegister(data);
+    setDone(true);
+  }
+
+  if(done) return <div className="login-card" style={{background:C.surface,border:`2px solid ${C.green}44`,boxShadow:C.shadowL,textAlign:"center"}}>
+    <div style={{fontSize:42,marginBottom:10}}>✅</div>
+    <div style={{fontWeight:800,fontSize:16,color:C.text,marginBottom:8}}>Request Submitted!</div>
+    <div style={{fontSize:12,color:C.muted,lineHeight:1.6,marginBottom:18}}>Your registration request has been sent to <b style={{color:C.text}}>{selInst?.name}</b>. Once an admin approves it, you'll be given a Roll Number. You can then sign in using that <b>Roll Number</b> with your <b>date of birth</b> ({f.dob}) as the password.</div>
+    <button className="sign-btn" onClick={onBack} style={{background:`linear-gradient(135deg,${C.purple},${C.purple}cc)`,color:"#fff"}}>← Back to Login</button>
+  </div>;
+
+  return <div className="login-card" style={{background:C.surface,border:`2px solid ${C.purple}33`,boxShadow:C.shadowL}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,padding:"9px 13px",background:C.purpleL,borderRadius:9}}>
+      <span style={{fontSize:20}}>📝</span>
+      <div><div style={{fontWeight:800,fontSize:13,color:C.purple}}>New Student Registration</div><div style={{fontSize:10,color:C.muted}}>Fill this form — an admin will approve your request</div></div>
+    </div>
+    <div style={{display:"flex",flexDirection:"column",gap:11,maxHeight:"44vh",overflowY:"auto",paddingRight:4}}>
+      <FG label="Institution *" C={C}><Sel C={C} value={f.instId} onChange={e=>set("instId",e.target.value)}><option value="">-- Select your institution --</option>{insts.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</Sel></FG>
+      <FG label="Full Name *" C={C}><Inp C={C} value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Your full name"/></FG>
+      <G2>
+        <FG label="Date of Birth *" C={C}><Inp C={C} type="date" value={f.dob} onChange={e=>set("dob",e.target.value)}/></FG>
+        <FG label="Gender" C={C}><Sel C={C} value={f.gender} onChange={e=>set("gender",e.target.value)}>{["Male","Female","Other"].map(g=><option key={g}>{g}</option>)}</Sel></FG>
+      </G2>
+      <G2>
+        <FG label="Phone *" C={C}><Inp C={C} value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="Mobile number"/></FG>
+        <FG label="Email" C={C}><Inp C={C} value={f.email} onChange={e=>set("email",e.target.value)} placeholder="you@mail.com"/></FG>
+      </G2>
+      {type==="College"&&<G2>
+        <FG label="Dept Group" C={C}><Sel C={C} value={f.deptGroup} onChange={e=>{set("deptGroup",e.target.value);set("department","");}}>{Object.keys(DEPARTMENTS).map(d=><option key={d}>{d}</option>)}</Sel></FG>
+        <FG label="Department" C={C}><Sel C={C} value={f.department} onChange={e=>set("department",e.target.value)}><option value="">-- Select --</option>{DEPARTMENTS[f.deptGroup].map(d=><option key={d}>{d}</option>)}</Sel></FG>
+        <FG label="Year" C={C}><Sel C={C} value={f.year} onChange={e=>set("year",e.target.value)}>{["1st Year","2nd Year","3rd Year","4th Year","PG 1st Year","PG 2nd Year"].map(y=><option key={y}>{y}</option>)}</Sel></FG>
+      </G2>}
+      {type==="School"&&<G2>
+        <FG label="Class" C={C}><Sel C={C} value={f.class} onChange={e=>set("class",e.target.value)}>{SCHOOL_CLASSES.map(c=><option key={c}>{c}</option>)}</Sel></FG>
+        <FG label="Section" C={C}><Sel C={C} value={f.section} onChange={e=>set("section",e.target.value)}>{SCHOOL_SECTIONS.map(s=><option key={s}>{s}</option>)}</Sel></FG>
+      </G2>}
+      {type==="Computer Institute"&&<FG label="Course" C={C}><Sel C={C} value={f.course} onChange={e=>set("course",e.target.value)}>{COMP_COURSES.map(c=><option key={c}>{c}</option>)}</Sel></FG>}
+      {type==="Dance School"&&<G2>
+        <FG label="Dance Style" C={C}><Sel C={C} value={f.danceStyle} onChange={e=>set("danceStyle",e.target.value)}>{DANCE_STYLES.map(d=><option key={d}>{d}</option>)}</Sel></FG>
+        <FG label="Level" C={C}><Sel C={C} value={f.danceLevel} onChange={e=>set("danceLevel",e.target.value)}>{DANCE_LEVELS.map(d=><option key={d}>{d}</option>)}</Sel></FG>
+      </G2>}
+      <G2>
+        <FG label="Parent / Guardian" C={C}><Inp C={C} value={f.parent} onChange={e=>set("parent",e.target.value)} placeholder="Parent name"/></FG>
+        <FG label="Parent Phone" C={C}><Inp C={C} value={f.parentPhone} onChange={e=>set("parentPhone",e.target.value)} placeholder="Parent mobile"/></FG>
+      </G2>
+      <FG label="Address" C={C}><Inp C={C} value={f.address} onChange={e=>set("address",e.target.value)} placeholder="City / town"/></FG>
+    </div>
+    <div style={{fontSize:10,color:C.muted,margin:"10px 0"}}>💡 Your <b>date of birth</b> will be your login password after approval.</div>
+    {err&&<div style={{background:C.redL,border:`1px solid ${C.red}44`,borderRadius:8,padding:"9px 13px",fontSize:12,color:C.red,marginBottom:12}}>⚠ {err}</div>}
+    <div style={{display:"flex",gap:10}}>
+      <button onClick={onBack} style={{flex:"0 0 auto",padding:"11px 16px",borderRadius:10,border:`1px solid ${C.border}`,background:"transparent",color:C.muted,fontWeight:600,fontSize:13,cursor:"pointer"}}>← Back</button>
+      <button className="sign-btn" onClick={submit} style={{flex:1,background:`linear-gradient(135deg,${C.purple},${C.purple}cc)`,color:"#fff",boxShadow:`0 4px 12px ${C.purple}44`}}>Submit Request →</button>
+    </div>
+  </div>;
+}
+
 // Super Admin
-const SA_TABS=[{k:"overview",i:"📊",l:"Overview"},{k:"institutions",i:"🏛",l:"Institutions"},{k:"users",i:"👤",l:"Users"},{k:"students",i:"👥",l:"Students"},{k:"whitelabel",i:"🎨",l:"White Label"},{k:"billing",i:"💳",l:"SaaS Billing"},{k:"reports",i:"📋",l:"Reports"}];
+const SA_TABS=[{k:"overview",i:"📊",l:"Overview"},{k:"institutions",i:"🏛",l:"Institutions"},{k:"users",i:"👤",l:"Users"},{k:"students",i:"👥",l:"Students"},{k:"whitelabel",i:"🎨",l:"White Label"},{k:"billing",i:"💳",l:"SaaS Billing"},{k:"sheetsync",i:"🔗",l:"Sheet Sync"},{k:"reports",i:"📋",l:"Reports"}];
 function SuperAdmin({db,saveDb,onLogout,notify,user,C,dark,setDark}){
   const [tab,setTab]=useState("overview");
   function addInst(d){saveDb({institutions:[...db.institutions,{...d,id:uid(),createdAt:today(),active:true}]});notify("Institution added!");}
@@ -430,11 +551,135 @@ function SuperAdmin({db,saveDb,onLogout,notify,user,C,dark,setDark}){
         {tab==="students"&&<SAStudents db={db} C={C}/>}
         {tab==="whitelabel"&&<SAWhiteLabel db={db} onUpdate={updInst} C={C}/>}
         {tab==="billing"&&<SABilling db={db} saveDb={saveDb} notify={notify} C={C}/>}
+        {tab==="sheetsync"&&<SASheetSync db={db} saveDb={saveDb} notify={notify} C={C}/>}
         {tab==="reports"&&<SAReports db={db} C={C}/>}
       </div>
     </div>
   </div>;
 }
+const GS_SYNC_CODE=`// ── AllBee EduSphere → Google Sheets sync ──────────────────────────────
+// 1. In your Google Sheet: Extensions → Apps Script
+// 2. Delete any code, paste this whole file, click Save.
+// 3. Deploy → New deployment → type "Web app"
+//      Execute as: Me   |   Who has access: Anyone
+// 4. Copy the Web app URL and paste it into AllBee (Super Admin → Sheet Sync).
+// (Optional) set SECRET below to the same secret you enter in the app.
+
+const SECRET = "";              // leave "" for no secret
+const SHEET_NAME = "Students";
+
+const HEADERS = ["Institution","Name","RollNo","Phone","Email","Gender","DOB",
+  "Course","Department","Class","Section","Year","DanceStyle","Batch","Status",
+  "AdmissionDate","Parent","ParentPhone","Address","CreatedAt"];
+
+function doPost(e){
+  try{
+    const body = JSON.parse(e.postData.contents);
+    if(SECRET && body.secret !== SECRET){
+      return _json({ ok:false, error:"bad secret" });
+    }
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
+    if(sheet.getLastRow() === 0) sheet.appendRow(HEADERS);
+
+    const row = body.row || {};
+    const values = HEADERS.map(h => row[h] != null ? row[h] : "");
+    const roll = String(row.RollNo || "").trim();
+
+    let updated = false;
+    if(roll){
+      const data = sheet.getDataRange().getValues();
+      for(let i = 1; i < data.length; i++){
+        if(String(data[i][2]).trim() === roll){
+          sheet.getRange(i + 1, 1, 1, HEADERS.length).setValues([values]);
+          updated = true;
+          break;
+        }
+      }
+    }
+    if(!updated) sheet.appendRow(values);
+    return _json({ ok:true, updated:updated });
+  }catch(err){
+    return _json({ ok:false, error:String(err) });
+  }
+}
+
+function doGet(){
+  return ContentService.createTextOutput("AllBee sync endpoint is live.");
+}
+
+function _json(obj){
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}`;
+
+function SASheetSync({db,saveDb,notify,C}){
+  const s=db.settings||{sheetUrl:"",sheetSecret:""};
+  const [url,setUrl]=useState(s.sheetUrl||"");
+  const [secret,setSecret]=useState(s.sheetSecret||"");
+  const [busy,setBusy]=useState(false);
+  const [copied,setCopied]=useState(false);
+  const instName=useMemo(()=>{const m={};(db.institutions||[]).forEach(i=>m[i.id]=i.name);return m;},[db.institutions]);
+
+  function save(){
+    saveDb({settings:{...db.settings,sheetUrl:url.trim(),sheetSecret:secret.trim()}});
+    notify("Sheet sync settings saved!");
+  }
+  function pushAll(){
+    if(!url.trim()){notify("Save your Web App URL first","error");return;}
+    setBusy(true);
+    const settings={...db.settings,sheetUrl:url.trim(),sheetSecret:secret.trim()};
+    const all=db.students||[];
+    all.forEach(st=>sheetPush(settings,{action:"upsertStudent",row:studentRow(st,instName[st.instId]||"")}));
+    setTimeout(()=>{setBusy(false);notify(`Pushed ${all.length} student${all.length!==1?"s":""} to your sheet`);},600);
+  }
+  function copyCode(){
+    const done=()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);};
+    if(navigator.clipboard?.writeText){navigator.clipboard.writeText(GS_SYNC_CODE).then(done).catch(done);}
+    else{const ta=document.createElement("textarea");ta.value=GS_SYNC_CODE;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");}catch(e){}document.body.removeChild(ta);done();}
+  }
+  const steps=[
+    "Open your Google Sheet → menu Extensions → Apps Script.",
+    "Delete any sample code, paste the script (button above), and click Save.",
+    'Click Deploy → New deployment. Choose type "Web app".',
+    'Set "Execute as" = Me, and "Who has access" = Anyone. Click Deploy and authorise.',
+    "Copy the Web app URL it gives you, paste it in the box above, and Save.",
+  ];
+
+  return <div style={{animation:"fadeUp 0.4s ease",maxWidth:920}}>
+    <PH title="🔗 Google Sheet Sync" sub="Auto-save every new, imported or approved student into a Google Sheet" C={C}/>
+
+    <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,marginBottom:16}}>
+      <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Connection</div>
+      <div style={{fontSize:12,color:C.muted,marginBottom:16}}>Paste the Apps Script <b>Web App URL</b> you get from the steps below. Once set, students are written to your sheet automatically (keyed by Roll No, so re-saves update the same row).</div>
+      <FG label="Apps Script Web App URL" C={C}><Inp C={C} value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://script.google.com/macros/s/AKfy.../exec"/></FG>
+      <div style={{height:11}}/>
+      <FG label="Shared secret (optional — must match SECRET in the script)" C={C}><Inp C={C} value={secret} onChange={e=>setSecret(e.target.value)} placeholder="leave blank for none"/></FG>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
+        <Btn onClick={save} C={C} color="teal">💾 Save Settings</Btn>
+        <Btn onClick={pushAll} C={C} color="purple" outline disabled={busy}>{busy?"Pushing…":`⬆ Push all ${(db.students||[]).length} students now`}</Btn>
+      </div>
+      {s.sheetUrl&&<div style={{marginTop:14,fontSize:12,color:C.green,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>● Connected — auto-sync is active.</div>}
+    </div>
+
+    <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:14}}>
+        <div>
+          <div style={{fontWeight:700,fontSize:14,color:C.text}}>One-time setup</div>
+          <div style={{fontSize:12,color:C.muted}}>Connect a sheet in ~2 minutes. The full script is also in the downloadable <b>google-sheets-sync.gs</b> file.</div>
+        </div>
+        <Btn onClick={copyCode} C={C} color="gold">{copied?"✓ Copied!":"📋 Copy Apps Script"}</Btn>
+      </div>
+      <ol style={{margin:0,paddingLeft:20,display:"flex",flexDirection:"column",gap:8}}>
+        {steps.map((t,i)=><li key={i} style={{fontSize:12.5,color:C.text,lineHeight:1.5}}>{t}</li>)}
+      </ol>
+      <div style={{marginTop:16,background:C.bg,borderRadius:10,border:`1px solid ${C.border}`,maxHeight:260,overflow:"auto"}}>
+        <pre style={{margin:0,padding:14,fontSize:11,lineHeight:1.5,color:C.text,fontFamily:"monospace",whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{GS_SYNC_CODE}</pre>
+      </div>
+    </div>
+  </div>;
+}
+
 function SAOverview({db,C}){
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <PH title="Overview" sub="All institutions at a glance" C={C}/>
@@ -2188,7 +2433,7 @@ function InstCourses({db,saveDb,inst,color,notify,C}){
 
 // Institution Dashboard Shell
 const NAV_GROUPS=["Main","Students","Staff","Academics","Finance","Communication","Insights"];
-const INST_TABS=[{k:"home",i:"🏠",l:"Home",g:"Main"},{k:"students",i:"👥",l:"Students",g:"Students"},{k:"register",i:"➕",l:"Register",g:"Students"},{k:"import",i:"📥",l:"Import Data",g:"Students"},{k:"attend",i:"📅",l:"Attendance",g:"Students"},{k:"fees",i:"💰",l:"Fees",g:"Students"},{k:"receipt",i:"🧾",l:"Fee Receipt",g:"Students"},{k:"homework",i:"📚",l:"Homework",g:"Students"},{k:"exams",i:"📝",l:"Exam Marks",g:"Students"},{k:"assign",i:"📋",l:"Assignments",g:"Students"},{k:"timetable",i:"🗓",l:"Timetable",g:"Students"},{k:"certificates",i:"🏆",l:"Certificates",g:"Students"},{k:"onlineexam",i:"💻",l:"Online Exams",g:"Students"},{k:"gamify",i:"🏅",l:"Gamification",g:"Students"},{k:"crm",i:"🎯",l:"Admission CRM",g:"Students"},{k:"staff",i:"👨‍🏫",l:"Staff",g:"Staff"},{k:"tasks",i:"✅",l:"Tasks",g:"Staff"},{k:"staffatt",i:"🕐",l:"Staff Attendance",g:"Staff"},{k:"payroll",i:"💵",l:"HR & Payroll",g:"Staff"},{k:"leave",i:"🏖",l:"Leave",g:"Staff"},{k:"courses",i:"🖥",l:"Courses",g:"Academics"},{k:"classlinks",i:"🎥",l:"Class Links",g:"Academics"},{k:"library",i:"📚",l:"Library",g:"Academics"},{k:"docs",i:"📁",l:"Documents",g:"Academics"},{k:"accounts",i:"💼",l:"Accounts",g:"Finance"},{k:"updates",i:"📰",l:"Updates",g:"Communication"},{k:"alerts",i:"📣",l:"Alerts",g:"Communication"},{k:"reports",i:"📊",l:"Reports",g:"Insights"},{k:"analytics",i:"📈",l:"Analytics",g:"Insights"},{k:"ai",i:"🤖",l:"AI Tools",g:"Insights"}];
+const INST_TABS=[{k:"home",i:"🏠",l:"Home",g:"Main"},{k:"students",i:"👥",l:"Students",g:"Students"},{k:"register",i:"➕",l:"Register",g:"Students"},{k:"approvals",i:"📨",l:"Registrations",g:"Students"},{k:"import",i:"📥",l:"Import Data",g:"Students"},{k:"attend",i:"📅",l:"Attendance",g:"Students"},{k:"fees",i:"💰",l:"Fees",g:"Students"},{k:"receipt",i:"🧾",l:"Fee Receipt",g:"Students"},{k:"homework",i:"📚",l:"Homework",g:"Students"},{k:"exams",i:"📝",l:"Exam Marks",g:"Students"},{k:"assign",i:"📋",l:"Assignments",g:"Students"},{k:"timetable",i:"🗓",l:"Timetable",g:"Students"},{k:"certificates",i:"🏆",l:"Certificates",g:"Students"},{k:"onlineexam",i:"💻",l:"Online Exams",g:"Students"},{k:"gamify",i:"🏅",l:"Gamification",g:"Students"},{k:"crm",i:"🎯",l:"Admission CRM",g:"Students"},{k:"staff",i:"👨‍🏫",l:"Staff",g:"Staff"},{k:"tasks",i:"✅",l:"Tasks",g:"Staff"},{k:"staffatt",i:"🕐",l:"Staff Attendance",g:"Staff"},{k:"payroll",i:"💵",l:"HR & Payroll",g:"Staff"},{k:"leave",i:"🏖",l:"Leave",g:"Staff"},{k:"courses",i:"🖥",l:"Courses",g:"Academics"},{k:"classlinks",i:"🎥",l:"Class Links",g:"Academics"},{k:"library",i:"📚",l:"Library",g:"Academics"},{k:"docs",i:"📁",l:"Documents",g:"Academics"},{k:"accounts",i:"💼",l:"Accounts",g:"Finance"},{k:"updates",i:"📰",l:"Updates",g:"Communication"},{k:"alerts",i:"📣",l:"Alerts",g:"Communication"},{k:"reports",i:"📊",l:"Reports",g:"Insights"},{k:"analytics",i:"📈",l:"Analytics",g:"Insights"},{k:"ai",i:"🤖",l:"AI Tools",g:"Insights"}];
 
 function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const [tab,setTab]=useState("home");
@@ -2202,17 +2447,35 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   function addStaff(d){if((db.users||[]).find(u=>u.username===d.username)){notify("Username already exists","error");return;}saveDb({users:[...(db.users||[]),{...d,id:uid(),instId:inst.id}]});notify("Staff added!");}
   function updStaff(id,p){saveDb({users:(db.users||[]).map(u=>u.id===id?{...u,...p}:u)});notify("Updated");}
   function delStaff(id){saveDb({users:(db.users||[]).filter(u=>u.id!==id)});notify("Staff removed","error");}
-  function addStudent(data){const s={...data,id:uid(),instId:inst.id,createdAt:today(),attendance:[],fees:[],homeworks:[],exams:[],assignments:[]};saveDb({students:[...db.students,s]});notify("Student registered!");setTab("students");}
+  function addStudent(data){const s={...data,id:uid(),instId:inst.id,createdAt:today(),attendance:[],fees:[],homeworks:[],exams:[],assignments:[]};saveDb({students:[...db.students,s]});sheetPush(db.settings,{action:"upsertStudent",row:studentRow(s,inst.name)});notify("Student registered!");setTab("students");}
+  // ── Student self-registration approval ──────────────────────────────────
+  const pendingRegs=useMemo(()=>(db.registrations||[]).filter(r=>r.instId===inst.id&&r.status==="pending"),[db.registrations,inst.id]);
+  function approveReg(reg,rollNo){
+    const s={...reg,id:uid(),instId:inst.id,rollNo:rollNo||reg.rollNo||"",createdAt:today(),
+      admissionDate:today(),status:"Studying",attendance:[],fees:[],homeworks:[],exams:[],assignments:[]};
+    delete s.requestedAt;delete s.approvedAt;delete s.rejectedAt;delete s.reason;
+    saveDb({
+      students:[...db.students,s],
+      registrations:(db.registrations||[]).map(r=>r.id===reg.id?{...r,status:"approved",approvedAt:today(),rollNo:s.rollNo}:r),
+    });
+    sheetPush(db.settings,{action:"upsertStudent",row:studentRow(s,inst.name)});
+    notify(`${s.name} approved & added!`);
+  }
+  function rejectReg(reg,reason){
+    saveDb({registrations:(db.registrations||[]).map(r=>r.id===reg.id?{...r,status:"rejected",rejectedAt:today(),reason:reason||""}:r)});
+    notify("Registration rejected","error");
+  }
+  function delReg(id){saveDb({registrations:(db.registrations||[]).filter(r=>r.id!==id)});notify("Removed");}
   function updStudent(id,patch){saveDb({students:db.students.map(s=>s.id===id?{...s,...patch}:s)});}
   function goTab(k){setTab(k);setSideOpen(false);}
   // Map service keys to tab keys for service-gating
-  const SVC_TAB_MAP={students:["students","register","import"],attendance:["attend"],fees:["fees","receipt"],marks:["exams","onlineexam"],homework:["homework"],assignments:["assign"],timetable:["timetable"],staff:["staff","staffatt","payroll","tasks"],library:["library"],updates:["updates"],classlinks:["classlinks"],alerts:["alerts"],gallery:[],leave:["leave"],transport:[],hostel:[],leads:["crm"],documents:["docs"],gamification:["gamify","certificates"],aichat:["ai"]};
+  const SVC_TAB_MAP={students:["students","register","approvals","import"],attendance:["attend"],fees:["fees","receipt"],marks:["exams","onlineexam"],homework:["homework"],assignments:["assign"],timetable:["timetable"],staff:["staff","staffatt","payroll","tasks"],library:["library"],updates:["updates"],classlinks:["classlinks"],alerts:["alerts"],gallery:[],leave:["leave"],transport:[],hostel:[],leads:["crm"],documents:["docs"],gamification:["gamify","certificates"],aichat:["ai"]};
   const enabledSvcs=inst.services||DEFAULT_SERVICES;
   const svcAllowedTabs=new Set(["home","accounts","reports","analytics",...enabledSvcs.flatMap(s=>SVC_TAB_MAP[s]||[])]);
   const visibleTabs=INST_TABS.filter(t=>{
     if(!svcAllowedTabs.has(t.k))return false;
     if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);
-    if(!isAdmin)return!["register","import","staff","courses","payroll","crm"].includes(t.k);
+    if(!isAdmin)return!["register","approvals","import","staff","courses","payroll","crm"].includes(t.k);
     if(t.k==="courses")return inst.type==="Computer Institute";
     return true;
   });
@@ -2268,6 +2531,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
             style={{background:tab===t.k?C.activeTab:"transparent",color:tab===t.k?C.activeTabText:C.muted,fontWeight:tab===t.k?600:400,borderRadius:8}}>
             <span style={{fontSize:16,flexShrink:0}}>{t.i}</span>
             <span>{t.l}</span>
+            {t.k==="approvals"&&pendingRegs.length>0&&<span style={{marginLeft:"auto",minWidth:18,height:18,borderRadius:99,background:C.red,color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 5px"}}>{pendingRegs.length}</span>}
           </button>)}
         </div>;})}
         <div style={{flex:1}}/>
@@ -2295,6 +2559,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
         {tab==="staff"&&isAdmin&&<InstStaff staff={myStaff} inst={inst} color={color} onAdd={addStaff} onUpdate={updStaff} onDelete={delStaff} notify={notify} C={C}/>}
         {tab==="students"&&<InstStudents students={myStudents} inst={inst} courses={myCourses} color={color} onUpdate={updStudent} onDelete={id=>{if(window.confirm("Permanently delete student?")){saveDb({students:db.students.filter(s=>s.id!==id)});notify("Student deleted","error");}}} C={C}/>}
         {tab==="register"&&isAdmin&&<InstRegister inst={inst} onSave={addStudent} color={color} m={m} courses={myCourses} C={C}/>}
+        {tab==="approvals"&&isAdmin&&<InstApprovals registrations={pendingRegs} all={db.registrations||[]} inst={inst} color={color} onApprove={approveReg} onReject={rejectReg} onDelete={delReg} C={C}/>}
         {tab==="import"&&isAdmin&&<InstImport db={db} saveDb={saveDb} inst={inst} notify={notify} C={C}/>}
         {tab==="attend"&&<InstAttend students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
         {tab==="fees"&&<InstFees students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
@@ -2570,6 +2835,90 @@ function impStatus(v){const n=String(v||"").toLowerCase();if(/complet|pass|finis
 function impGender(v){const n=String(v||"").toLowerCase();if(n.startsWith("f")||n==="female")return"Female";if(n.startsWith("m")||n==="male")return"Male";if(n)return"Other";return"Male";}
 function loadXLSX(){return new Promise((res,rej)=>{if(window.XLSX)return res(window.XLSX);const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=()=>res(window.XLSX);s.onerror=()=>rej(new Error("xlsx"));document.head.appendChild(s);});}
 
+function InstApprovals({registrations,all,inst,color,onApprove,onReject,onDelete,C}){
+  const [showHist,setShowHist]=useState(false);
+  const history=(all||[]).filter(r=>r.instId===inst.id&&r.status!=="pending")
+    .sort((a,b)=>String(b.approvedAt||b.rejectedAt||"").localeCompare(String(a.approvedAt||a.rejectedAt||"")));
+  function detail(r){
+    const parts=[];
+    if(r.department)parts.push(r.department);
+    if(r.year)parts.push(r.year);
+    if(r.class)parts.push(r.class);
+    if(r.section)parts.push("Sec "+r.section);
+    if(r.course)parts.push(r.course);
+    if(r.danceStyle)parts.push(r.danceStyle);
+    if(r.danceLevel)parts.push(r.danceLevel);
+    return parts.join(" · ");
+  }
+  function doApprove(r){
+    const roll=window.prompt(`Approve ${r.name}?\n\nEnter a Roll Number for this student (they will log in with this Roll No + their date of birth):`,r.rollNo||"");
+    if(roll===null)return;
+    if(!String(roll).trim()){window.alert("A Roll Number is required so the student can log in.");return;}
+    onApprove(r,String(roll).trim());
+  }
+  function doReject(r){
+    const reason=window.prompt(`Reject ${r.name}'s registration?\n\nOptionally add a reason (for your records):`,"");
+    if(reason===null)return;
+    onReject(r,String(reason).trim());
+  }
+  return <div style={{animation:"fadeUp 0.4s ease",maxWidth:1000}}>
+    <PH title="📨 Student Registration Requests" sub="Approve or reject students who signed up from the login page" C={C}/>
+
+    {registrations.length===0
+      ? <div style={{background:C.surface,borderRadius:12,border:`1px dashed ${C.border}`,padding:"40px 20px",textAlign:"center",boxShadow:C.shadow}}>
+          <div style={{fontSize:38,marginBottom:10}}>✅</div>
+          <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>No pending requests</div>
+          <div style={{fontSize:12,color:C.muted}}>New self-registrations from students will appear here for your approval.</div>
+        </div>
+      : <div style={{display:"grid",gap:12,marginBottom:8}}>
+          {registrations.map(r=><div key={r.id} style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:16,boxShadow:C.shadow,borderLeft:`4px solid ${C.gold}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+              <div style={{display:"flex",gap:12,alignItems:"center",minWidth:0}}>
+                <Avatar name={r.name} photo={r.photo} color={color} size={44} C={C}/>
+                <div style={{minWidth:0}}>
+                  <div style={{fontWeight:800,fontSize:15,color:C.text,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>{r.name}<Badge label="Pending" color="gold" C={C}/></div>
+                  {detail(r)&&<div style={{fontSize:12,color:C.muted,marginTop:2}}>{detail(r)}</div>}
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8,flexShrink:0}}>
+                <Btn onClick={()=>doApprove(r)} C={C} color="green">✓ Approve</Btn>
+                <Btn onClick={()=>doReject(r)} C={C} color="red" outline>✕ Reject</Btn>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:8,marginTop:14,paddingTop:14,borderTop:`1px solid ${C.border}`}}>
+              {[["📞 Phone",r.phone],["✉️ Email",r.email],["🎂 DOB",r.dob],["⚧ Gender",r.gender],["👪 Parent",r.parent],["📞 Parent Ph",r.parentPhone],["📍 Address",r.address],["🕒 Requested",r.requestedAt?fmt(r.requestedAt.slice(0,10)):fmt(r.createdAt)]]
+                .filter(([,v])=>v).map(([k,v])=><div key={k}>
+                  <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em"}}>{k}</div>
+                  <div style={{fontSize:12,color:C.text,fontWeight:600,wordBreak:"break-word"}}>{v}</div>
+                </div>)}
+            </div>
+            <div style={{fontSize:11,color:C.muted,marginTop:12,background:C.bg,borderRadius:8,padding:"8px 12px"}}>💡 On approval you'll set a Roll No. The student then logs in with that Roll No and their date of birth ({r.dob||"—"}) as the password.</div>
+          </div>)}
+        </div>}
+
+    {history.length>0&&<div style={{marginTop:18}}>
+      <button onClick={()=>setShowHist(h=>!h)} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:9,padding:"9px 14px",color:C.text,fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+        {showHist?"▾":"▸"} Processed Requests ({history.length})
+      </button>
+      {showHist&&<div style={{marginTop:12,background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,boxShadow:C.shadow,overflow:"hidden"}}>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr>{["Name","Status","Roll No","Date","Reason",""].map(h=><th key={h} style={{padding:"9px 12px",textAlign:"left",color:C.muted,fontSize:10,textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:`1px solid ${C.border}`,background:C.bg}}>{h}</th>)}</tr></thead>
+            <tbody>{history.map(r=><tr key={r.id} style={{borderBottom:`1px solid ${C.border}`}}>
+              <td style={{padding:"9px 12px",fontWeight:600,color:C.text}}>{r.name}</td>
+              <td style={{padding:"9px 12px"}}><Badge label={r.status==="approved"?"Approved":"Rejected"} color={r.status==="approved"?"green":"red"} C={C}/></td>
+              <td style={{padding:"9px 12px",color:C.muted}}>{r.rollNo||"—"}</td>
+              <td style={{padding:"9px 12px",color:C.muted}}>{(r.approvedAt||r.rejectedAt)?fmt(r.approvedAt||r.rejectedAt):"—"}</td>
+              <td style={{padding:"9px 12px",color:C.muted}}>{r.reason||"—"}</td>
+              <td style={{padding:"9px 12px"}}><button onClick={()=>{if(window.confirm("Remove this request from the list?"))onDelete(r.id);}} style={{background:"transparent",border:"none",color:C.red,cursor:"pointer",fontSize:14}} title="Remove">🗑</button></td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+      </div>}
+    </div>}
+  </div>;
+}
+
 function InstImport({db,saveDb,inst,notify,C}){
   const [headers,setHeaders]=useState([]);
   const [rows,setRows]=useState([]);
@@ -2577,6 +2926,10 @@ function InstImport({db,saveDb,inst,notify,C}){
   const [paste,setPaste]=useState("");
   const [err,setErr]=useState("");
   const [done,setDone]=useState(0);
+  const [doneMsg,setDoneMsg]=useState("");
+  const [updateMode,setUpdateMode]=useState(false);
+  const [gUrl,setGUrl]=useState("");
+  const [gBusy,setGBusy]=useState(false);
   const fileRef=useRef(null);
 
   function ingest(aoa){
@@ -2587,6 +2940,24 @@ function InstImport({db,saveDb,inst,notify,C}){
     setHeaders(hdr);setRows(clean.slice(1));setMap(impAutoMap(hdr));
   }
   function doPaste(){ingest(impParse(paste));}
+  async function fetchGSheet(){
+    const url=gUrl.trim();
+    const m=url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if(!m){setErr("That doesn't look like a Google Sheets link. Paste the full URL from your browser's address bar.");return;}
+    const gidM=url.match(/[#&?]gid=(\d+)/);
+    const gid=gidM?gidM[1]:"0";
+    const csvUrl=`https://docs.google.com/spreadsheets/d/${m[1]}/gviz/tq?tqx=out:csv&gid=${gid}`;
+    setGBusy(true);setErr("");
+    try{
+      const res=await fetch(csvUrl);
+      if(!res.ok)throw new Error("http "+res.status);
+      const text=await res.text();
+      if(/^\s*</.test(text)||/google-site-verification|accounts\.google\.com/i.test(text))throw new Error("not public");
+      ingest(impParse(text));
+    }catch(ex){
+      setErr("Couldn't read that sheet. In Google Sheets click Share → General access → \"Anyone with the link\" (Viewer), then try again. Or use the file upload / copy-paste options below.");
+    }finally{setGBusy(false);}
+  }
   async function handleFile(e){
     const file=e.target.files?.[0];if(!file)return;
     const ext=file.name.split(".").pop().toLowerCase();
@@ -2612,10 +2983,33 @@ function InstImport({db,saveDb,inst,notify,C}){
   function doImport(){
     if(!validRows.length){setErr("No rows with a Name to import. Map the Name column first.");return;}
     if(map.name==null){setErr("Please map the Name column.");return;}
-    const newStudents=validRows.map(buildStudent);
-    saveDb({students:[...db.students,...newStudents]});
-    setDone(newStudents.length);notify(`✅ Imported ${newStudents.length} student${newStudents.length!==1?"s":""}!`);
-    setHeaders([]);setRows([]);setMap({});setPaste("");
+    if(updateMode&&map.rollNo==null){setErr("Update mode matches students by Roll No — please map the Roll No column first.");return;}
+    const NON_EMPTY=v=>v!=null&&String(v).trim()!=="";
+    let added=0,updated=0;
+    let students=[...db.students];
+    const touched=[];
+    validRows.forEach(r=>{
+      const built=buildStudent(r);
+      const roll=String(built.rollNo||"").trim().toLowerCase();
+      const idx=updateMode&&roll?students.findIndex(s=>s.instId===inst.id&&String(s.rollNo||"").trim().toLowerCase()===roll):-1;
+      if(idx>=0){
+        // merge only non-empty incoming scalar fields; preserve records (attendance/fees/etc.) + id
+        const ex=students[idx];const patch={};
+        ["name","rollNo","phone","email","gender","dob","course","department","class","section","year","danceStyle","batch","status","completionDate","admissionDate","parent","parentPhone","address"]
+          .forEach(k=>{if(NON_EMPTY(built[k]))patch[k]=built[k];});
+        const merged={...ex,...patch};
+        students[idx]=merged;updated++;touched.push(merged);
+      }else{
+        students.push(built);added++;touched.push(built);
+      }
+    });
+    saveDb({students});
+    touched.forEach(s=>sheetPush(db.settings,{action:"upsertStudent",row:studentRow(s,inst.name)}));
+    const msg=updateMode
+      ?`✅ ${added} added, ${updated} updated.`
+      :`✅ Imported ${added} student${added!==1?"s":""}!`;
+    setDone(added+updated);setDoneMsg(msg);notify(msg);
+    setHeaders([]);setRows([]);setMap({});setPaste("");setGUrl("");
   }
   function downloadTemplate(){
     const h=["Name","Roll No","Phone","Email","Gender","DOB","Course","Department","Class","Section","Status","Completion Date","Admission Date","Parent","Parent Phone","Address"];
@@ -2629,7 +3023,7 @@ function InstImport({db,saveDb,inst,notify,C}){
   return <div style={{animation:"fadeUp 0.4s ease",maxWidth:1000}}>
     <PH title="📥 Import Students" sub="Bring in your existing data from Excel or Google Sheets" C={C}/>
 
-    {done>0&&<div style={{background:C.greenL,color:C.green,borderRadius:10,padding:"12px 16px",marginBottom:16,fontWeight:700,fontSize:13}}>✅ {done} student(s) imported successfully. Check the Students tab.</div>}
+    {done>0&&<div style={{background:C.greenL,color:C.green,borderRadius:10,padding:"12px 16px",marginBottom:16,fontWeight:700,fontSize:13}}>{doneMsg||`✅ ${done} student(s) imported successfully.`} Check the Students tab.</div>}
     {err&&<div style={{background:C.redL,color:C.red,borderRadius:10,padding:"12px 16px",marginBottom:16,fontSize:13}}>{err}</div>}
 
     {!loaded&&<>
@@ -2647,6 +3041,14 @@ function InstImport({db,saveDb,inst,notify,C}){
         <div style={{fontSize:12,color:C.muted,marginBottom:12}}>In Google Sheets/Excel select your cells (including the header row), copy, and paste below. The first row must be the column titles.</div>
         <Txt C={C} value={paste} onChange={e=>setPaste(e.target.value)} rows={7} placeholder={"Name\tRoll No\tPhone\tStatus\nAnitha R\tCI2025001\t9876543210\tCompleted\n..."} style={{fontFamily:"monospace",fontSize:12}}/>
         <div style={{marginTop:12}}><Btn onClick={doPaste} C={C} color="teal" disabled={!paste.trim()}>Preview Data →</Btn></div>
+      </div>
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:20,boxShadow:C.shadow,marginTop:16}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:6,color:C.text}}>Option 3 — Link a Google Sheet</div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>Paste the link to your Google Sheet. First, in the sheet click <b>Share → General access → "Anyone with the link" (Viewer)</b> so it can be read.</div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+          <Inp C={C} value={gUrl} onChange={e=>setGUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0" style={{flex:1,minWidth:240}}/>
+          <Btn onClick={fetchGSheet} C={C} color="purple" disabled={!gUrl.trim()||gBusy}>{gBusy?"Loading…":"Load Sheet →"}</Btn>
+        </div>
       </div>
     </>}
 
@@ -2684,9 +3086,19 @@ function InstImport({db,saveDb,inst,notify,C}){
         </div>
       </div>
 
+      <div style={{background:C.surface,borderRadius:12,border:`1px solid ${updateMode?C.purple:C.border}`,padding:16,boxShadow:C.shadow,marginBottom:16}}>
+        <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer"}}>
+          <input type="checkbox" checked={updateMode} onChange={e=>setUpdateMode(e.target.checked)} style={{marginTop:3,width:16,height:16,accentColor:C.purple,cursor:"pointer"}}/>
+          <div>
+            <div style={{fontWeight:700,fontSize:13,color:C.text}}>Update existing students (match by Roll No)</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>When on, rows whose <b>Roll No</b> matches an existing student will update that student's details (only non-empty cells overwrite; attendance, fees and history are kept). Rows with a new Roll No are added. When off, every row is added as a new student.</div>
+          </div>
+        </label>
+      </div>
+
       <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-        <Btn onClick={doImport} C={C} color="green">✅ Import {validRows.length} Student{validRows.length!==1?"s":""}</Btn>
-        <Btn onClick={()=>{setHeaders([]);setRows([]);setMap({});setPaste("");setErr("");}} C={C} color="red" outline>Cancel</Btn>
+        <Btn onClick={doImport} C={C} color="green">{updateMode?`✅ Import / Update ${validRows.length} Row${validRows.length!==1?"s":""}`:`✅ Import ${validRows.length} Student${validRows.length!==1?"s":""}`}</Btn>
+        <Btn onClick={()=>{setHeaders([]);setRows([]);setMap({});setPaste("");setGUrl("");setErr("");}} C={C} color="red" outline>Cancel</Btn>
       </div>
     </>}
   </div>;
