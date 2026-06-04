@@ -2742,7 +2742,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const visibleTabs=INST_TABS.filter(t=>{
     if(!svcAllowedTabs.has(t.k))return false;
     if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);
-    if(!isAdmin)return!["register","approvals","import","staff","courses","payroll","crm"].includes(t.k);
+    if(!isAdmin)return!["register","approvals","import","staff","courses","payroll","crm","accounts"].includes(t.k);
     if(t.k==="courses")return inst.type==="Computer Institute";
     return true;
   });
@@ -2839,7 +2839,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
         {tab==="updates"&&<InstUpdates db={db} saveDb={saveDb} user={user} inst={inst} color={color} notify={notify} C={C}/>}
         {tab==="classlinks"&&<InstClassLinks db={db} saveDb={saveDb} user={user} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
         {tab==="alerts"&&<InstAlerts students={myStudents} inst={inst} color={color} notify={notify} C={C}/>}
-        {tab==="accounts"&&<InstAccounts db={db} saveDb={saveDb} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
+        {tab==="accounts"&&(isAdmin||user.role==="accountant")&&<InstAccounts db={db} saveDb={saveDb} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
         {tab==="courses"&&inst.type==="Computer Institute"&&isAdmin&&<InstCourses db={db} saveDb={saveDb} inst={inst} color={color} notify={notify} C={C}/>}
         {tab==="tasks"&&<StaffTasks db={db} saveDb={saveDb} user={user} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
         {tab==="staffatt"&&<StaffAttend db={db} saveDb={saveDb} user={user} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
@@ -4623,78 +4623,218 @@ function InstDocs({db,saveDb,inst,color,isAdmin,notify,C}){
   </div>;
 }
 
-// ─── ADMISSION CRM ────────────────────────────────────────────────────────────
+// ─── ADMISSION CRM (enhanced) ─────────────────────────────────────────────────
 function InstCRM({db,saveDb,inst,color,notify,C}){
   const KEY="crm_"+inst.id;
   const [leads,setLeads]=useState(()=>lsGet(KEY,[]));
   const [showAdd,setShowAdd]=useState(false);
+  const [editId,setEditId]=useState(null);
+  const [showImport,setShowImport]=useState(false);
+  const [paste,setPaste]=useState("");
   const [subTab,setSubTab]=useState("board");
-  const blank={name:"",phone:"",email:"",course:"",source:"Walk-in",notes:"",status:"New Inquiry"};
+  const [q,setQ]=useState("");
+  const [fSource,setFSource]=useState("all");
+  const [fAssignee,setFAssignee]=useState("all");
+  const [fStatus,setFStatus]=useState("all");
+  const blank={name:"",phone:"",email:"",course:"",source:"Walk-in",notes:"",status:"New Inquiry",followUpDate:"",assignedTo:"",value:""};
   const [form,setForm]=useState(blank);
   const STATUSES=["New Inquiry","Contacted","Follow-up","Demo Scheduled","Enrolled","Not Interested","Lost"];
   const SOURCES=["Walk-in","Phone Call","WhatsApp","Reference","Social Media","Website","Other"];
   const SCOL={"New Inquiry":"teal","Contacted":"blue","Follow-up":"gold","Demo Scheduled":"purple","Enrolled":"green","Not Interested":"red","Lost":"red"};
+  const team=(db.users||[]).filter(u=>u.instId===inst.id);
+  const nameOf=id=>team.find(u=>u.id===id)?.name||"";
+  const stamp=()=>{try{return new Date().toLocaleString();}catch{return today();}};
+  const fmtMoney=n=>{const v=Number(n)||0;return "₹"+v.toLocaleString("en-IN");};
+
   function saveLeads(l){setLeads(l);lsSet(KEY,l);}
-  function addLead(){if(!form.name||!form.phone)return;saveLeads([...leads,{...form,id:uid(),createdAt:today(),updatedAt:today()}]);setForm(blank);setShowAdd(false);notify("Lead added!");}
-  function updateStatus(id,status){saveLeads(leads.map(l=>l.id===id?{...l,status,updatedAt:today()}:l));}
-  function addNote(id,note){saveLeads(leads.map(l=>l.id===id?{...l,notes:(l.notes?l.notes+"\n":"")+today()+": "+note,updatedAt:today()}:l));}
-  function delLead(id){if(!window.confirm("Delete lead?"))return;saveLeads(leads.filter(l=>l.id!==id));notify("Deleted","error");}
-  const convRate=leads.length?Math.round(leads.filter(l=>l.status==="Enrolled").length/leads.length*100):0;
+  function pushLog(lead,text){return {...lead,log:[...(lead.log||[]),{t:stamp(),text}]};}
+  function addLead(){
+    if(!form.name||!form.phone){notify("Name and phone are required","error");return;}
+    const lead=pushLog({...form,value:form.value?Number(form.value):"",assignedToName:nameOf(form.assignedTo),id:uid(),createdAt:today(),updatedAt:today(),log:[]},"Lead created");
+    saveLeads([...leads,lead]);setForm(blank);setShowAdd(false);notify("Lead added!");
+  }
+  function startEdit(lead){setForm({...blank,...lead});setEditId(lead.id);setShowAdd(true);setShowImport(false);}
+  function saveEdit(){
+    if(!form.name||!form.phone){notify("Name and phone are required","error");return;}
+    saveLeads(leads.map(l=>l.id===editId?{...l,...form,value:form.value?Number(form.value):"",assignedToName:nameOf(form.assignedTo),updatedAt:today()}:l));
+    setForm(blank);setEditId(null);setShowAdd(false);notify("Lead updated");
+  }
+  function updateStatus(id,status){saveLeads(leads.map(l=>l.id===id?pushLog({...l,status,updatedAt:today()},"Status → "+status):l));}
+  function setFollowUp(id,date){saveLeads(leads.map(l=>l.id===id?{...l,followUpDate:date,updatedAt:today()}:l));}
+  function assignLead(id,uId){saveLeads(leads.map(l=>l.id===id?{...l,assignedTo:uId,assignedToName:nameOf(uId),updatedAt:today()}:l));}
+  function addNote(id,note){saveLeads(leads.map(l=>l.id===id?pushLog({...l,updatedAt:today()},"📝 "+note):l));}
+  function delLead(id){if(!window.confirm("Delete this lead?"))return;saveLeads(leads.filter(l=>l.id!==id));notify("Deleted","error");}
+
+  function convertToStudent(lead){
+    const dup=(db.students||[]).some(s=>s.instId===inst.id&&lead.phone&&(s.phone||"")===lead.phone);
+    if(dup){if(!window.confirm("A student with this phone already exists. Enroll anyway?"))return;}
+    else if(!window.confirm("Enroll "+lead.name+" as a student?"))return;
+    const s={id:uid(),instId:inst.id,name:lead.name,phone:lead.phone,email:lead.email||"",course:lead.course||"",rollNo:"",
+      createdAt:today(),admissionDate:today(),status:"Studying",attendance:[],fees:[],homeworks:[],exams:[],assignments:[]};
+    saveDb({students:[...(db.students||[]),s]});
+    try{sheetPush(db.settings,{action:"upsertStudent",row:studentRow(s,inst.name)});}catch{}
+    saveLeads(leads.map(l=>l.id===lead.id?pushLog({...l,status:"Enrolled",updatedAt:today()},"🎓 Converted to student"):l));
+    notify("🎓 "+lead.name+" enrolled as a student!");
+  }
+
+  function importPaste(){
+    const rows=paste.split("\n").map(r=>r.trim()).filter(Boolean);
+    let added=0;const next=[...leads];
+    rows.forEach(r=>{
+      const cols=r.indexOf("\t")>-1?r.split("\t"):r.split(",");
+      const [name,phone,course,source,status]=cols.map(x=>(x||"").trim());
+      if(!name||!phone)return;
+      next.push(pushLog({name,phone,email:"",course:course||"",source:source||"Other",status:STATUSES.includes(status)?status:"New Inquiry",notes:"",followUpDate:"",assignedTo:"",value:"",id:uid(),createdAt:today(),updatedAt:today(),log:[]},"Imported"));
+      added++;
+    });
+    if(!added){notify("Nothing to import — each row needs Name and Phone","error");return;}
+    saveLeads(next);setPaste("");setShowImport(false);notify("Imported "+added+" lead"+(added>1?"s":""));
+  }
+
+  function exportCSV(){
+    const head=["Name","Phone","Email","Course","Source","Status","Assigned To","Follow-up","Value","Created","Updated","Activity"];
+    const esc=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+    const lines=[head.map(esc).join(",")];
+    filtered.forEach(l=>{
+      const log=(l.log||[]).map(e=>e.t+" "+e.text).join(" | ");
+      lines.push([l.name,l.phone,l.email,l.course,l.source,l.status,l.assignedToName||nameOf(l.assignedTo),l.followUpDate,l.value,l.createdAt,l.updatedAt,log].map(esc).join(","));
+    });
+    try{
+      const blob=new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8;"});
+      const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=(inst.name||"leads").replace(/\s+/g,"_")+"_leads.csv";document.body.appendChild(a);a.click();a.remove();
+      notify("Exported "+filtered.length+" lead"+(filtered.length!==1?"s":""));
+    }catch{notify("Export failed","error");}
+  }
+
   const week=new Date(Date.now()-7*86400000).toISOString().slice(0,10);
+  const tdy=today();
+  const dead=st=>st==="Enrolled"||st==="Lost"||st==="Not Interested";
+  const isOverdue=l=>!!l.followUpDate&&l.followUpDate<tdy&&!dead(l.status);
+  const isDueToday=l=>l.followUpDate===tdy&&!dead(l.status);
+
+  const filtered=leads.filter(l=>{
+    if(fSource!=="all"&&l.source!==fSource)return false;
+    if(fAssignee!=="all"&&(l.assignedTo||"")!==fAssignee)return false;
+    if(q.trim()){const s=q.toLowerCase();if(![l.name,l.phone,l.email,l.course].some(v=>(v||"").toLowerCase().includes(s)))return false;}
+    return true;
+  });
+
+  const convRate=leads.length?Math.round(leads.filter(l=>l.status==="Enrolled").length/leads.length*100):0;
+  const pipeline=leads.filter(l=>!dead(l.status)).reduce((a,l)=>a+(Number(l.value)||0),0);
+  const dueCount=leads.filter(l=>isOverdue(l)||isDueToday(l)).length;
+  const stats=[
+    {l:"Total Leads",v:leads.length,c:"teal"},
+    {l:"This Week",v:leads.filter(l=>l.createdAt>=week).length,c:"blue"},
+    {l:"Follow-ups Due",v:dueCount,c:"gold"},
+    {l:"Enrolled",v:leads.filter(l=>l.status==="Enrolled").length,c:"green"},
+    {l:"Conversion",v:convRate+"%",c:"purple"},
+    {l:"Pipeline Value",v:fmtMoney(pipeline),c:"pink"},
+  ];
+
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
-      <PH title="Admission CRM" sub={leads.length+" leads - "+convRate+"% conversion"} C={C}/>
-      <Btn onClick={()=>setShowAdd(s=>!s)} C={C} color="teal">+ Add Lead</Btn>
+      <PH title="🎯 Admission CRM" sub={leads.length+" leads · "+convRate+"% conversion · "+dueCount+" follow-up"+(dueCount!==1?"s":"")+" due"} C={C}/>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <Btn onClick={exportCSV} C={C} color="blue" outline size="sm">⬇ Export</Btn>
+        <Btn onClick={()=>{setShowImport(s=>!s);setShowAdd(false);}} C={C} color="purple" outline size="sm">⬆ Import</Btn>
+        <Btn onClick={()=>{setShowAdd(s=>!s);setEditId(null);setForm(blank);setShowImport(false);}} C={C} color="teal">+ Add Lead</Btn>
+      </div>
     </div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
-      {[{l:"Total Leads",v:leads.length,c:"teal"},{l:"This Week",v:leads.filter(l=>l.createdAt>=week).length,c:"blue"},{l:"Enrolled",v:leads.filter(l=>l.status==="Enrolled").length,c:"green"},{l:"Conversion",v:convRate+"%",c:"gold"}].map(x=><div key={x.l} style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:14,textAlign:"center",boxShadow:C.shadow}}><div style={{fontSize:20,fontWeight:800,color:tc(C,x.c)}}>{x.v}</div><div style={{fontSize:10,color:C.muted}}>{x.l}</div></div>)}
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:12,marginBottom:18}}>
+      {stats.map(x=><div key={x.l} style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:14,textAlign:"center",boxShadow:C.shadow}}><div style={{fontSize:20,fontWeight:800,color:tc(C,x.c)}}>{x.v}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{x.l}</div></div>)}
     </div>
+
+    {showImport&&<div style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:18,marginBottom:16,boxShadow:C.shadow}}>
+      <div style={{fontWeight:700,fontSize:13,marginBottom:6,color:C.text}}>Bulk Import Leads</div>
+      <div style={{fontSize:11,color:C.muted,marginBottom:8}}>One lead per line — <b>Name, Phone, Course, Source, Status</b> (tab or comma separated). Name &amp; Phone required.</div>
+      <Txt C={C} value={paste} onChange={e=>setPaste(e.target.value)} rows={5} placeholder={"Arun Kumar, 9876543210, Python, Walk-in, New Inquiry\nMeena R, 9123456780, Tally, Reference, Contacted"} style={{fontFamily:"monospace",fontSize:12,marginBottom:10}}/>
+      <div style={{display:"flex",gap:10}}><Btn onClick={importPaste} C={C} color="green">Import</Btn><Btn onClick={()=>setShowImport(false)} C={C} color="red" outline>Cancel</Btn></div>
+    </div>}
+
     {showAdd&&<div style={{background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:20,marginBottom:18,boxShadow:C.shadow}}>
-      <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>New Inquiry / Lead</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
+      <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>{editId?"Edit Lead":"New Inquiry / Lead"}</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12,marginBottom:12}}>
         <FG label="Name *" C={C}><Inp C={C} value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Prospect name"/></FG>
         <FG label="Phone *" C={C}><Inp C={C} value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} placeholder="Mobile number"/></FG>
         <FG label="Email" C={C}><Inp C={C} value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="Email (optional)"/></FG>
         <FG label="Course Interest" C={C}><Inp C={C} value={form.course} onChange={e=>setForm(f=>({...f,course:e.target.value}))} placeholder="e.g. Python, Class 6"/></FG>
         <FG label="Source" C={C}><Sel C={C} value={form.source} onChange={e=>setForm(f=>({...f,source:e.target.value}))}>{SOURCES.map(s=><option key={s}>{s}</option>)}</Sel></FG>
         <FG label="Status" C={C}><Sel C={C} value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>{STATUSES.map(s=><option key={s}>{s}</option>)}</Sel></FG>
+        <FG label="Assign To" C={C}><Sel C={C} value={form.assignedTo} onChange={e=>setForm(f=>({...f,assignedTo:e.target.value}))}><option value="">— Unassigned —</option>{team.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</Sel></FG>
+        <FG label="Follow-up Date" C={C}><Inp C={C} type="date" value={form.followUpDate} onChange={e=>setForm(f=>({...f,followUpDate:e.target.value}))}/></FG>
+        <FG label="Expected Fee (₹)" C={C}><Inp C={C} type="number" value={form.value} onChange={e=>setForm(f=>({...f,value:e.target.value}))} placeholder="0"/></FG>
         <FG label="Notes" C={C} span><Inp C={C} value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Initial notes..."/></FG>
       </div>
-      <div style={{display:"flex",gap:10}}><Btn onClick={addLead} C={C} color="green">Save Lead</Btn><Btn onClick={()=>setShowAdd(false)} C={C} color="red" outline>Cancel</Btn></div>
+      <div style={{display:"flex",gap:10}}><Btn onClick={editId?saveEdit:addLead} C={C} color="green">{editId?"Save Changes":"Save Lead"}</Btn><Btn onClick={()=>{setShowAdd(false);setEditId(null);setForm(blank);}} C={C} color="red" outline>Cancel</Btn></div>
     </div>}
+
+    <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
+      <Inp C={C} value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Search name, phone, course…" style={{flex:1,minWidth:180,marginBottom:0}}/>
+      <Sel C={C} value={fSource} onChange={e=>setFSource(e.target.value)} style={{width:"auto",minWidth:130}}><option value="all">All Sources</option>{SOURCES.map(s=><option key={s} value={s}>{s}</option>)}</Sel>
+      <Sel C={C} value={fAssignee} onChange={e=>setFAssignee(e.target.value)} style={{width:"auto",minWidth:140}}><option value="all">All Owners</option><option value="">Unassigned</option>{team.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</Sel>
+      {subTab==="list"&&<Sel C={C} value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{width:"auto",minWidth:140}}><option value="all">All Status</option>{STATUSES.map(s=><option key={s} value={s}>{s}</option>)}</Sel>}
+    </div>
+
     <div style={{display:"flex",gap:8,marginBottom:18}}>
       {["board","list"].map(v=><button key={v} onClick={()=>setSubTab(v)} style={{padding:"7px 16px",borderRadius:20,border:"1px solid "+(subTab===v?color:C.border),background:subTab===v?color:"transparent",color:subTab===v?"#fff":C.muted,fontWeight:700,fontSize:12,cursor:"pointer"}}>{v==="board"?"Kanban Board":"List View"}</button>)}
     </div>
+
     {subTab==="board"&&<div style={{display:"flex",gap:12,overflowX:"auto",paddingBottom:8}}>
-      {STATUSES.map(status=>{const col=tc(C,SCOL[status]||"teal");const bg=tb(C,SCOL[status]||"teal");const items=leads.filter(l=>l.status===status);return<div key={status} style={{minWidth:200,background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:12,flexShrink:0}}>
+      {STATUSES.map(status=>{const col=tc(C,SCOL[status]||"teal");const bg=tb(C,SCOL[status]||"teal");const items=filtered.filter(l=>l.status===status);return<div key={status} style={{minWidth:210,background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:12,flexShrink:0}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:col,textTransform:"uppercase"}}>{status}</div><span style={{background:bg,color:col,borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:700}}>{items.length}</span></div>
-        {items.map(lead=><LeadCard key={lead.id} lead={lead} STATUSES={STATUSES} SCOL={SCOL} onStatusChange={updateStatus} onDelete={delLead} onNote={addNote} C={C}/>)}
+        {items.map(lead=><LeadCard key={lead.id} lead={lead} STATUSES={STATUSES} SCOL={SCOL} team={team} onStatusChange={updateStatus} onDelete={delLead} onNote={addNote} onEdit={startEdit} onConvert={convertToStudent} onAssign={assignLead} onFollowUp={setFollowUp} isOverdue={isOverdue} isDueToday={isDueToday} fmtMoney={fmtMoney} C={C}/>)}
         {!items.length&&<div style={{textAlign:"center",padding:"12px 0",color:C.muted,fontSize:11,opacity:0.6}}>Empty</div>}
       </div>;})}
     </div>}
+
     {subTab==="list"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {leads.slice().sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(lead=><LeadCard key={lead.id} lead={lead} STATUSES={STATUSES} SCOL={SCOL} onStatusChange={updateStatus} onDelete={delLead} onNote={addNote} C={C} full/>)}
-      {!leads.length&&<Empty msg="No leads yet. Add your first inquiry above." C={C}/>}
+      {filtered.filter(l=>fStatus==="all"||l.status===fStatus).slice().sort((a,b)=>(b.updatedAt||"").localeCompare(a.updatedAt||"")).map(lead=><LeadCard key={lead.id} lead={lead} STATUSES={STATUSES} SCOL={SCOL} team={team} onStatusChange={updateStatus} onDelete={delLead} onNote={addNote} onEdit={startEdit} onConvert={convertToStudent} onAssign={assignLead} onFollowUp={setFollowUp} isOverdue={isOverdue} isDueToday={isDueToday} fmtMoney={fmtMoney} C={C} full/>)}
+      {!filtered.length&&<Empty msg={leads.length?"No leads match your filters.":"No leads yet. Add your first inquiry above."} C={C}/>}
     </div>}
   </div>;
 }
 
-function LeadCard({lead,STATUSES,SCOL,onStatusChange,onDelete,onNote,C,full}){
+function LeadCard({lead,STATUSES,SCOL,team,onStatusChange,onDelete,onNote,onEdit,onConvert,onAssign,onFollowUp,isOverdue,isDueToday,fmtMoney,C,full}){
   const [showNotes,setShowNotes]=useState(false);const [newNote,setNewNote]=useState("");
   const col=tc(C,SCOL[lead.status]||"teal");
-  return <div style={{background:C.bg,borderRadius:9,border:"1px solid "+C.border,padding:12,marginBottom:8}}>
+  const overdue=isOverdue&&isOverdue(lead);const dueToday=isDueToday&&isDueToday(lead);
+  const waNum=(()=>{const d=(lead.phone||"").replace(/\D/g,"");return d.length===10?"91"+d:d;})();
+  return <div style={{background:C.bg,borderRadius:9,border:"1px solid "+(overdue?C.red:dueToday?C.gold:C.border),borderLeft:"4px solid "+col,padding:12,marginBottom:8}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-      <div style={{flex:1}}><div style={{fontWeight:700,fontSize:12,color:C.text}}>{lead.name}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{lead.phone}{lead.course?" - "+lead.course:""}</div>{lead.source&&<div style={{fontSize:9,color:C.muted,marginTop:1}}>via {lead.source}</div>}</div>
-      <div style={{display:"flex",gap:4,flexShrink:0}}>
-        <button onClick={()=>setShowNotes(s=>!s)} style={{background:"none",border:"none",fontSize:13,cursor:"pointer",padding:"2px 4px"}} title="Notes">📝</button>
-        <button onClick={()=>onDelete(lead.id)} style={{background:"none",border:"none",fontSize:12,cursor:"pointer",padding:"2px 4px",color:C.red}}>✕</button>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontWeight:700,fontSize:12,color:C.text}}>{lead.name}</div>
+        <div style={{fontSize:10,color:C.muted,marginTop:2}}>{lead.phone}{lead.course?" · "+lead.course:""}</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
+          {lead.source&&<span style={{fontSize:9,color:C.muted}}>via {lead.source}</span>}
+          {(lead.assignedToName)&&<span style={{fontSize:9,color:tc(C,"blue")}}>👤 {lead.assignedToName}</span>}
+          {Number(lead.value)>0&&<span style={{fontSize:9,color:tc(C,"green"),fontWeight:700}}>{fmtMoney(lead.value)}</span>}
+          {lead.followUpDate&&<span style={{fontSize:9,fontWeight:700,color:overdue?C.red:dueToday?C.gold:C.muted}}>⏰ {fmt(lead.followUpDate)}{overdue?" (overdue)":dueToday?" (today)":""}</span>}
+        </div>
+      </div>
+      <div style={{display:"flex",gap:2,flexShrink:0}}>
+        {waNum&&<a href={"tel:"+lead.phone} title="Call" style={{textDecoration:"none",fontSize:13,padding:"2px 4px"}}>📞</a>}
+        {waNum&&<a href={"https://wa.me/"+waNum} target="_blank" rel="noopener noreferrer" title="WhatsApp" style={{textDecoration:"none",fontSize:13,padding:"2px 4px"}}>💬</a>}
+        <button onClick={()=>setShowNotes(s=>!s)} style={{background:"none",border:"none",fontSize:13,cursor:"pointer",padding:"2px 4px"}} title="Notes & activity">📝</button>
+        {onEdit&&<button onClick={()=>onEdit(lead)} style={{background:"none",border:"none",fontSize:12,cursor:"pointer",padding:"2px 4px"}} title="Edit">✏️</button>}
+        <button onClick={()=>onDelete(lead.id)} style={{background:"none",border:"none",fontSize:12,cursor:"pointer",padding:"2px 4px",color:C.red}} title="Delete">✕</button>
       </div>
     </div>
-    {full&&<div style={{marginTop:8}}><Sel C={C} value={lead.status} onChange={e=>onStatusChange(lead.id,e.target.value)} style={{fontSize:11,padding:"4px 8px",marginBottom:0}}>{STATUSES.map(s=><option key={s}>{s}</option>)}</Sel></div>}
+
+    {full&&<div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+      <Sel C={C} value={lead.status} onChange={e=>onStatusChange(lead.id,e.target.value)} style={{fontSize:11,padding:"4px 8px",marginBottom:0,width:"auto",minWidth:140}}>{STATUSES.map(s=><option key={s}>{s}</option>)}</Sel>
+      <Sel C={C} value={lead.assignedTo||""} onChange={e=>onAssign(lead.id,e.target.value)} style={{fontSize:11,padding:"4px 8px",marginBottom:0,width:"auto",minWidth:130}}><option value="">— Unassigned —</option>{(team||[]).map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</Sel>
+      <Inp C={C} type="date" value={lead.followUpDate||""} onChange={e=>onFollowUp(lead.id,e.target.value)} style={{fontSize:11,padding:"4px 8px",marginBottom:0,width:"auto"}}/>
+    </div>}
+
     {!full&&<div style={{display:"flex",gap:4,marginTop:8,flexWrap:"wrap"}}>{STATUSES.slice(0,4).map(s=><button key={s} onClick={()=>onStatusChange(lead.id,s)} style={{fontSize:9,padding:"2px 6px",borderRadius:20,border:"1px solid "+tc(C,SCOL[s]||"teal")+"44",background:lead.status===s?tc(C,SCOL[s]||"teal"):C.surface,color:lead.status===s?"#fff":tc(C,SCOL[s]||"teal"),cursor:"pointer"}}>{s}</button>)}</div>}
+
+    {lead.status!=="Enrolled"&&onConvert&&<div style={{marginTop:8}}><Btn onClick={()=>onConvert(lead)} C={C} color="green" size="sm">🎓 Enroll as Student</Btn></div>}
+
     {showNotes&&<div style={{marginTop:10,borderTop:"1px solid "+C.border,paddingTop:10}}>
-      {lead.notes&&<pre style={{fontSize:10,color:C.muted,whiteSpace:"pre-wrap",marginBottom:8,maxHeight:80,overflowY:"auto"}}>{lead.notes}</pre>}
-      <div style={{display:"flex",gap:6}}><Inp C={C} value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="Add note..." style={{flex:1,fontSize:11,marginBottom:0}}/><Btn onClick={()=>{if(newNote.trim()){onNote(lead.id,newNote);setNewNote("");}}} C={C} color="teal" size="sm">Add</Btn></div>
+      {(lead.log&&lead.log.length>0)&&<div style={{maxHeight:120,overflowY:"auto",marginBottom:8}}>{lead.log.slice().reverse().map((e,i)=><div key={i} style={{fontSize:10,color:C.muted,marginBottom:3}}><span style={{color:tc(C,"teal"),fontWeight:600}}>{e.t}</span> — {e.text}</div>)}</div>}
+      {lead.notes&&<div style={{fontSize:10,color:C.muted,marginBottom:8,fontStyle:"italic"}}>“{lead.notes}”</div>}
+      <div style={{display:"flex",gap:6}}><Inp C={C} value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="Add note / log activity..." style={{flex:1,fontSize:11,marginBottom:0}}/><Btn onClick={()=>{if(newNote.trim()){onNote(lead.id,newNote);setNewNote("");}}} C={C} color="teal" size="sm">Add</Btn></div>
     </div>}
   </div>;
 }
