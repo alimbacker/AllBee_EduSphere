@@ -1178,9 +1178,7 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark,isParent})
                 <span style={{fontSize:12,fontWeight:700,color:C.text,textAlign:"center",padding:"0 6px"}}>{t.l}</span>
               </button>)}
           </div>
-          <div className="stat-grid-4">
-            <StatCard icon="📅" label="Attendance" value={`${att}%`} color={att>=75?"green":"red"} C={C} onClick={()=>setTab("attendance")}/>
-            <StatCard icon="💰" label="Fee Due" value={`₹${dueFee.toLocaleString()}`} color={dueFee>0?"pink":"green"} C={C} onClick={()=>setTab("fees")}/>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14,marginBottom:20}}>
             <StatCard icon="📚" label="HW Pending" value={stu.homeworks?.filter(h=>h.status==="Pending").length||0} color="purple" C={C} onClick={()=>setTab("homework")}/>
             <StatCard icon="📝" label="Exams Done" value={stu.exams?.length||0} color="blue" C={C} onClick={()=>setTab("marks")}/>
           </div>
@@ -1193,14 +1191,6 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark,isParent})
             </div>
             <span style={{flexShrink:0,padding:"7px 14px",borderRadius:20,background:"#ffffff2e",color:"#fff",fontSize:12,fontWeight:700}}>Open ↗</span>
           </a>
-          {/* Recent attendance */}
-          <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:18,marginBottom:16,boxShadow:C.shadow}}>
-            <div style={{fontWeight:700,fontSize:13,marginBottom:12,color:C.text}}>📅 Recent Attendance</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {(stu.attendance||[]).slice(-20).reverse().map((a,i)=><div key={i} title={a.date} style={{padding:"4px 10px",borderRadius:20,background:a.status==="Present"?C.greenL:a.status==="Leave"?C.goldL:C.redL,color:a.status==="Present"?C.green:a.status==="Leave"?C.gold:C.red,fontSize:10,fontWeight:600}}>{a.date?.slice(5)} {a.status==="Present"?"✓":a.status==="Leave"?"L":"✗"}</div>)}
-              {!stu.attendance?.length&&<div style={{color:C.muted,fontSize:12}}>No attendance records yet</div>}
-            </div>
-          </div>
           {/* Profile info */}
           <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:18,boxShadow:C.shadow}}>
             <div style={{fontWeight:700,fontSize:13,marginBottom:12,color:C.text}}>👤 My Profile</div>
@@ -2891,28 +2881,9 @@ function InstHome({inst,students,color,setTab,m,C}){
   const avgAtt=students.length?Math.round(students.reduce((a,s)=>a+attPct(s.attendance),0)/students.length):0;
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <div className="hide-mobile" style={{marginBottom:22}}><div style={{fontSize:22,fontWeight:800,color:C.text}}>{m.icon} {inst.name}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{inst.type} - {inst.city}</div></div>
-    <div className="stat-grid-4">
+    <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14,marginBottom:22}}>
       <StatCard icon="👥" label="Total Students" value={students.length} color="teal" C={C} onClick={()=>setTab("students")}/>
-      <StatCard icon="✅" label="Present Today" value={present} color="green" C={C} onClick={()=>setTab("attend")}/>
-      <StatCard icon="💰" label="Fee Pending" value={feePending} color="pink" C={C} onClick={()=>setTab("fees")} sub={`Rs.${(tf-pf).toLocaleString()} due`}/>
       <StatCard icon="📚" label="HW Pending" value={hwPending} color="purple" C={C} onClick={()=>setTab("homework")}/>
-    </div>
-    <div className="stat-grid-2">
-      <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:18,boxShadow:C.shadow}}>
-        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>💰 Fee Collection</div>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:C.muted,fontSize:13}}>Rs.{pf.toLocaleString()} collected</span><span style={{fontWeight:700,color,fontSize:13}}>{feePct}%</span></div>
-        <div style={{height:10,background:C.bg,borderRadius:99,overflow:"hidden",marginBottom:7,border:`1px solid ${C.border}`}}><div style={{height:"100%",width:`${feePct}%`,background:`linear-gradient(90deg,${color},${color}cc)`,borderRadius:99,transition:"width 0.5s"}}/></div>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:12}}><span style={{color:C.muted}}>Total: Rs.{tf.toLocaleString()}</span><span style={{color:C.red,fontWeight:600}}>Due: Rs.{(tf-pf).toLocaleString()}</span></div>
-      </div>
-      <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:18,boxShadow:C.shadow}}>
-        <div style={{fontWeight:700,fontSize:13,marginBottom:14,color:C.text}}>📅 Attendance</div>
-        <div style={{display:"flex",alignItems:"center",gap:16}}>
-          <div style={{width:68,height:68,borderRadius:"50%",background:`conic-gradient(${avgAtt>=75?C.green:C.red} ${avgAtt*3.6}deg,${C.bg} 0deg)`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:`2px solid ${C.border}`}}>
-            <div style={{width:50,height:50,borderRadius:"50%",background:C.surface,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:13,color:avgAtt>=75?C.green:C.red}}>{avgAtt}%</div>
-          </div>
-          <div><div style={{fontSize:12,color:C.muted}}>Average attendance</div><div style={{fontSize:12,color:avgAtt>=75?C.green:C.red,fontWeight:700,marginTop:5}}>{avgAtt>=75?"Good standing":"Below 75%"}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{students.filter(s=>attPct(s.attendance)<75).length} below threshold</div></div>
-        </div>
-      </div>
     </div>
     {students.length>0&&<div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:18,boxShadow:C.shadow}}><Sec C={C}>Recently Registered</Sec><div style={{display:"flex",flexDirection:"column",gap:7}}>{students.slice(-4).reverse().map(s=><div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",background:C.bg,borderRadius:9,border:`1px solid ${C.border}`}}><div style={{display:"flex",alignItems:"center",gap:10}}><Avatar name={s.name} photo={s.photo} color={color} size={32}/><div><div style={{fontWeight:600,fontSize:12,color:C.text}}>{s.name}</div><div style={{fontSize:10,color:C.muted}}>{s.rollNo} - {s.course||s.department||s.danceStyle||s.class||""}</div></div></div><div style={{fontSize:11,color:C.muted}}>{fmt(s.createdAt)}</div></div>)}</div></div>}
   </div>;
