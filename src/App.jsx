@@ -1126,6 +1126,7 @@ function SAReports({db,C}){
 // ─── Student Portal ──────────────────────────────────────────────────────────
 function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark,isParent}){
   const [tab,setTab]=useState("home");
+  const [batchUnlocked,setBatchUnlocked]=useState(false);
   const stu=db.students.find(s=>s.id===user.studentId);
   const inst=db.institutions.find(i=>i.id===user.instId);
   if(!stu)return <div style={{padding:40,textAlign:"center",color:C.muted}}>Student record not found.</div>
@@ -1139,6 +1140,8 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark,isParent})
   const totalFee=stu.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;
   const paidFee=stu.fees?.reduce((a,f)=>a+Number(f.paid||0),0)||0;
   const dueFee=totalFee-paidFee;
+  const myBatch=(db.batches||[]).find(b=>b.id===stu.batchId);
+  const batchLocked=!!(myBatch&&myBatch.password)&&!batchUnlocked;
   const STABS=[{k:"home",i:"🏠",l:"Home"},{k:"notifs",i:"🔔",l:"Notifications"},{k:"attendance",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"marks",i:"📝",l:"Exam Marks"},{k:"homework",i:"📚",l:"Homework"},{k:"assignments",i:"📋",l:"Assignments"},{k:"updates",i:"📰",l:"Daily Updates"},{k:"classlinks",i:"🎥",l:"Class Links"},{k:"recordings",i:"🎬",l:"Recordings"},{k:"tests",i:"📝",l:"Tests"},{k:"notes",i:"📒",l:"Notes"},{k:"questions",i:"❓",l:"Questions"},{k:"aichat",i:"🤖",l:"AI Assistant"},{k:"leave",i:"🏖",l:"Leave"},{k:"settings",i:"⚙️",l:"Settings"}].filter(t=>t.k!=="fees"&&!(isParent&&t.k==="settings"));
   const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:`1px solid ${C.border}`,background:C.bg||"#f2f4f6"};
   const TD={padding:"10px 14px",fontSize:13,color:C.text,borderBottom:`1px solid ${C.border}`};
@@ -1295,10 +1298,10 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark,isParent})
         {/* NOTIFICATIONS */}
         {tab==="notifs"&&<StuNotifications notifs={myNotifs} unread={unread} onClear={clearNotif} onClearAll={clearAllNotifs} onMarkRead={markAllRead} user={user} C={C}/>}
         {/* CLASS LINKS */}
-        {tab==="classlinks"&&<StuClassLinks db={db} stu={stu} C={C}/>}
+        {tab==="classlinks"&&<StuClassLinks db={db} saveDb={saveDb} stu={stu} C={C}/>}
         {tab==="recordings"&&<StuRecordings db={db} stu={stu} C={C}/>}
-        {tab==="tests"&&<StuTests db={db} saveDb={saveDb} stu={stu} C={C} notify={notify}/>}
-        {tab==="notes"&&<StuNotes db={db} stu={stu} C={C}/>}
+        {tab==="tests"&&(batchLocked?<BatchLock batch={myBatch} onUnlock={()=>setBatchUnlocked(true)} notify={notify} C={C}/>:<StuTests db={db} saveDb={saveDb} stu={stu} C={C} notify={notify}/>)}
+        {tab==="notes"&&(batchLocked?<BatchLock batch={myBatch} onUnlock={()=>setBatchUnlocked(true)} notify={notify} C={C}/>:<StuNotes db={db} stu={stu} C={C}/>)}
         {tab==="questions"&&<StuQuestions db={db} stu={stu} C={C}/>}
         {/* DAILY UPDATES */}
         {tab==="updates"&&<StuDailyUpdates db={db} saveDb={saveDb} stu={stu} inst={inst} C={C} notify={notify}/>}
@@ -1324,6 +1327,10 @@ function InstClassLinks({db,saveDb,user,inst,color,isAdmin,notify,C}){
   const links=(db.classLinks||[]).filter(l=>l.instId===inst.id);
   const batches=(db.batches||[]).filter(b=>b.instId===inst.id);
   const PLATFORMS=["Google Meet","Zoom","Microsoft Teams","YouTube Live","Other"];
+  const students=(db.students||[]).filter(s=>s.instId===inst.id&&s.status!=="Completed"&&s.status!=="Dropout");
+  const [attId,setAttId]=useState(null);
+  const expectedFor=(l)=>students.filter(s=>!l.batchId||l.batchId==="all"||s.batchId===l.batchId);
+  const pendingFor=(l)=>{const done=new Set((l.joinedBy||[]).map(j=>j.id));return expectedFor(l).filter(s=>!done.has(s.id));};
 
   function save(){
     if(!form.title.trim()||!form.link.trim()){notify("Title and link required","error");return;}
@@ -1413,6 +1420,21 @@ function InstClassLinks({db,saveDb,user,inst,color,isAdmin,notify,C}){
                 textDecoration:"none",boxShadow:`0 4px 12px ${C.blue}44`,marginTop:4}}>
               {platformIcon(l.platform)} Join {l.platform} Class →
             </a>
+            {/* Attendance: who joined vs who didn't */}
+            <div style={{borderTop:`1px solid ${C.border}`,paddingTop:8,marginTop:2}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,fontSize:11,flexWrap:"wrap"}}>
+                <span style={{color:C.green,fontWeight:700}}>✅ {(l.joinedBy||[]).length} joined</span>
+                <span style={{color:pendingFor(l).length?C.red:C.muted,fontWeight:700}}>⏳ {pendingFor(l).length} not joined</span>
+                <button onClick={()=>setAttId(attId===l.id?null:l.id)} style={{marginLeft:"auto",background:"none",border:"none",color:C.blue,fontWeight:700,fontSize:11,cursor:"pointer",padding:0}}>{attId===l.id?"Hide":"View list"}</button>
+              </div>
+              {attId===l.id&&<div style={{marginTop:8}}>
+                {pendingFor(l).length===0
+                  ? <div style={{fontSize:11,color:C.green,fontWeight:600}}>🎉 Everyone joined this class.</div>
+                  : <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                      {pendingFor(l).map(s=><span key={s.id} style={{fontSize:11,padding:"3px 9px",borderRadius:99,background:C.bg,border:`1px solid ${C.red}33`,color:C.text}}>{s.name}{s.rollNo?` · ${s.rollNo}`:""}</span>)}
+                    </div>}
+              </div>}
+            </div>
           </>}
         </div>;
       })}
@@ -1422,9 +1444,13 @@ function InstClassLinks({db,saveDb,user,inst,color,isAdmin,notify,C}){
 }
 
 // ─── Class Links (Student view) ───────────────────────────────────────────────
-function StuClassLinks({db,stu,C}){
+function StuClassLinks({db,saveDb,stu,C}){
   const links=(db.classLinks||[]).filter(l=>l.instId===stu.instId&&(!l.batchId||l.batchId==="all"||l.batchId===stu.batchId));
   const platformIcon=(p)=>p==="Google Meet"?"🟢":p==="Zoom"?"🔵":p==="Microsoft Teams"?"🟣":p==="YouTube Live"?"🔴":"🔗";
+  function recordJoin(l){
+    if((l.joinedBy||[]).some(j=>j.id===stu.id))return; // already recorded
+    saveDb({classLinks:(db.classLinks||[]).map(x=>x.id===l.id?{...x,joinedBy:[...(x.joinedBy||[]),{id:stu.id,name:stu.name,at:new Date().toISOString()}]}:x)});
+  }
 
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <PH title="🎥 Class Links" sub="Join your online classes" C={C}/>
@@ -1445,7 +1471,7 @@ function StuClassLinks({db,stu,C}){
           {l.schedule&&<div style={{fontSize:12,color:C.teal,fontWeight:700,marginBottom:2}}>🕐 {l.schedule}</div>}
           {l.description&&<div style={{fontSize:11,color:C.muted,lineHeight:1.5,marginTop:4}}>{l.description}</div>}
         </div>
-        <a href={l.link} target="_blank" rel="noreferrer"
+        <a href={l.link} target="_blank" rel="noreferrer" onClick={()=>recordJoin(l)}
           style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"12px",borderRadius:10,
             background:`linear-gradient(135deg,${C.blue},${C.blue}cc)`,color:"#fff",fontSize:14,fontWeight:700,
             textDecoration:"none",boxShadow:`0 4px 14px ${C.blue}44`}}>
@@ -4927,6 +4953,26 @@ function InstGamification({students,inst,color,onUpdate,notify,C}){
 //  ("All batches") or its batchId matches the student's batchId.
 // ════════════════════════════════════════════════════════════════════════════
 
+// Student-facing gate — must enter the batch's access code to view locked content
+function BatchLock({batch,onUnlock,notify,C}){
+  const [val,setVal]=useState("");
+  const [err,setErr]=useState(false);
+  function tryUnlock(){
+    if(String(val).trim()===String(batch.password)){setErr(false);onUnlock();notify&&notify("Batch unlocked!");}
+    else setErr(true);
+  }
+  return <div style={{animation:"fadeUp 0.4s ease",maxWidth:400,margin:"24px auto 0",textAlign:"center"}}>
+    <div style={{fontSize:46,marginBottom:8}}>🔒</div>
+    <div style={{fontWeight:800,fontSize:17,color:C.text,marginBottom:4}}>“{batch.name}” is locked</div>
+    <div style={{fontSize:12,color:C.muted,marginBottom:18}}>Enter the access code from your teacher to view this batch's content.</div>
+    <div style={{background:C.surface,borderRadius:12,border:`1px solid ${err?C.red:C.border}`,padding:18,boxShadow:C.shadow}}>
+      <Inp C={C} type="password" value={val} onChange={e=>{setVal(e.target.value);setErr(false);}} placeholder="Access code" onKeyDown={e=>e.key==="Enter"&&tryUnlock()} style={{textAlign:"center",letterSpacing:"0.12em"}}/>
+      {err&&<div style={{color:C.red,fontSize:12,fontWeight:600,marginTop:8}}>Incorrect code — try again</div>}
+      <Btn onClick={tryUnlock} C={C} color="teal" style={{width:"100%",marginTop:12}}>🔓 Unlock</Btn>
+    </div>
+  </div>;
+}
+
 // Reusable batch picker (hoisted; usable by edited components above too)
 function BatchSelect({batches,value,onChange,C}){
   return <Sel C={C} value={value||""} onChange={onChange}>
@@ -4940,13 +4986,21 @@ function InstBatches({db,saveDb,user,inst,color,notify,C}){
   const batches=(db.batches||[]).filter(b=>b.instId===inst.id);
   const students=(db.students||[]).filter(s=>s.instId===inst.id);
   const [name,setName]=useState("");
+  const [code,setCode]=useState("");
   const [openId,setOpenId]=useState(null);
   const [q,setQ]=useState("");
   function addBatch(){
     const nm=name.trim(); if(!nm)return;
     if(batches.some(b=>b.name.toLowerCase()===nm.toLowerCase())){notify("That batch already exists","error");return;}
-    saveDb({batches:[...(db.batches||[]),{id:uid(),instId:inst.id,name:nm,createdBy:user.name,createdAt:new Date().toISOString()}]});
-    setName(""); notify("Batch created!");
+    saveDb({batches:[...(db.batches||[]),{id:uid(),instId:inst.id,name:nm,password:code.trim(),createdBy:user.name,createdAt:new Date().toISOString()}]});
+    setName(""); setCode(""); notify("Batch created!");
+  }
+  function setBatchCode(b){
+    const next=window.prompt(`Access code for "${b.name}".\nStudents in this batch must enter it to view its Tests & Notes.\nLeave blank to remove the lock.`,b.password||"");
+    if(next===null)return; // cancelled
+    const code=next.trim();
+    saveDb({batches:(db.batches||[]).map(x=>x.id===b.id?{...x,password:code}:x)});
+    notify(code?"Access code updated":"Lock removed");
   }
   function delBatch(b){
     if(!window.confirm(`Delete batch "${b.name}"? Its students will be unassigned.`))return;
@@ -4965,6 +5019,7 @@ function InstBatches({db,saveDb,user,inst,color,notify,C}){
     <PH title="👥 Batches" sub="Group students into batches. Class Links & Questions can be shared with one batch only." C={C}/>
     <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:16,margin:"14px 0",boxShadow:C.shadow,display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end"}}>
       <div style={{flex:1,minWidth:200}}><LBL C={C}>New Batch Name</LBL><Inp C={C} value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Batch A · Morning · Class 10-B" onKeyDown={e=>e.key==="Enter"&&addBatch()}/></div>
+      <div style={{width:150,minWidth:120}}><LBL C={C}>Access Code (optional)</LBL><Inp C={C} value={code} onChange={e=>setCode(e.target.value)} placeholder="e.g. 1234" onKeyDown={e=>e.key==="Enter"&&addBatch()}/></div>
       <Btn onClick={addBatch} C={C} color="teal">+ Create Batch</Btn>
     </div>
     {!batches.length&&<Empty msg="No batches yet — create your first batch above" C={C}/>}
@@ -4974,8 +5029,9 @@ function InstBatches({db,saveDb,user,inst,color,notify,C}){
         const open=openId===b.id;
         return <div key={b.id} style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,boxShadow:C.shadow,borderLeft:`4px solid ${color}`,overflow:"hidden"}}>
           <div style={{padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-            <div><div style={{fontWeight:800,fontSize:14,color:C.text}}>{b.name}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{members.length} student{members.length!==1?"s":""}</div></div>
-            <div style={{display:"flex",gap:8}}>
+            <div><div style={{fontWeight:800,fontSize:14,color:C.text,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>{b.name}{b.password&&<span style={{fontSize:9,fontWeight:700,color:C.gold,background:C.goldL,border:`1px solid ${C.gold}44`,borderRadius:99,padding:"1px 8px",letterSpacing:"0.04em"}}>🔒 LOCKED</span>}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{members.length} student{members.length!==1?"s":""}</div></div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <Btn onClick={()=>setBatchCode(b)} C={C} color={b.password?"gold":"teal"} size="sm" outline>{b.password?"🔒 Code":"🔓 Set Code"}</Btn>
               <Btn onClick={()=>{setOpenId(open?null:b.id);setQ("");}} C={C} color="blue" size="sm" outline>{open?"Done":"Assign Students"}</Btn>
               <Btn onClick={()=>delBatch(b)} C={C} color="red" size="sm" outline>🗑</Btn>
             </div>
@@ -5024,6 +5080,9 @@ function TestLeaderboard({test,C,highlightId}){
 function InstTests({db,saveDb,user,inst,color,notify,C}){
   const batches=(db.batches||[]).filter(b=>b.instId===inst.id);
   const tests=(db.tests||[]).filter(t=>t.instId===inst.id).sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+  const students=(db.students||[]).filter(s=>s.instId===inst.id&&s.status!=="Completed"&&s.status!=="Dropout");
+  const expectedFor=(t)=>students.filter(s=>!t.batchId||t.batchId==="all"||s.batchId===t.batchId);
+  const pendingFor=(t)=>{const done=new Set((t.attempts||[]).map(a=>a.studentId));return expectedFor(t).filter(s=>!done.has(s.id));};
   const [view,setView]=useState("list");
   const [activeId,setActiveId]=useState(null);
   const blank={title:"",subject:"",batchId:"",description:""};
@@ -5057,7 +5116,10 @@ function InstTests({db,saveDb,user,inst,color,notify,C}){
       {tests.map(t=>{const subs=t.attempts||[];const top=subs.length?Math.max(...subs.map(s=>s.score)):0;return <div key={t.id} style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:18,boxShadow:C.shadow,borderLeft:`4px solid ${C.purple}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
           <div><div style={{fontWeight:700,fontSize:14,color:C.text}}>{t.title}</div><div style={{fontSize:11,color:C.muted,marginTop:3}}>{t.subject} · {t.questions?.length||0} questions · {t.totalMarks} marks</div><div style={{marginTop:6}}><Badge label={batchName(t.batchId)} color={t.batchId?"blue":"green"} C={C}/></div></div>
-          <div style={{textAlign:"center",padding:"6px 14px",background:C.bg,borderRadius:8,border:`1px solid ${C.border}`}}><div style={{fontWeight:800,fontSize:16,color:C.purple}}>{subs.length}</div><div style={{fontSize:9,color:C.muted}}>Attempts</div></div>
+          <div style={{display:"flex",gap:8}}>
+            <div style={{textAlign:"center",padding:"6px 14px",background:C.bg,borderRadius:8,border:`1px solid ${C.border}`}}><div style={{fontWeight:800,fontSize:16,color:C.purple}}>{subs.length}</div><div style={{fontSize:9,color:C.muted}}>Attempts</div></div>
+            <div style={{textAlign:"center",padding:"6px 14px",background:C.bg,borderRadius:8,border:`1px solid ${C.border}`}}><div style={{fontWeight:800,fontSize:16,color:pendingFor(t).length?C.red:C.green}}>{pendingFor(t).length}</div><div style={{fontSize:9,color:C.muted}}>Pending</div></div>
+          </div>
         </div>
         <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
           <Btn onClick={()=>{setActiveId(t.id);setView("results");}} C={C} color="blue" size="sm" outline>🏆 Results & Leaderboard</Btn>
@@ -5111,6 +5173,15 @@ function InstTests({db,saveDb,user,inst,color,notify,C}){
       </div>;})()}
       <Sec C={C}>🏆 Leaderboard</Sec>
       <TestLeaderboard test={active} C={C}/>
+      <Sec C={C}>⏳ Not Attempted ({pendingFor(active).length})</Sec>
+      {(()=>{const pend=pendingFor(active);return pend.length===0
+        ? <div style={{padding:"14px",textAlign:"center",color:C.green,fontSize:12,fontWeight:600,background:C.surface,borderRadius:10,border:`1px solid ${C.border}`}}>🎉 Everyone has attempted this test.</div>
+        : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:8}}>
+            {pend.map(s=><div key={s.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:9,border:`1px solid ${C.red}33`,background:C.bg}}>
+              <Avatar name={s.name} photo={s.photo} color={C.red} size={28} C={C}/>
+              <div style={{minWidth:0}}><div style={{fontSize:12,fontWeight:600,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div><div style={{fontSize:9,color:C.muted}}>{s.rollNo||"--"}</div></div>
+            </div>)}
+          </div>;})()}
     </div>}
   </div>;
 }
