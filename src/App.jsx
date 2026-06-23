@@ -237,6 +237,29 @@ function StuSidebar({students,sel,setSel,C,extra}){
   </div>;
 }
 
+// ── Browser/hardware Back-button handler ───────────────────────────────────
+// Without this, pressing Back in an SPA exits the whole page. onBack() should
+// handle one "step" of in-app navigation and return true if it did; returning
+// false means we're at the top (Home) and a 2nd Back within 2s exits the app.
+function useBackButton(onBack,notify){
+  const cb=useRef(onBack);
+  cb.current=onBack;
+  useEffect(()=>{
+    window.history.pushState({allbee:true},"");   // seed an entry to pop
+    let lastExit=0;
+    const handler=()=>{
+      if(cb.current()){window.history.pushState({allbee:true},"");return;} // handled in-app → re-arm
+      const now=Date.now();
+      if(now-lastExit<2000)return;                 // 2nd Back → let the browser leave
+      lastExit=now;
+      window.history.pushState({allbee:true},"");  // re-arm, swallow this press
+      if(notify)notify("Press Back again to exit");
+    };
+    window.addEventListener("popstate",handler);
+    return()=>window.removeEventListener("popstate",handler);
+  },[]);
+}
+
 // Root App
 export default function App(){
   const [dark,setDark]=useState(false);
@@ -1116,10 +1139,15 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark,isParent})
   const totalFee=stu.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;
   const paidFee=stu.fees?.reduce((a,f)=>a+Number(f.paid||0),0)||0;
   const dueFee=totalFee-paidFee;
-  const STABS=[{k:"home",i:"🏠",l:"Home"},{k:"notifs",i:"🔔",l:"Notifications"},{k:"attendance",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"marks",i:"📝",l:"Exam Marks"},{k:"homework",i:"📚",l:"Homework"},{k:"assignments",i:"📋",l:"Assignments"},{k:"updates",i:"📰",l:"Daily Updates"},{k:"classlinks",i:"🎥",l:"Class Links"},{k:"recordings",i:"🎬",l:"Recordings"},{k:"tests",i:"📝",l:"Tests"},{k:"notes",i:"📒",l:"Notes"},{k:"questions",i:"❓",l:"Questions"},{k:"aichat",i:"🤖",l:"AI Assistant"},{k:"leave",i:"🏖",l:"Leave"},{k:"settings",i:"⚙️",l:"Settings"}].filter(t=>!(isParent&&t.k==="settings"));
+  const STABS=[{k:"home",i:"🏠",l:"Home"},{k:"notifs",i:"🔔",l:"Notifications"},{k:"attendance",i:"📅",l:"Attendance"},{k:"fees",i:"💰",l:"Fees"},{k:"marks",i:"📝",l:"Exam Marks"},{k:"homework",i:"📚",l:"Homework"},{k:"assignments",i:"📋",l:"Assignments"},{k:"updates",i:"📰",l:"Daily Updates"},{k:"classlinks",i:"🎥",l:"Class Links"},{k:"recordings",i:"🎬",l:"Recordings"},{k:"tests",i:"📝",l:"Tests"},{k:"notes",i:"📒",l:"Notes"},{k:"questions",i:"❓",l:"Questions"},{k:"aichat",i:"🤖",l:"AI Assistant"},{k:"leave",i:"🏖",l:"Leave"},{k:"settings",i:"⚙️",l:"Settings"}].filter(t=>t.k!=="fees"&&!(isParent&&t.k==="settings"));
   const TH={padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:`1px solid ${C.border}`,background:C.bg||"#f2f4f6"};
   const TD={padding:"10px 14px",fontSize:13,color:C.text,borderBottom:`1px solid ${C.border}`};
   const [sideOpen,setSideOpen]=useState(false);
+  useBackButton(()=>{
+    if(sideOpen){setSideOpen(false);return true;}
+    if(tab!=="home"){setTab("home");return true;}
+    return false;
+  },notify);
   return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:C.bg}}>
     <style>{`
       .inst-sidebar{width:210px;background:var(--sb-bg,${C.surface});border-right:1px solid var(--sb-border,${C.border});padding:12px 10px;position:sticky;top:54px;height:calc(100vh - 54px);overflow-y:auto;display:flex;flex-direction:column;gap:1px;flex-shrink:0;transition:transform 0.25s ease;}
@@ -1191,13 +1219,6 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark,isParent})
             </div>
             <span style={{flexShrink:0,padding:"7px 14px",borderRadius:20,background:"#ffffff2e",color:"#fff",fontSize:12,fontWeight:700}}>Open ↗</span>
           </a>
-          {/* Profile info */}
-          <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:18,boxShadow:C.shadow}}>
-            <div style={{fontWeight:700,fontSize:13,marginBottom:12,color:C.text}}>👤 My Profile</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              {[["Roll No",stu.rollNo],["Class/Course",stu.class||stu.course||"--"],["Phone",stu.phone||"--"],["Parent",stu.parentName||"--"],["Parent Phone",stu.parentPhone||"--"],["DOB",stu.dob||"--"]].map(([l,v])=><div key={l} style={{padding:"8px 12px",background:C.bg,borderRadius:8,border:`1px solid ${C.border}`}}><div style={{fontSize:9,color:C.muted,textTransform:"uppercase",fontWeight:700,marginBottom:3}}>{l}</div><div style={{fontWeight:600,fontSize:12,color:C.text}}>{v}</div></div>)}
-            </div>
-          </div>
         </div>}
         {/* ATTENDANCE */}
         {tab==="attendance"&&<div style={{animation:"fadeUp 0.4s ease"}}>
@@ -2706,12 +2727,17 @@ function InstCourses({db,saveDb,inst,color,notify,C}){
 }
 
 // Institution Dashboard Shell
-const NAV_GROUPS=["Main","Students","Staff","Academics","Finance","Communication","Insights"];
+const NAV_GROUPS=["Main","Academics","Students","Staff","Finance","Communication","Insights"];
 const INST_TABS=[{k:"home",i:"🏠",l:"Home",g:"Main"},{k:"students",i:"👥",l:"Students",g:"Students"},{k:"register",i:"➕",l:"Register",g:"Students"},{k:"approvals",i:"📨",l:"Registrations",g:"Students"},{k:"import",i:"📥",l:"Import Data",g:"Students"},{k:"attend",i:"📅",l:"Attendance",g:"Students"},{k:"fees",i:"💰",l:"Fees",g:"Students"},{k:"receipt",i:"🧾",l:"Fee Receipt",g:"Students"},{k:"homework",i:"📚",l:"Homework",g:"Students"},{k:"exams",i:"📝",l:"Exam Marks",g:"Students"},{k:"assign",i:"📋",l:"Assignments",g:"Students"},{k:"timetable",i:"🗓",l:"Timetable",g:"Students"},{k:"certificates",i:"🏆",l:"Certificates",g:"Students"},{k:"onlineexam",i:"💻",l:"Online Exams",g:"Students"},{k:"gamify",i:"🏅",l:"Gamification",g:"Students"},{k:"crm",i:"🎯",l:"Admission CRM",g:"Students"},{k:"staff",i:"👨‍🏫",l:"Staff",g:"Staff"},{k:"tasks",i:"✅",l:"Tasks",g:"Staff"},{k:"staffatt",i:"🕐",l:"Staff Attendance",g:"Staff"},{k:"payroll",i:"💵",l:"HR & Payroll",g:"Staff"},{k:"leave",i:"🏖",l:"Leave",g:"Staff"},{k:"courses",i:"🖥",l:"Courses",g:"Academics"},{k:"classlinks",i:"🎥",l:"Class Links",g:"Academics"},{k:"recordings",i:"🎬",l:"Recordings",g:"Academics"},{k:"batches",i:"👥",l:"Batches",g:"Academics"},{k:"tests",i:"📝",l:"Tests",g:"Academics"},{k:"notes",i:"📒",l:"Notes",g:"Academics"},{k:"questions",i:"❓",l:"Questions",g:"Academics"},{k:"library",i:"📚",l:"Library",g:"Academics"},{k:"docs",i:"📁",l:"Documents",g:"Academics"},{k:"accounts",i:"💼",l:"Accounts",g:"Finance"},{k:"updates",i:"📰",l:"Updates",g:"Communication"},{k:"alerts",i:"📣",l:"Alerts",g:"Communication"},{k:"reports",i:"📊",l:"Reports",g:"Insights"},{k:"analytics",i:"📈",l:"Analytics",g:"Insights"},{k:"ai",i:"🤖",l:"AI Tools",g:"Insights"}];
 
 function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const [tab,setTab]=useState("home");
   const [sideOpen,setSideOpen]=useState(false);
+  useBackButton(()=>{
+    if(sideOpen){setSideOpen(false);return true;}
+    if(tab!=="home"){setTab("home");return true;}
+    return false;
+  },notify);
   const color=inst.color||C.teal;
   const m=TYPE_META[inst.type]||TYPE_META["College"];
   const myStudents=useMemo(()=>db.students.filter(s=>s.instId===inst.id),[db.students,inst.id]);
@@ -2749,7 +2775,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const visibleTabs=INST_TABS.filter(t=>{
     if(!svcAllowedTabs.has(t.k))return false;
     if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);
-    if(!isAdmin)return!["register","approvals","import","staff","courses","payroll","crm","accounts"].includes(t.k);
+    if(!isAdmin)return!["register","approvals","import","staff","courses","payroll","crm","accounts","fees","receipt"].includes(t.k);
     if(t.k==="courses")return inst.type==="Computer Institute";
     return true;
   });
