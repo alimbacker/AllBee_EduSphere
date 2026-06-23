@@ -260,6 +260,13 @@ function useBackButton(onBack,notify){
   },[]);
 }
 
+// Firestore rejects an entire write if any field is `undefined`. Strip them first.
+function stripUndefined(v){
+  if(Array.isArray(v))return v.map(stripUndefined);
+  if(v&&typeof v==="object"){const o={};for(const k in v){if(v[k]!==undefined)o[k]=stripUndefined(v[k]);}return o;}
+  return v;
+}
+
 // Root App
 export default function App(){
   const [dark,setDark]=useState(false);
@@ -291,7 +298,13 @@ export default function App(){
   const saveDb=useCallback((patch)=>{
     const n={...db,...patch};
     setDb(n);
-    setDoc(doc(firestoreDb,"allbee","data"),n);
+    try{
+      setDoc(doc(firestoreDb,"allbee","data"),stripUndefined(n))
+        .catch(err=>{console.error("Save failed:",err);notify("Couldn't save — "+(err?.code||err?.message||"check your connection"),"error");});
+    }catch(err){
+      console.error("Save failed (sync):",err);
+      notify("Couldn't save — "+(err?.message||"invalid data"),"error");
+    }
   },[db]);
 
   function notify(msg,type="success"){setToast({msg,type});setTimeout(()=>setToast(null),3000);}
@@ -4990,9 +5003,9 @@ function InstBatches({db,saveDb,user,inst,color,notify,C}){
   const [openId,setOpenId]=useState(null);
   const [q,setQ]=useState("");
   function addBatch(){
-    const nm=name.trim(); if(!nm)return;
+    const nm=name.trim(); if(!nm){notify("Enter a batch name first","error");return;}
     if(batches.some(b=>b.name.toLowerCase()===nm.toLowerCase())){notify("That batch already exists","error");return;}
-    saveDb({batches:[...(db.batches||[]),{id:uid(),instId:inst.id,name:nm,password:code.trim(),createdBy:user.name,createdAt:new Date().toISOString()}]});
+    saveDb({batches:[...(db.batches||[]),{id:uid(),instId:inst.id,name:nm,password:(code||"").trim(),createdBy:user.name||"",createdAt:new Date().toISOString()}]});
     setName(""); setCode(""); notify("Batch created!");
   }
   function setBatchCode(b){
