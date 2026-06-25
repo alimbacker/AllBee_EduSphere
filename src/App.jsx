@@ -79,6 +79,11 @@ const tb=(C,color)=>color==="teal"?C.tealL:color==="red"?C.redL:color==="gold"?C
 const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch{return d;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
 
+function confirmDelete(what){
+  const r=window.prompt(`Type "ok" to confirm deleting ${what}. This cannot be undone.`);
+  return r!==null && r.trim().toLowerCase()==="ok";
+}
+
 function seedData(){
   return {
     institutions:[
@@ -616,7 +621,7 @@ function SuperAdmin({db,saveDb,onLogout,notify,user,C,dark,setDark}){
   const [tab,setTab]=useState("overview");
   function addInst(d){saveDb({institutions:[...db.institutions,{...d,id:uid(),createdAt:today(),active:true}]});notify("Institution added!");}
   function updInst(id,p){saveDb({institutions:db.institutions.map(i=>i.id===id?{...i,...p}:i)});notify("Updated");}
-  function delInst(id){if(!window.confirm("Delete institution and all data?"))return;saveDb({institutions:db.institutions.filter(i=>i.id!==id),users:db.users.filter(u=>u.instId!==id),students:db.students.filter(s=>s.instId!==id)});notify("Deleted","error");}
+  function delInst(id){if(!confirmDelete("this institution and ALL its data"))return;saveDb({institutions:db.institutions.filter(i=>i.id!==id),users:db.users.filter(u=>u.instId!==id),students:db.students.filter(s=>s.instId!==id)});notify("Deleted","error");}
   function addUser(d){if(db.users.find(u=>u.username===d.username)){notify("Username exists","error");return;}saveDb({users:[...db.users,{...d,id:uid()}]});notify("User created!");}
   function delUser(id){saveDb({users:db.users.filter(u=>u.id!==id)});notify("Deleted");}
   function updUser(id,p){saveDb({users:db.users.map(u=>u.id===id?{...u,...p}:u)});notify("Updated");}
@@ -962,7 +967,7 @@ function SAUsers({db,onAdd,onDelete,onUpdate,C}){
     <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,overflow:"hidden",boxShadow:C.shadow}}>
       <table style={{width:"100%",borderCollapse:"collapse"}}>
         <thead><tr>{["User","Username","Role","Institution","Actions"].map(h=><th key={h} style={TH}>{h}</th>)}</tr></thead>
-        <tbody>{db.users.filter(u=>u.role!=="superadmin").map(u=>{const inst=db.institutions.find(i=>i.id===u.instId);return<tr key={u.id} style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:"11px 16px"}}><div style={{display:"flex",alignItems:"center",gap:9}}><Avatar name={u.name} color={u.role==="admin"?C.teal:C.green} size={30}/><div><div style={{fontWeight:600,fontSize:12,color:C.text}}>{u.name}</div><div style={{fontSize:10,color:C.muted}}>{u.email}</div></div></div></td><td style={{padding:"11px 16px",fontFamily:"monospace",fontSize:12,color:C.teal}}>{u.username}</td><td style={{padding:"11px 16px"}}><Badge label={u.role} color={u.role==="admin"?"teal":u.role==="accountant"?"gold":u.role==="staff"?"blue":"green"} C={C}/></td><td style={{padding:"11px 16px",fontSize:12,color:C.muted}}>{inst?.name?.slice(0,22)||"--"}</td><td style={{padding:"11px 16px"}}><div style={{display:"flex",gap:6}}><Btn onClick={()=>{const np=window.prompt("New password:",u.password);if(np)onUpdate(u.id,{password:np});}} C={C} color="gold" size="sm" outline>Reset Pwd</Btn><Btn onClick={()=>onDelete(u.id)} C={C} color="red" size="sm" outline>Delete</Btn></div></td></tr>;})}
+        <tbody>{db.users.filter(u=>u.role!=="superadmin").map(u=>{const inst=db.institutions.find(i=>i.id===u.instId);return<tr key={u.id} style={{borderBottom:`1px solid ${C.border}`}}><td style={{padding:"11px 16px"}}><div style={{display:"flex",alignItems:"center",gap:9}}><Avatar name={u.name} color={u.role==="admin"?C.teal:C.green} size={30}/><div><div style={{fontWeight:600,fontSize:12,color:C.text}}>{u.name}</div><div style={{fontSize:10,color:C.muted}}>{u.email}</div></div></div></td><td style={{padding:"11px 16px",fontFamily:"monospace",fontSize:12,color:C.teal}}>{u.username}</td><td style={{padding:"11px 16px"}}><Badge label={u.role} color={u.role==="admin"?"teal":u.role==="accountant"?"gold":u.role==="staff"?"blue":"green"} C={C}/></td><td style={{padding:"11px 16px",fontSize:12,color:C.muted}}>{inst?.name?.slice(0,22)||"--"}</td><td style={{padding:"11px 16px"}}><div style={{display:"flex",gap:6}}><Btn onClick={()=>{const np=window.prompt("New password:",u.password);if(np)onUpdate(u.id,{password:np});}} C={C} color="gold" size="sm" outline>Reset Pwd</Btn><Btn onClick={()=>{if(confirmDelete(u.name))onDelete(u.id);}} C={C} color="red" size="sm" outline>Delete</Btn></div></td></tr>;})}
         {!db.users.filter(u=>u.role!=="superadmin").length&&<tr><td colSpan={5}><Empty msg="No users" C={C}/></td></tr>}</tbody>
       </table>
     </div>
@@ -1143,11 +1148,11 @@ function StudentPortal({db,saveDb,onLogout,notify,user,C,dark,setDark,isParent})
   const stu=db.students.find(s=>s.id===user.studentId);
   const inst=db.institutions.find(i=>i.id===user.instId);
   if(!stu)return <div style={{padding:40,textAlign:"center",color:C.muted}}>Student record not found.</div>
-  const myNotifs=(db.notifications||[]).filter(n=>n.instId===user.instId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const myNotifs=(db.notifications||[]).filter(n=>n.instId===user.instId&&(!n.toUserId||n.toUserId===user.id)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   const unread=myNotifs.filter(n=>!(n.readBy||[]).includes(user.id)).length;
   function markAllRead(){saveDb({notifications:(db.notifications||[]).map(n=>n.instId===user.instId&&!(n.readBy||[]).includes(user.id)?{...n,readBy:[...(n.readBy||[]),user.id]}:n)});}
   function clearNotif(id){saveDb({notifications:(db.notifications||[]).filter(n=>n.id!==id)});}
-  function clearAllNotifs(){if(!window.confirm("Clear all notifications?"))return;saveDb({notifications:(db.notifications||[]).filter(n=>n.instId!==user.instId)});};
+  function clearAllNotifs(){if(!confirmDelete("all notifications"))return;saveDb({notifications:(db.notifications||[]).filter(n=>n.instId!==user.instId)});};
   const color=inst?.color||C.teal;
   const att=attPct(stu.attendance||[]);
   const totalFee=stu.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;
@@ -1357,7 +1362,7 @@ function InstClassLinks({db,saveDb,user,inst,color,isAdmin,notify,C}){
     setEditId(null);setEditForm(null);notify("Updated!");
   }
   function del(id){
-    if(!window.confirm("Delete this class link?"))return;
+    if(!confirmDelete("this class link"))return;
     saveDb({classLinks:(db.classLinks||[]).filter(l=>l.id!==id)});
     notify("Deleted","error");
   }
@@ -1699,7 +1704,7 @@ function InstUpdates({db,saveDb,user,inst,color,notify,C}){
     setForm(blank);setShowAdd(false);
     notify("📰 Update posted & students notified!");
   }
-  function del(id){if(!window.confirm("Delete this update?"))return;saveDb({dailyUpdates:(db.dailyUpdates||[]).filter(u=>u.id!==id),notifications:(db.notifications||[]).filter(n=>n.updateId!==id)});notify("Deleted","error");}
+  function del(id){if(!confirmDelete("this update"))return;saveDb({dailyUpdates:(db.dailyUpdates||[]).filter(u=>u.id!==id),notifications:(db.notifications||[]).filter(n=>n.updateId!==id)});notify("Deleted","error");}
 
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
@@ -1797,14 +1802,21 @@ function StaffTasks({db,saveDb,user,inst,color,isAdmin,notify,C}){
     const staff=instStaff.find(u=>u.id===form.assignedTo);
     const task={...form,id:uid(),instId:inst.id,assignedBy:user.id,assignedByName:user.name,
       assignedToName:staff?.name||"",status:"pending",createdAt:new Date().toISOString(),comments:[]};
-    saveDb({staffTasks:[...(db.staffTasks||[]),task]});
+    saveDb({
+      staffTasks:[...(db.staffTasks||[]),task],
+      notifications:[...(db.notifications||[]),{id:uid(),instId:inst.id,toUserId:form.assignedTo,type:"notice",title:`📋 New task: ${task.title}${task.dueDate?` (due ${fmt(task.dueDate)})`:""}`,postedBy:user.name,createdAt:new Date().toISOString(),readBy:[]}],
+    });
     setForm(blank);setShowAdd(false);
     notify("✅ Task assigned to "+staff?.name);
   }
 
   function updateStatus(id,status){
-    saveDb({staffTasks:(db.staffTasks||[]).map(t=>t.id===id?{...t,status,updatedAt:new Date().toISOString()}:t)});
-    notify("Task updated");
+    const t=(db.staffTasks||[]).find(x=>x.id===id);
+    const patch={staffTasks:(db.staffTasks||[]).map(x=>x.id===id?{...x,status,updatedAt:new Date().toISOString()}:x)};
+    if(status==="done"&&t&&!isAdmin&&t.assignedBy){
+      patch.notifications=[...(db.notifications||[]),{id:uid(),instId:inst.id,toUserId:t.assignedBy,type:"event",title:`✅ Task completed: ${t.title} — by ${user.name}`,postedBy:user.name,createdAt:new Date().toISOString(),readBy:[]}];
+    }
+    saveDb(patch);notify("Task updated");
   }
 
   function addComment(id,text){
@@ -1813,8 +1825,14 @@ function StaffTasks({db,saveDb,user,inst,color,isAdmin,notify,C}){
       {id:uid(),text,author:user.name,authorId:user.id,at:new Date().toISOString()}]}:t)});
   }
 
+  function addAttachment(id,url,label){
+    if(!url||!/^https?:\/\//i.test(url)){notify("Paste a valid link (https://…)","error");return;}
+    saveDb({staffTasks:(db.staffTasks||[]).map(t=>t.id===id?{...t,attachments:[...(t.attachments||[]),{id:uid(),url,label:label||url,by:user.name,at:new Date().toISOString()}]}:t)});
+    notify("Attachment added");
+  }
+
   function deleteTask(id){
-    if(!window.confirm("Delete this task?"))return;
+    if(!confirmDelete("this task"))return;
     saveDb({staffTasks:(db.staffTasks||[]).filter(t=>t.id!==id)});
     notify("Task deleted","error");
   }
@@ -1929,6 +1947,16 @@ function StaffTasks({db,saveDb,user,inst,color,isAdmin,notify,C}){
           {expanded&&<div style={{borderTop:`1px solid ${C.border}`,background:C.bg,padding:"14px 18px"}}>
             {task.description&&<div style={{fontSize:13,color:C.text,marginBottom:14,lineHeight:1.6,padding:"10px 14px",background:C.surface,borderRadius:9,border:`1px solid ${C.border}`}}>{task.description}</div>}
 
+            {/* Reports / Attachments */}
+            <div style={{marginBottom:14}}>
+              <div style={{fontWeight:700,fontSize:12,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>📎 Reports / Attachments</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
+                {(task.attachments||[]).map(a=><a key={a.id} href={a.url} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",gap:8,padding:"7px 12px",background:C.surface,borderRadius:8,border:`1px solid ${C.border}`,textDecoration:"none",color:C.teal,fontSize:12,fontWeight:600}}>🔗 {a.label}<span style={{marginLeft:"auto",fontSize:10,color:C.muted,fontWeight:400}}>{a.by}</span></a>)}
+                {!task.attachments?.length&&<div style={{fontSize:11,color:C.muted,fontStyle:"italic"}}>No attachments yet</div>}
+              </div>
+              <AttachBox onAdd={(url,label)=>addAttachment(task.id,url,label)} C={C}/>
+            </div>
+
             {/* Status selector */}
             <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
               <span style={{fontSize:11,color:C.muted,alignSelf:"center",fontWeight:600}}>Status:</span>
@@ -1962,6 +1990,15 @@ function StaffTasks({db,saveDb,user,inst,color,isAdmin,notify,C}){
 }
 
 // Comment input box helper
+function AttachBox({onAdd,C}){
+  const [url,setUrl]=useState("");const [label,setLabel]=useState("");
+  return <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+    <Inp C={C} value={label} onChange={e=>setLabel(e.target.value)} placeholder="Label (e.g. Monthly report)" style={{flex:"1 1 140px"}}/>
+    <Inp C={C} value={url} onChange={e=>setUrl(e.target.value)} placeholder="Paste link (Google Drive / PDF URL)" style={{flex:"2 1 200px"}}/>
+    <Btn onClick={()=>{if(url){onAdd(url,label);setUrl("");setLabel("");}}} C={C} color="teal" size="sm">Attach</Btn>
+  </div>;
+}
+
 function CommentBox({onSubmit,C}){
   const [text,setText]=useState("");
   return <div style={{display:"flex",gap:8}}>
@@ -2154,7 +2191,7 @@ function InstStaff({staff,inst,color,onAdd,onUpdate,onDelete,notify,C}){
                 <td style={TD}><div style={{fontSize:11}}>{u.phone||"--"}</div><div style={{fontSize:10,color:C.muted}}>{u.email||""}</div></td>
                 <td style={TD}><div style={{display:"flex",gap:6}}>
                   <Btn onClick={()=>{setEditId(u.id);setEditForm({...u});setShowAdd(false);}} C={C} color="teal" size="sm" outline>✏ Edit</Btn>
-                  <Btn onClick={()=>{if(window.confirm("Remove "+u.name+"?"))onDelete(u.id);}} C={C} color="red" size="sm" outline>Remove</Btn>
+                  <Btn onClick={()=>{if(confirmDelete(u.name))onDelete(u.id);}} C={C} color="red" size="sm" outline>Remove</Btn>
                 </div></td>
               </>}
             </tr>;
@@ -2573,7 +2610,7 @@ function InstAccounts({db,saveDb,inst,color,isAdmin,notify,C}){
             <td style={TD}><span style={{color:C.muted}}>{t.description||"--"}</span></td>
             <td style={{...TD,fontFamily:"monospace",fontSize:11}}>{t.ref||"--"}</td>
             <td style={{...TD,fontWeight:800,color:subTab==="income"?C.green:C.red}}>₹{Number(t.amount).toLocaleString()}</td>
-            <td style={TD}><Btn onClick={()=>{if(window.confirm("Delete this entry?"))delTx(t.id);}} C={C} color="red" size="sm" outline>Del</Btn></td>
+            <td style={TD}><Btn onClick={()=>{if(confirmDelete("this entry"))delTx(t.id);}} C={C} color="red" size="sm" outline>Del</Btn></td>
           </tr>)}
           {!monthTx.filter(t=>t.type===subTab).length&&<tr><td colSpan={6}><Empty msg={`No ${subTab} records for ${filterMonth}`} C={C}/></td></tr>}
         </tbody>
@@ -2599,7 +2636,7 @@ function InstAccounts({db,saveDb,inst,color,isAdmin,notify,C}){
             <td style={{...TD,color:C.muted}}>{t.description||"--"}</td>
             <td style={{...TD,fontFamily:"monospace",fontSize:11,color:C.muted}}>{t.ref||""}</td>
             <td style={{...TD,fontWeight:700,color:t.type==="income"?C.green:C.red,textAlign:"right"}}>₹{Number(t.amount).toLocaleString()}</td>
-            <td style={{...TD,width:60}}><Btn onClick={()=>{if(window.confirm("Delete?"))delTx(t.id);}} C={C} color="red" size="sm" outline>Del</Btn></td>
+            <td style={{...TD,width:60}}><Btn onClick={()=>{if(confirmDelete("this entry"))delTx(t.id);}} C={C} color="red" size="sm" outline>Del</Btn></td>
           </tr>)}</tbody>
         </table>
       </div>;})}
@@ -2675,7 +2712,7 @@ function InstCourses({db,saveDb,inst,color,notify,C}){
     setEditId(null);setEditForm(null);notify("Course updated");
   }
   function delCourse(id){
-    if(!window.confirm("Delete this course?"))return;
+    if(!confirmDelete("this course"))return;
     saveDb({courses:(db.courses||[]).filter(c=>c.id!==id)});notify("Deleted","error");
   }
 
@@ -2767,7 +2804,7 @@ function InstCourses({db,saveDb,inst,color,notify,C}){
 
 // Institution Dashboard Shell
 const NAV_GROUPS=["Main","Academics","Students","Staff","Finance","Communication","Insights"];
-const INST_TABS=[{k:"home",i:"🏠",l:"Home",g:"Main"},{k:"students",i:"👥",l:"Students",g:"Students"},{k:"register",i:"➕",l:"Register",g:"Students"},{k:"approvals",i:"📨",l:"Registrations",g:"Students"},{k:"import",i:"📥",l:"Import Data",g:"Students"},{k:"attend",i:"📅",l:"Attendance",g:"Students"},{k:"fees",i:"💰",l:"Fees",g:"Students"},{k:"receipt",i:"🧾",l:"Fee Receipt",g:"Students"},{k:"homework",i:"📚",l:"Homework",g:"Students"},{k:"exams",i:"📝",l:"Exam Marks",g:"Students"},{k:"assign",i:"📋",l:"Assignments",g:"Students"},{k:"timetable",i:"🗓",l:"Timetable",g:"Students"},{k:"certificates",i:"🏆",l:"Certificates",g:"Students"},{k:"onlineexam",i:"💻",l:"Online Exams",g:"Students"},{k:"gamify",i:"🏅",l:"Gamification",g:"Students"},{k:"crm",i:"🎯",l:"Admission CRM",g:"Students"},{k:"staff",i:"👨‍🏫",l:"Staff",g:"Staff"},{k:"tasks",i:"✅",l:"Tasks",g:"Staff"},{k:"staffatt",i:"🕐",l:"Staff Attendance",g:"Staff"},{k:"payroll",i:"💵",l:"HR & Payroll",g:"Staff"},{k:"leave",i:"🏖",l:"Leave",g:"Staff"},{k:"courses",i:"🖥",l:"Courses",g:"Academics"},{k:"classlinks",i:"🎥",l:"Class Links",g:"Academics"},{k:"recordings",i:"🎬",l:"Recordings",g:"Academics"},{k:"batches",i:"👥",l:"Batches",g:"Academics"},{k:"tests",i:"📝",l:"Tests",g:"Academics"},{k:"notes",i:"📒",l:"Notes",g:"Academics"},{k:"questions",i:"❓",l:"Questions",g:"Academics"},{k:"library",i:"📚",l:"Library",g:"Academics"},{k:"docs",i:"📁",l:"Documents",g:"Academics"},{k:"accounts",i:"💼",l:"Accounts",g:"Finance"},{k:"updates",i:"📰",l:"Updates",g:"Communication"},{k:"alerts",i:"📣",l:"Alerts",g:"Communication"},{k:"reports",i:"📊",l:"Reports",g:"Insights"},{k:"analytics",i:"📈",l:"Analytics",g:"Insights"},{k:"ai",i:"🤖",l:"AI Tools",g:"Insights"}];
+const INST_TABS=[{k:"home",i:"🏠",l:"Home",g:"Main"},{k:"students",i:"👥",l:"Students",g:"Students"},{k:"register",i:"➕",l:"Register",g:"Students"},{k:"approvals",i:"📨",l:"Registrations",g:"Students"},{k:"import",i:"📥",l:"Import Data",g:"Students"},{k:"attend",i:"📅",l:"Attendance",g:"Students"},{k:"fees",i:"💰",l:"Fees",g:"Students"},{k:"receipt",i:"🧾",l:"Fee Receipt",g:"Students"},{k:"homework",i:"📚",l:"Homework",g:"Students"},{k:"exams",i:"📝",l:"Exam Marks",g:"Students"},{k:"assign",i:"📋",l:"Assignments",g:"Students"},{k:"timetable",i:"🗓",l:"Timetable",g:"Students"},{k:"certificates",i:"🏆",l:"Certificates",g:"Students"},{k:"onlineexam",i:"💻",l:"Online Exams",g:"Students"},{k:"gamify",i:"🏅",l:"Gamification",g:"Students"},{k:"crm",i:"🎯",l:"Admission CRM",g:"Students"},{k:"staff",i:"👨‍🏫",l:"Staff",g:"Staff"},{k:"tasks",i:"✅",l:"Tasks",g:"Staff"},{k:"staffatt",i:"🕐",l:"Staff Attendance",g:"Staff"},{k:"payroll",i:"💵",l:"HR & Payroll",g:"Staff"},{k:"leave",i:"🏖",l:"Leave",g:"Staff"},{k:"courses",i:"🖥",l:"Courses",g:"Academics"},{k:"classlinks",i:"🎥",l:"Class Links",g:"Academics"},{k:"recordings",i:"🎬",l:"Recordings",g:"Academics"},{k:"batches",i:"👥",l:"Batches",g:"Academics"},{k:"tests",i:"📝",l:"Tests",g:"Academics"},{k:"notes",i:"📒",l:"Notes",g:"Academics"},{k:"questions",i:"❓",l:"Questions",g:"Academics"},{k:"library",i:"📚",l:"Library",g:"Academics"},{k:"docs",i:"📁",l:"Documents",g:"Academics"},{k:"accounts",i:"💼",l:"Accounts",g:"Finance"},{k:"notifs",i:"🔔",l:"Notifications",g:"Communication"},{k:"updates",i:"📰",l:"Updates",g:"Communication"},{k:"alerts",i:"📣",l:"Alerts",g:"Communication"},{k:"reports",i:"📊",l:"Reports",g:"Insights"},{k:"analytics",i:"📈",l:"Analytics",g:"Insights"},{k:"ai",i:"🤖",l:"AI Tools",g:"Insights"}];
 
 function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const [tab,setTab]=useState("home");
@@ -2782,6 +2819,12 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   const myStudents=useMemo(()=>db.students.filter(s=>s.instId===inst.id),[db.students,inst.id]);
   const myCourses=useMemo(()=>(db.courses||[]).filter(c=>c.instId===inst.id).map(c=>c.name).filter(Boolean),[db.courses,inst.id]);
   const isAdmin=user.role==="admin";
+  // Personal notifications (tasks/leads target staff & admin via toUserId)
+  const myNotifs=useMemo(()=>(db.notifications||[]).filter(n=>n.instId===inst.id&&n.toUserId===user.id).sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||"")),[db.notifications,inst.id,user.id]);
+  const unreadNotifs=myNotifs.filter(n=>!(n.readBy||[]).includes(user.id)).length;
+  function markAllNotifsRead(){saveDb({notifications:(db.notifications||[]).map(n=>n.instId===inst.id&&n.toUserId===user.id&&!(n.readBy||[]).includes(user.id)?{...n,readBy:[...(n.readBy||[]),user.id]}:n)});}
+  function clearNotif(id){saveDb({notifications:(db.notifications||[]).filter(n=>n.id!==id)});}
+  function clearAllNotifs(){if(!confirmDelete("all your notifications"))return;saveDb({notifications:(db.notifications||[]).filter(n=>!(n.instId===inst.id&&n.toUserId===user.id))});}
   const myStaff=useMemo(()=>(db.users||[]).filter(u=>u.instId===inst.id&&u.role!=="admin"&&u.role!=="accountant"),[db.users,inst.id]);
   function addStaff(d){if((db.users||[]).find(u=>u.username===d.username)){notify("Username already exists","error");return;}saveDb({users:[...(db.users||[]),{...d,id:uid(),instId:inst.id}]});notify("Staff added!");}
   function updStaff(id,p){saveDb({users:(db.users||[]).map(u=>u.id===id?{...u,...p}:u)});notify("Updated");}
@@ -2810,11 +2853,11 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
   // Map service keys to tab keys for service-gating
   const SVC_TAB_MAP={students:["students","register","approvals","import"],attendance:["attend"],fees:["fees","receipt"],marks:["exams","onlineexam"],homework:["homework"],assignments:["assign"],timetable:["timetable"],staff:["staff","staffatt","payroll","tasks"],library:["library"],updates:["updates"],classlinks:["classlinks"],alerts:["alerts"],gallery:[],leave:["leave"],transport:[],hostel:[],leads:["crm"],documents:["docs"],gamification:["gamify","certificates"],aichat:["ai"]};
   const enabledSvcs=inst.services||DEFAULT_SERVICES;
-  const svcAllowedTabs=new Set(["home","accounts","reports","analytics","batches","tests","notes","questions","recordings",...enabledSvcs.flatMap(s=>SVC_TAB_MAP[s]||[])]);
+  const svcAllowedTabs=new Set(["home","notifs","accounts","reports","analytics","batches","tests","notes","questions","recordings",...enabledSvcs.flatMap(s=>SVC_TAB_MAP[s]||[])]);
   const visibleTabs=INST_TABS.filter(t=>{
     if(!svcAllowedTabs.has(t.k))return false;
-    if(user.role==="accountant")return["home","students","fees","receipt","accounts","reports"].includes(t.k);
-    if(!isAdmin)return!["register","approvals","import","staff","courses","payroll","crm","accounts","fees","receipt"].includes(t.k);
+    if(user.role==="accountant")return["home","notifs","students","fees","receipt","accounts","reports"].includes(t.k);
+    if(!isAdmin)return!["register","approvals","import","staff","courses","payroll","accounts","fees","receipt"].includes(t.k);
     if(t.k==="courses")return inst.type==="Computer Institute";
     return true;
   });
@@ -2851,7 +2894,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
     `}</style>
     {/* CSS vars for sidebar */}
     <style>{`:root{--sb-bg:${C.surface};--sb-border:${C.border};}` + (dark ? ".inst-sidebar{color-scheme:dark;}" : "") + `}`}</style>
-    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={`${m.icon} ${inst.brandName||inst.name}`} instLogo={inst.logoUrl||""} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen}/>
+    <TopBar C={C} dark={dark} setDark={setDark} onLogout={onLogout} user={user} right={`${m.icon} ${inst.brandName||inst.name}`} instLogo={inst.logoUrl||""} onMenuToggle={()=>setSideOpen(s=>!s)} showMenu={sideOpen} onNotifClick={()=>{goTab("notifs");markAllNotifsRead();}} notifCount={unreadNotifs}/>
     {/* Overlay for mobile */}
     <div className={"inst-overlay"+(sideOpen?" open":"")} onClick={()=>setSideOpen(false)} style={{display:sideOpen?"block":"none",position:"fixed",inset:0,top:54,background:"#0005",zIndex:140}}/>
     <div style={{display:"flex",flex:1,minHeight:0}}>
@@ -2896,18 +2939,19 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
         </div>
         {tab==="home"&&<InstHome inst={inst} students={myStudents} color={color} setTab={goTab} m={m} C={C}/>}
         {tab==="staff"&&isAdmin&&<InstStaff staff={myStaff} inst={inst} color={color} onAdd={addStaff} onUpdate={updStaff} onDelete={delStaff} notify={notify} C={C}/>}
-        {tab==="students"&&<InstStudents students={myStudents} inst={inst} courses={myCourses} color={color} onUpdate={updStudent} onDelete={id=>{if(window.confirm("Permanently delete student?")){saveDb({students:db.students.filter(s=>s.id!==id)});notify("Student deleted","error");}}} C={C}/>}
+        {tab==="students"&&<InstStudents students={myStudents} inst={inst} courses={myCourses} color={color} onUpdate={updStudent} onDelete={id=>{if(confirmDelete("this student")){saveDb({students:db.students.filter(s=>s.id!==id)});notify("Student deleted","error");}}} C={C}/>}
         {tab==="register"&&isAdmin&&<InstRegister inst={inst} onSave={addStudent} color={color} m={m} courses={myCourses} C={C}/>}
         {tab==="approvals"&&isAdmin&&<InstApprovals registrations={pendingRegs} all={db.registrations||[]} inst={inst} color={color} onApprove={approveReg} onReject={rejectReg} onDelete={delReg} C={C}/>}
         {tab==="import"&&isAdmin&&<InstImport db={db} saveDb={saveDb} inst={inst} notify={notify} C={C}/>}
         {tab==="attend"&&<InstAttend students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
-        {tab==="fees"&&<InstFees students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
+        {tab==="fees"&&<InstFees students={myStudents} db={db} saveDb={saveDb} inst={inst} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
         {tab==="homework"&&<InstHomework students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
         {tab==="exams"&&<InstExams students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
         {tab==="assign"&&<InstAssign students={myStudents} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
         {tab==="timetable"&&<InstTimetable inst={inst} color={color} notify={notify} C={C}/>}
         {tab==="idcard"&&<InstIDCards students={myStudents} inst={inst} color={color} C={C}/>}
         {tab==="receipt"&&<InstReceipts students={myStudents} inst={inst} color={color} C={C}/>}
+        {tab==="notifs"&&<StuNotifications notifs={myNotifs} unread={unreadNotifs} onClear={clearNotif} onClearAll={clearAllNotifs} onMarkRead={markAllNotifsRead} user={user} C={C}/>}
         {tab==="updates"&&<InstUpdates db={db} saveDb={saveDb} user={user} inst={inst} color={color} notify={notify} C={C}/>}
         {tab==="classlinks"&&<InstClassLinks db={db} saveDb={saveDb} user={user} inst={inst} color={color} isAdmin={isAdmin||user.role==="staff"} notify={notify} C={C}/>}
         {tab==="recordings"&&<InstRecordings db={db} saveDb={saveDb} user={user} inst={inst} color={color} notify={notify} C={C}/>}
@@ -2929,7 +2973,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
         {tab==="payroll"&&isAdmin&&<InstPayroll db={db} saveDb={saveDb} inst={inst} color={color} notify={notify} C={C}/>}
         {tab==="leave"&&<InstLeave db={db} saveDb={saveDb} user={user} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
         {tab==="docs"&&<InstDocs db={db} saveDb={saveDb} inst={inst} color={color} isAdmin={isAdmin} notify={notify} C={C}/>}
-        {tab==="crm"&&isAdmin&&<InstCRM db={db} saveDb={saveDb} inst={inst} color={color} notify={notify} C={C}/>}
+        {tab==="crm"&&<InstCRM db={db} saveDb={saveDb} user={user} inst={inst} isAdmin={isAdmin} color={color} notify={notify} C={C}/>}
         {tab==="gamify"&&<InstGamification students={myStudents} inst={inst} color={color} onUpdate={updStudent} notify={notify} C={C}/>}
       </div>
     </div>
@@ -2938,7 +2982,7 @@ function InstDash({db,saveDb,onLogout,notify,user,inst,C,dark,setDark}){
 
 function InstHome({inst,students,color,setTab,m,C}){
   const present=students.filter(s=>s.attendance?.find(a=>a.date===today())?.status==="Present").length;
-  const feePending=students.filter(s=>s.fees?.some(f=>f.status==="Pending"||f.status==="Partial")).length;
+  const feePending=students.filter(s=>(s.fees||[]).some(f=>f.status!=="Waived"&&(Number(f.amount||0)-Number(f.paid||0))>0)).length;
   const hwPending=students.filter(s=>s.homeworks?.some(h=>h.status==="Pending")).length;
   const tf=students.flatMap(s=>s.fees||[]).reduce((a,f)=>a+Number(f.amount||0),0);
   const pf=students.flatMap(s=>s.fees||[]).reduce((a,f)=>a+Number(f.paid||0),0);
@@ -3235,7 +3279,7 @@ function InstApprovals({registrations,all,inst,color,onApprove,onReject,onDelete
               <td style={{padding:"9px 12px",color:C.muted}}>{r.rollNo||"—"}</td>
               <td style={{padding:"9px 12px",color:C.muted}}>{(r.approvedAt||r.rejectedAt)?fmt(r.approvedAt||r.rejectedAt):"—"}</td>
               <td style={{padding:"9px 12px",color:C.muted}}>{r.reason||"—"}</td>
-              <td style={{padding:"9px 12px"}}><button onClick={()=>{if(window.confirm("Remove this request from the list?"))onDelete(r.id);}} style={{background:"transparent",border:"none",color:C.red,cursor:"pointer",fontSize:14}} title="Remove">🗑</button></td>
+              <td style={{padding:"9px 12px"}}><button onClick={()=>{if(confirmDelete("this request"))onDelete(r.id);}} style={{background:"transparent",border:"none",color:C.red,cursor:"pointer",fontSize:14}} title="Remove">🗑</button></td>
             </tr>)}</tbody>
           </table>
         </div>
@@ -3487,28 +3531,92 @@ function InstAttend({students,color,onUpdate,notify,C}){
   </div>;
 }
 
-function InstFees({students,color,onUpdate,notify,C}){
+function InstFees({students,db,saveDb,inst,color,onUpdate,notify,C}){
   const [sel,setSel]=useState(null);const [showAdd,setShowAdd]=useState(false);
   const now=new Date();const MN=["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const [form,setForm]=useState({month:`${MN[now.getMonth()]} ${now.getFullYear()}`,amount:"",paid:"",status:"Paid",mode:"Cash",date:today()});
+  const [showPending,setShowPending]=useState(false);
+  const [payFor,setPayFor]=useState(null);
+  const [payForm,setPayForm]=useState({amount:"",mode:"Cash",date:today()});
+  const [form,setForm]=useState({month:`${MN[now.getMonth()]} ${now.getFullYear()}`,amount:"",paid:"",mode:"Cash",date:today()});
   const s=students.find(x=>x.id===sel);
-  function addFee(){if(!form.amount){notify("Enter amount","error");return;}onUpdate(sel,{fees:[...(s.fees||[]),{...form,id:uid()}]});notify("Fee added!");setShowAdd(false);setForm(f=>({...f,amount:"",paid:""}));}
+  // Status is DERIVED from paid vs total. "Waived" is the only sticky flag.
+  const feeStatus=f=>{const t=Number(f.amount||0),p=Number(f.paid||0);if(f.status==="Waived")return"Waived";if(p<=0)return"Pending";if(p>=t)return"Paid";return"Partial";};
+  const feeBal=f=>Math.max(0,Number(f.amount||0)-Number(f.paid||0));
+  // Build a "Fee Collection" income entry for Accounts (#2)
+  function mkIncome(stu,amt,fee,date){return {id:uid(),instId:inst.id,type:"income",category:"Fee Collection",amount:Number(amt),date:date||today(),description:`Fee · ${stu.name} · ${fee.month}`,source:"fee",feeId:fee.id,createdAt:new Date().toISOString()};}
+  // One atomic write: update the student's fees AND (optionally) append income
+  function writeFees(newFees,incomeTx){const patch={students:(db.students||[]).map(x=>x.id===sel?{...x,fees:newFees}:x)};if(incomeTx)patch.accounts=[...(db.accounts||[]),incomeTx];saveDb(patch);}
+  function addFee(){
+    if(!form.amount){notify("Enter amount","error");return;}
+    const paid=Number(form.paid||0);
+    const fee={...form,paid,status:undefined,id:uid()};
+    writeFees([...(s.fees||[]),fee],paid>0?mkIncome(s,paid,fee,form.date):null);
+    notify("Fee added!");setShowAdd(false);setForm(f=>({...f,amount:"",paid:""}));
+  }
+  // Record an ADDITIONAL payment against an existing fee — accumulates, never overwrites (#1)
+  function recordPayment(feeId){
+    const amt=Number(payForm.amount||0);
+    if(!(amt>0)){notify("Enter a payment amount","error");return;}
+    const fee=(s.fees||[]).find(f=>f.id===feeId);if(!fee)return;
+    const updated={...fee,paid:Number(fee.paid||0)+amt,mode:payForm.mode||fee.mode,date:payForm.date||today()};
+    writeFees((s.fees||[]).map(f=>f.id===feeId?updated:f),mkIncome(s,amt,fee,payForm.date));
+    setPayFor(null);setPayForm({amount:"",mode:"Cash",date:today()});
+    notify("Payment recorded!");
+  }
   const tc2=students.flatMap(s=>s.fees||[]).reduce((a,f)=>a+Number(f.paid||0),0);
-  const td=students.flatMap(s=>s.fees||[]).reduce((a,f)=>a+Number(f.amount||0)-Number(f.paid||0),0);
+  const td=students.flatMap(s=>s.fees||[]).reduce((a,f)=>a+Math.max(0,Number(f.amount||0)-Number(f.paid||0)),0);
+  const pendingStudents=students.filter(st=>(st.fees||[]).some(f=>f.status!=="Waived"&&(Number(f.amount||0)-Number(f.paid||0))>0));
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <PH title="💰 Fees" sub="Track and record fees" C={C}/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:18}}>
       <StatCard icon="✅" label="Collected" value={`Rs.${tc2.toLocaleString()}`} color="green" C={C}/>
       <StatCard icon="❗" label="Due" value={`Rs.${td.toLocaleString()}`} color="red" C={C}/>
-      <StatCard icon="⏳" label="Pending Students" value={students.filter(s=>s.fees?.some(f=>f.status!=="Paid"&&f.status!=="Waived")).length} color="gold" C={C}/>
+      <div onClick={()=>setShowPending(p=>!p)} style={{cursor:"pointer"}} title="Click to see pending students">
+        <StatCard icon="⏳" label="Pending Students" value={pendingStudents.length} color="gold" C={C}/>
+      </div>
     </div>
+    {showPending&&<div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:16,marginBottom:16,boxShadow:C.shadow}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div style={{fontWeight:700,fontSize:13,color:C.text}}>⏳ Pending Students ({pendingStudents.length})</div>
+        <button onClick={()=>setShowPending(false)} style={{background:"none",border:"none",color:C.muted,fontSize:18,cursor:"pointer"}}>×</button>
+      </div>
+      {!pendingStudents.length&&<Empty msg="No pending fees 🎉" C={C}/>}
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {pendingStudents.map(st=>{const bal=(st.fees||[]).reduce((a,f)=>a+(f.status==="Waived"?0:Math.max(0,Number(f.amount||0)-Number(f.paid||0))),0);return(
+          <div key={st.id} onClick={()=>{setSel(st.id);setShowPending(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",background:C.bg,borderRadius:9,border:`1px solid ${C.border}`,cursor:"pointer"}}>
+            <Avatar name={st.name} photo={st.photo} color={color} size={32}/>
+            <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,color:C.text}}>{st.name}</div><div style={{fontSize:11,color:C.muted}}>{st.rollNo||st.dept||""}</div></div>
+            <div style={{fontWeight:700,fontSize:13,color:C.red}}>Rs.{bal.toLocaleString()} due</div>
+          </div>);})}
+      </div>
+    </div>}
     <div style={{display:"grid",gridTemplateColumns:"220px 1fr",gap:16,alignItems:"start"}}>
       <StuSidebar students={students} sel={sel} setSel={id=>{setSel(id);setShowAdd(false);}} C={C} extra={s=>{const p=s.fees?.reduce((a,f)=>a+Number(f.paid||0),0)||0;const t=s.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;return t>0?`Rs.${p.toLocaleString()} / Rs.${t.toLocaleString()}`:"No records";}}/>
       <div>{s?<div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:18,boxShadow:C.shadow}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><div style={{display:"flex",alignItems:"center",gap:9}}><Avatar name={s.name} photo={s.photo} color={color} size={36}/><div style={{fontWeight:700,fontSize:14,color:C.text}}>{s.name}</div></div><Btn onClick={()=>setShowAdd(x=>!x)} C={C} color="teal">+ Add Fee</Btn></div>
-        {showAdd&&<div style={{background:C.bg,borderRadius:10,padding:16,marginBottom:14,border:`1px solid ${C.border}`}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:10}}><FG label="Month" C={C}><Inp C={C} value={form.month} onChange={e=>setForm(f=>({...f,month:e.target.value}))}/></FG><FG label="Total (Rs.)" C={C}><Inp C={C} type="number" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} placeholder="0"/></FG><FG label="Paid (Rs.)" C={C}><Inp C={C} type="number" value={form.paid} onChange={e=>setForm(f=>({...f,paid:e.target.value}))} placeholder="0"/></FG><FG label="Status" C={C}><Sel C={C} value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>{FEE_STATUS.map(x=><option key={x}>{x}</option>)}</Sel></FG><FG label="Mode" C={C}><Inp C={C} value={form.mode} onChange={e=>setForm(f=>({...f,mode:e.target.value}))} placeholder="Cash/UPI"/></FG><FG label="Date" C={C}><Inp C={C} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></FG></div><Btn onClick={addFee} C={C} color="green">Save</Btn></div>}
+        {showAdd&&<div style={{background:C.bg,borderRadius:10,padding:16,marginBottom:14,border:`1px solid ${C.border}`}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:10}}><FG label="Month" C={C}><Inp C={C} value={form.month} onChange={e=>setForm(f=>({...f,month:e.target.value}))}/></FG><FG label="Total (Rs.)" C={C}><Inp C={C} type="number" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} placeholder="0"/></FG><FG label="Paid (Rs.)" C={C}><Inp C={C} type="number" value={form.paid} onChange={e=>setForm(f=>({...f,paid:e.target.value}))} placeholder="0"/></FG><FG label="Mode" C={C}><Inp C={C} value={form.mode} onChange={e=>setForm(f=>({...f,mode:e.target.value}))} placeholder="Cash/UPI"/></FG><FG label="Date" C={C}><Inp C={C} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></FG></div><Btn onClick={addFee} C={C} color="green">Save</Btn></div>}
         {!(s.fees||[]).length&&<Empty msg="No fee records yet" C={C}/>}
-        {(s.fees||[]).map(fee=><div key={fee.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:C.bg,borderRadius:9,marginBottom:6,border:`1px solid ${C.border}`}}><div><div style={{fontWeight:600,fontSize:13,color:C.text}}>{fee.month}</div><div style={{fontSize:11,color:C.muted}}>{fee.mode} · {fmt(fee.date)}</div></div><div style={{textAlign:"right"}}><div style={{fontWeight:700,fontSize:13,color:C.text}}>Rs.{Number(fee.paid||0).toLocaleString()}<span style={{color:C.muted,fontWeight:400,fontSize:11}}>/Rs.{Number(fee.amount||0).toLocaleString()}</span></div><Badge label={fee.status} color={fee.status==="Paid"?"green":fee.status==="Partial"?"gold":fee.status==="Waived"?"teal":"red"} C={C}/></div></div>)}
+        {(s.fees||[]).map(fee=>{const stt=feeStatus(fee);const bal=feeBal(fee);return(
+          <div key={fee.id} style={{padding:"10px 14px",background:C.bg,borderRadius:9,marginBottom:6,border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div><div style={{fontWeight:600,fontSize:13,color:C.text}}>{fee.month}</div><div style={{fontSize:11,color:C.muted}}>{fee.mode} · {fmt(fee.date)}</div></div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontWeight:700,fontSize:13,color:C.text}}>Rs.{Number(fee.paid||0).toLocaleString()}<span style={{color:C.muted,fontWeight:400,fontSize:11}}>/Rs.{Number(fee.amount||0).toLocaleString()}</span></div>
+                <div style={{fontSize:11,fontWeight:600,color:bal>0?C.red:C.green}}>{bal>0?`Balance Rs.${bal.toLocaleString()}`:"Cleared ✓"}</div>
+                <Badge label={stt} color={stt==="Paid"?"green":stt==="Partial"?"gold":stt==="Waived"?"teal":"red"} C={C}/>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,marginTop:8,justifyContent:"flex-end"}}>
+              {stt!=="Waived"&&bal>0&&<Btn onClick={()=>{setPayFor(payFor===fee.id?null:fee.id);setPayForm({amount:"",mode:fee.mode||"Cash",date:today()});}} C={C} color="green" size="sm">+ Pay</Btn>}
+              <button onClick={()=>writeFees((s.fees||[]).map(f=>f.id===fee.id?{...f,status:stt==="Waived"?undefined:"Waived"}:f),null)} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:7,padding:"3px 10px",fontSize:11,color:C.muted,cursor:"pointer"}}>{stt==="Waived"?"Unwaive":"Waive"}</button>
+            </div>
+            {payFor===fee.id&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr auto",gap:8,marginTop:10,alignItems:"end",background:C.surface,padding:10,borderRadius:8,border:`1px solid ${C.border}`}}>
+              <FG label="Amount (Rs.)" C={C}><Inp C={C} type="number" value={payForm.amount} onChange={e=>setPayForm(f=>({...f,amount:e.target.value}))} placeholder="0"/></FG>
+              <FG label="Mode" C={C}><Inp C={C} value={payForm.mode} onChange={e=>setPayForm(f=>({...f,mode:e.target.value}))} placeholder="Cash/UPI"/></FG>
+              <FG label="Date" C={C}><Inp C={C} type="date" value={payForm.date} onChange={e=>setPayForm(f=>({...f,date:e.target.value}))}/></FG>
+              <Btn onClick={()=>recordPayment(fee.id)} C={C} color="green">Save</Btn>
+            </div>}
+          </div>);})}
       </div>:<div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:"50px",textAlign:"center",color:C.muted,boxShadow:C.shadow}}>Select a student to manage fees</div>}</div>
     </div>
   </div>;
@@ -3579,7 +3687,7 @@ function InstTimetable({inst,color,notify,C}){
   const [classes,setClasses]=useState(()=>lsGet(KEY,[]));const [selCls,setSelCls]=useState(null);const [showAdd,setShowAdd]=useState(false);const [newCls,setNewCls]=useState({name:"",section:"",teacher:""});const [editing,setEditing]=useState(null);const [cellForm,setCellForm]=useState({subject:"",teacher:"",room:""});
   function saveCls(c){setClasses(c);lsSet(KEY,c);}
   function addClass(){if(!newCls.name.trim()){notify("Class name required","error");return;}const c=[...classes,{id:uid(),...newCls,timetable:{}}];saveCls(c);setSelCls(c[c.length-1].id);setNewCls({name:"",section:"",teacher:""});setShowAdd(false);notify("Class created!");}
-  function delClass(id){if(!window.confirm("Delete?"))return;saveCls(classes.filter(c=>c.id!==id));if(selCls===id)setSelCls(null);}
+  function delClass(id){if(!confirmDelete("this class"))return;saveCls(classes.filter(c=>c.id!==id));if(selCls===id)setSelCls(null);}
   const cls=classes.find(c=>c.id===selCls);
   function setCell(day,period,data){saveCls(classes.map(c=>c.id!==selCls?c:{...c,timetable:{...c.timetable,[`${day}|${period}`]:data}}));}
   function clearCell(day,period){saveCls(classes.map(c=>{if(c.id!==selCls)return c;const tt={...c.timetable};delete tt[`${day}|${period}`];return{...c,timetable:tt};}));}
@@ -4155,7 +4263,7 @@ function InstOnlineExams({students,inst,color,onUpdate,notify,C}){
   const [grading,setGrading]=useState(null);
   function saveExams(e){setExams(e);lsSet(STORE_KEY,e);}
   function createExam(ex){saveExams([...exams,{...ex,id:uid(),createdAt:today(),submissions:[]}]);setView("list");notify("✅ Exam created!");}
-  function deleteExam(id){if(!window.confirm("Delete exam?"))return;saveExams(exams.filter(e=>e.id!==id));notify("Deleted","error");}
+  function deleteExam(id){if(!confirmDelete("this exam"))return;saveExams(exams.filter(e=>e.id!==id));notify("Deleted","error");}
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
       <PH title="💻 Online Exams" sub={`${exams.length} exam${exams.length!==1?"s":""} created`} C={C}/>
@@ -4387,7 +4495,7 @@ function InstLibrary({db,saveDb,inst,color,isAdmin,notify,C}){
   const CATS=["Mathematics","Science","English","History","Computer","Fiction","Reference","Other"];
   function saveBooks(b){setBooks(b);lsSet(KEY,b);}
   function addBook(){if(!form.title||!form.author)return;saveBooks([...books,{...form,id:uid(),totalCopies:Number(form.totalCopies)||1,available:Number(form.totalCopies)||1,issues:[],addedAt:today()}]);setForm(blank);setShowAdd(false);notify("Book added!");}
-  function delBook(id){if(!window.confirm("Delete book?"))return;saveBooks(books.filter(b=>b.id!==id));notify("Deleted","error");}
+  function delBook(id){if(!confirmDelete("this book"))return;saveBooks(books.filter(b=>b.id!==id));notify("Deleted","error");}
   function issueBook(bookId){const stu=myStudents.find(s=>s.id===issueStudent);if(!stu){notify("Select a student","error");return;}const book=books.find(b=>b.id===bookId);if(!book||book.available<1){notify("No copies available","error");return;}const due=new Date(Date.now()+14*86400000).toISOString().slice(0,10);const issue={id:uid(),studentId:stu.id,studentName:stu.name,rollNo:stu.rollNo,issuedAt:today(),dueDate:due,returned:false};saveBooks(books.map(b=>b.id===bookId?{...b,available:b.available-1,issues:[...(b.issues||[]),issue]}:b));setIssueFor(null);setIssueStudent("");notify("Issued to "+stu.name+"!");}
   function returnBook(bookId,issueId){saveBooks(books.map(b=>b.id===bookId?{...b,available:b.available+1,issues:b.issues.map(i=>i.id===issueId?{...i,returned:true,returnedAt:today()}:i)}:b));notify("Book returned!");}
   const filtered=books.filter(b=>[b.title,b.author,b.isbn,b.category].some(v=>v&&v.toLowerCase().includes(search.toLowerCase())));
@@ -4525,7 +4633,7 @@ function InstPayroll({db,saveDb,inst,color,notify,C}){
             <td style={{...TD,color:C.red}}>-Rs {r.deductions&&r.deductions.reduce((a,x)=>a+Number(x.amount||0),0).toLocaleString()}</td>
             <td style={{...TD,fontWeight:800,color:C.teal}}>Rs {r.net&&r.net.toLocaleString()}</td>
             <td style={TD}>{fmt(r.paidAt)}</td>
-            <td style={TD}><Btn onClick={()=>{if(window.confirm("Delete?"))saveRecords(records.filter(x=>x.id!==r.id));}} C={C} color="red" size="sm" outline>Del</Btn></td>
+            <td style={TD}><Btn onClick={()=>{if(confirmDelete("this record"))saveRecords(records.filter(x=>x.id!==r.id));}} C={C} color="red" size="sm" outline>Del</Btn></td>
           </tr>)}
           {!monthRecords.length&&<tr><td colSpan={8}><Empty msg={"No salary records for "+month} C={C}/></td></tr>}
         </tbody>
@@ -4640,7 +4748,7 @@ function InstDocs({db,saveDb,inst,color,isAdmin,notify,C}){
   const myStudents=(db.students||[]).filter(s=>s.instId===inst.id);
   function saveDocs(d){setDocs(d);lsSet(KEY,d);}
   function addDoc(){if(!form.title||!form.category)return;saveDocs([...docs,{...form,id:uid(),uploadedAt:today()}]);setForm({title:"",category:"",description:"",url:"",studentId:""});setShowAdd(false);notify("Document added!");}
-  function delDoc(id){if(!window.confirm("Delete document?"))return;saveDocs(docs.filter(d=>d.id!==id));notify("Deleted","error");}
+  function delDoc(id){if(!confirmDelete("this document"))return;saveDocs(docs.filter(d=>d.id!==id));notify("Deleted","error");}
   const filtered=docs.filter(d=>{const matchCat=filter==="all"||d.category===filter;const matchQ=[d.title,d.description,d.category].some(v=>v&&v.toLowerCase().includes(search.toLowerCase()));return matchCat&&matchQ;});
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
@@ -4682,9 +4790,19 @@ function InstDocs({db,saveDb,inst,color,isAdmin,notify,C}){
 }
 
 // ─── ADMISSION CRM (enhanced) ─────────────────────────────────────────────────
-function InstCRM({db,saveDb,inst,color,notify,C}){
+function InstCRM({db,saveDb,user,inst,isAdmin,color,notify,C}){
   const KEY="crm_"+inst.id;
-  const [leads,setLeads]=useState(()=>lsGet(KEY,[]));
+  // Leads now live in Firestore so assigned staff see them across devices (#6)
+  const leads=useMemo(()=>(db.leads||[]).filter(l=>l.instId===inst.id),[db.leads,inst.id]);
+  // One-time migration of any legacy localStorage leads for this institution
+  useEffect(()=>{
+    const legacy=lsGet(KEY,[]);
+    if(legacy.length&&!(db.leads||[]).some(l=>l.instId===inst.id)){
+      saveDb({leads:[...(db.leads||[]),...legacy.map(l=>({...l,instId:inst.id}))]});
+      lsSet(KEY,[]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
   const [showAdd,setShowAdd]=useState(false);
   const [editId,setEditId]=useState(null);
   const [showImport,setShowImport]=useState(false);
@@ -4704,7 +4822,10 @@ function InstCRM({db,saveDb,inst,color,notify,C}){
   const stamp=()=>{try{return new Date().toLocaleString();}catch{return today();}};
   const fmtMoney=n=>{const v=Number(n)||0;return "₹"+v.toLocaleString("en-IN");};
 
-  function saveLeads(l){setLeads(l);lsSet(KEY,l);}
+  function saveLeads(l){
+    const others=(db.leads||[]).filter(x=>x.instId!==inst.id);
+    saveDb({leads:[...others,...l.map(x=>x.instId?x:{...x,instId:inst.id})]});
+  }
   function pushLog(lead,text){return {...lead,log:[...(lead.log||[]),{t:stamp(),text}]};}
   function addLead(){
     if(!form.name||!form.phone){notify("Name and phone are required","error");return;}
@@ -4719,9 +4840,18 @@ function InstCRM({db,saveDb,inst,color,notify,C}){
   }
   function updateStatus(id,status){saveLeads(leads.map(l=>l.id===id?pushLog({...l,status,updatedAt:today()},"Status → "+status):l));}
   function setFollowUp(id,date){saveLeads(leads.map(l=>l.id===id?{...l,followUpDate:date,updatedAt:today()}:l));}
-  function assignLead(id,uId){saveLeads(leads.map(l=>l.id===id?{...l,assignedTo:uId,assignedToName:nameOf(uId),updatedAt:today()}:l));}
+  function assignLead(id,uId){
+    const lead=leads.find(l=>l.id===id);
+    const next=leads.map(l=>l.id===id?{...l,assignedTo:uId,assignedToName:nameOf(uId),updatedAt:today()}:l);
+    const others=(db.leads||[]).filter(x=>x.instId!==inst.id);
+    const patch={leads:[...others,...next.map(x=>x.instId?x:{...x,instId:inst.id})]};
+    if(uId&&lead){
+      patch.notifications=[...(db.notifications||[]),{id:uid(),instId:inst.id,toUserId:uId,type:"notice",title:`🎯 Lead assigned to you: ${lead.name}${lead.phone?` (${lead.phone})`:""}`,postedBy:user?.name||"Admin",createdAt:new Date().toISOString(),readBy:[]}];
+    }
+    saveDb(patch);
+  }
   function addNote(id,note){saveLeads(leads.map(l=>l.id===id?pushLog({...l,updatedAt:today()},"📝 "+note):l));}
-  function delLead(id){if(!window.confirm("Delete this lead?"))return;saveLeads(leads.filter(l=>l.id!==id));notify("Deleted","error");}
+  function delLead(id){if(!confirmDelete("this lead"))return;saveLeads(leads.filter(l=>l.id!==id));notify("Deleted","error");}
 
   function convertToStudent(lead){
     const dup=(db.students||[]).some(s=>s.instId===inst.id&&lead.phone&&(s.phone||"")===lead.phone);
@@ -4770,21 +4900,22 @@ function InstCRM({db,saveDb,inst,color,notify,C}){
   const isOverdue=l=>!!l.followUpDate&&l.followUpDate<tdy&&!dead(l.status);
   const isDueToday=l=>l.followUpDate===tdy&&!dead(l.status);
 
-  const filtered=leads.filter(l=>{
+  const scoped=isAdmin?leads:leads.filter(l=>l.assignedTo===user?.id);
+  const filtered=scoped.filter(l=>{
     if(fSource!=="all"&&l.source!==fSource)return false;
     if(fAssignee!=="all"&&(l.assignedTo||"")!==fAssignee)return false;
     if(q.trim()){const s=q.toLowerCase();if(![l.name,l.phone,l.email,l.course].some(v=>(v||"").toLowerCase().includes(s)))return false;}
     return true;
   });
 
-  const convRate=leads.length?Math.round(leads.filter(l=>l.status==="Enrolled").length/leads.length*100):0;
-  const pipeline=leads.filter(l=>!dead(l.status)).reduce((a,l)=>a+(Number(l.value)||0),0);
-  const dueCount=leads.filter(l=>isOverdue(l)||isDueToday(l)).length;
+  const convRate=scoped.length?Math.round(scoped.filter(l=>l.status==="Enrolled").length/scoped.length*100):0;
+  const pipeline=scoped.filter(l=>!dead(l.status)).reduce((a,l)=>a+(Number(l.value)||0),0);
+  const dueCount=scoped.filter(l=>isOverdue(l)||isDueToday(l)).length;
   const stats=[
-    {l:"Total Leads",v:leads.length,c:"teal"},
-    {l:"This Week",v:leads.filter(l=>l.createdAt>=week).length,c:"blue"},
+    {l:"Total Leads",v:scoped.length,c:"teal"},
+    {l:"This Week",v:scoped.filter(l=>l.createdAt>=week).length,c:"blue"},
     {l:"Follow-ups Due",v:dueCount,c:"gold"},
-    {l:"Enrolled",v:leads.filter(l=>l.status==="Enrolled").length,c:"green"},
+    {l:"Enrolled",v:scoped.filter(l=>l.status==="Enrolled").length,c:"green"},
     {l:"Conversion",v:convRate+"%",c:"purple"},
     {l:"Pipeline Value",v:fmtMoney(pipeline),c:"pink"},
   ];
@@ -4793,9 +4924,9 @@ function InstCRM({db,saveDb,inst,color,notify,C}){
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
       <PH title="🎯 Admission CRM" sub={leads.length+" leads · "+convRate+"% conversion · "+dueCount+" follow-up"+(dueCount!==1?"s":"")+" due"} C={C}/>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <Btn onClick={exportCSV} C={C} color="blue" outline size="sm">⬇ Export</Btn>
-        <Btn onClick={()=>{setShowImport(s=>!s);setShowAdd(false);}} C={C} color="purple" outline size="sm">⬆ Import</Btn>
-        <Btn onClick={()=>{setShowAdd(s=>!s);setEditId(null);setForm(blank);setShowImport(false);}} C={C} color="teal">+ Add Lead</Btn>
+        {isAdmin&&<Btn onClick={exportCSV} C={C} color="blue" outline size="sm">⬇ Export</Btn>}
+        {isAdmin&&<Btn onClick={()=>{setShowImport(s=>!s);setShowAdd(false);}} C={C} color="purple" outline size="sm">⬆ Import</Btn>}
+        {isAdmin&&<Btn onClick={()=>{setShowAdd(s=>!s);setEditId(null);setForm(blank);setShowImport(false);}} C={C} color="teal">+ Add Lead</Btn>}
       </div>
     </div>
 
@@ -4841,13 +4972,13 @@ function InstCRM({db,saveDb,inst,color,notify,C}){
     {subTab==="board"&&<div style={{display:"flex",gap:12,overflowX:"auto",paddingBottom:8}}>
       {STATUSES.map(status=>{const col=tc(C,SCOL[status]||"teal");const bg=tb(C,SCOL[status]||"teal");const items=filtered.filter(l=>l.status===status);return<div key={status} style={{minWidth:210,background:C.surface,borderRadius:10,border:"1px solid "+C.border,padding:12,flexShrink:0}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{fontWeight:700,fontSize:11,color:col,textTransform:"uppercase"}}>{status}</div><span style={{background:bg,color:col,borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:700}}>{items.length}</span></div>
-        {items.map(lead=><LeadCard key={lead.id} lead={lead} STATUSES={STATUSES} SCOL={SCOL} team={team} onStatusChange={updateStatus} onDelete={delLead} onNote={addNote} onEdit={startEdit} onConvert={convertToStudent} onAssign={assignLead} onFollowUp={setFollowUp} isOverdue={isOverdue} isDueToday={isDueToday} fmtMoney={fmtMoney} C={C}/>)}
+        {items.map(lead=><LeadCard key={lead.id} lead={lead} STATUSES={STATUSES} SCOL={SCOL} team={team} onStatusChange={updateStatus} onDelete={isAdmin?delLead:undefined} onNote={addNote} onEdit={isAdmin?startEdit:undefined} onConvert={isAdmin?convertToStudent:undefined} onAssign={assignLead} onFollowUp={setFollowUp} isOverdue={isOverdue} isDueToday={isDueToday} fmtMoney={fmtMoney} C={C}/>)}
         {!items.length&&<div style={{textAlign:"center",padding:"12px 0",color:C.muted,fontSize:11,opacity:0.6}}>Empty</div>}
       </div>;})}
     </div>}
 
     {subTab==="list"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {filtered.filter(l=>fStatus==="all"||l.status===fStatus).slice().sort((a,b)=>(b.updatedAt||"").localeCompare(a.updatedAt||"")).map(lead=><LeadCard key={lead.id} lead={lead} STATUSES={STATUSES} SCOL={SCOL} team={team} onStatusChange={updateStatus} onDelete={delLead} onNote={addNote} onEdit={startEdit} onConvert={convertToStudent} onAssign={assignLead} onFollowUp={setFollowUp} isOverdue={isOverdue} isDueToday={isDueToday} fmtMoney={fmtMoney} C={C} full/>)}
+      {filtered.filter(l=>fStatus==="all"||l.status===fStatus).slice().sort((a,b)=>(b.updatedAt||"").localeCompare(a.updatedAt||"")).map(lead=><LeadCard key={lead.id} lead={lead} STATUSES={STATUSES} SCOL={SCOL} team={team} onStatusChange={updateStatus} onDelete={isAdmin?delLead:undefined} onNote={addNote} onEdit={isAdmin?startEdit:undefined} onConvert={isAdmin?convertToStudent:undefined} onAssign={assignLead} onFollowUp={setFollowUp} isOverdue={isOverdue} isDueToday={isDueToday} fmtMoney={fmtMoney} C={C} full/>)}
       {!filtered.length&&<Empty msg={leads.length?"No leads match your filters.":"No leads yet. Add your first inquiry above."} C={C}/>}
     </div>}
   </div>;
@@ -4875,7 +5006,7 @@ function LeadCard({lead,STATUSES,SCOL,team,onStatusChange,onDelete,onNote,onEdit
         {waNum&&<a href={"https://wa.me/"+waNum} target="_blank" rel="noopener noreferrer" title="WhatsApp" style={{textDecoration:"none",fontSize:13,padding:"2px 4px"}}>💬</a>}
         <button onClick={()=>setShowNotes(s=>!s)} style={{background:"none",border:"none",fontSize:13,cursor:"pointer",padding:"2px 4px"}} title="Notes & activity">📝</button>
         {onEdit&&<button onClick={()=>onEdit(lead)} style={{background:"none",border:"none",fontSize:12,cursor:"pointer",padding:"2px 4px"}} title="Edit">✏️</button>}
-        <button onClick={()=>onDelete(lead.id)} style={{background:"none",border:"none",fontSize:12,cursor:"pointer",padding:"2px 4px",color:C.red}} title="Delete">✕</button>
+        {onDelete&&<button onClick={()=>onDelete(lead.id)} style={{background:"none",border:"none",fontSize:12,cursor:"pointer",padding:"2px 4px",color:C.red}} title="Delete">✕</button>}
       </div>
     </div>
 
@@ -5016,7 +5147,7 @@ function InstBatches({db,saveDb,user,inst,color,notify,C}){
     notify(code?"Access code updated":"Lock removed");
   }
   function delBatch(b){
-    if(!window.confirm(`Delete batch "${b.name}"? Its students will be unassigned.`))return;
+    if(!confirmDelete(`batch "${b.name}"`))return;
     saveDb({
       batches:(db.batches||[]).filter(x=>x.id!==b.id),
       students:(db.students||[]).map(s=>s.batchId===b.id?{...s,batchId:""}:s),
@@ -5114,7 +5245,7 @@ function InstTests({db,saveDb,user,inst,color,notify,C}){
     saveDb({tests:[...(db.tests||[]),{...form,id:uid(),instId:inst.id,questions:qs,totalMarks:total,createdBy:user.name,createdAt:new Date().toISOString(),attempts:[]}]});
     setForm(blank);setQs([]);setView("list");notify("✅ Test published for students!");
   }
-  function delTest(id){if(!window.confirm("Delete this test and all its results?"))return;saveDb({tests:(db.tests||[]).filter(t=>t.id!==id)});if(activeId===id){setActiveId(null);setView("list");}notify("Deleted","error");}
+  function delTest(id){if(!confirmDelete("this test and all its results"))return;saveDb({tests:(db.tests||[]).filter(t=>t.id!==id)});if(activeId===id){setActiveId(null);setView("list");}notify("Deleted","error");}
   const batchName=(id)=>id?(batches.find(b=>b.id===id)?.name||"Unknown batch"):"All batches";
   const active=tests.find(t=>t.id===activeId);
 
@@ -5300,7 +5431,7 @@ function InstNotes({db,saveDb,user,inst,color,notify,C}){
     saveDb({notes:[...(db.notes||[]),{...form,links,id:uid(),instId:inst.id,createdBy:user.name,createdAt:new Date().toISOString()}]});
     setForm(blank);setShowAdd(false);notify("📒 Note added!");
   }
-  function del(id){if(!window.confirm("Delete this note?"))return;saveDb({notes:(db.notes||[]).filter(n=>n.id!==id)});notify("Deleted","error");}
+  function del(id){if(!confirmDelete("this note"))return;saveDb({notes:(db.notes||[]).filter(n=>n.id!==id)});notify("Deleted","error");}
   const linkIcon=(t)=>t==="pdf"?"📄":t==="drive"?"🟢":"🔗";
   const batchName=(id)=>id?(batches.find(b=>b.id===id)?.name||"Unknown batch"):"All batches";
 
@@ -5380,7 +5511,7 @@ function InstQuestions({db,saveDb,user,inst,color,notify,C}){
     saveDb({questions:[...(db.questions||[]),{...form,body:form.body.trim(),answer:form.answer.trim(),link:form.link.trim(),id:uid(),instId:inst.id,createdBy:user.name,createdAt:new Date().toISOString()}]});
     setForm(blank);setShowAdd(false);notify("❓ Question added!");
   }
-  function del(id){if(!window.confirm("Delete this question?"))return;saveDb({questions:(db.questions||[]).filter(q=>q.id!==id)});notify("Deleted","error");}
+  function del(id){if(!confirmDelete("this question"))return;saveDb({questions:(db.questions||[]).filter(q=>q.id!==id)});notify("Deleted","error");}
   const batchName=(id)=>id?(batches.find(b=>b.id===id)?.name||"Unknown batch"):"All batches";
 
   return <div style={{animation:"fadeUp 0.4s ease"}}>
@@ -5464,7 +5595,7 @@ function InstRecordings({db,saveDb,user,inst,color,notify,C}){
     saveDb({recordings:(db.recordings||[]).map(r=>r.id===id?{...r,...editForm}:r)});
     setEditId(null);setEditForm(null);notify("Updated!");
   }
-  function del(id){if(!window.confirm("Delete this recording?"))return;saveDb({recordings:(db.recordings||[]).filter(r=>r.id!==id)});notify("Deleted","error");}
+  function del(id){if(!confirmDelete("this recording"))return;saveDb({recordings:(db.recordings||[]).filter(r=>r.id!==id)});notify("Deleted","error");}
 
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
