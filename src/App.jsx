@@ -595,7 +595,7 @@ function StudentRegister({db,onRegister,onBack,C}){
         <FG label="Class" C={C}><Sel C={C} value={f.class} onChange={e=>set("class",e.target.value)}>{SCHOOL_CLASSES.map(c=><option key={c}>{c}</option>)}</Sel></FG>
         <FG label="Section" C={C}><Sel C={C} value={f.section} onChange={e=>set("section",e.target.value)}>{SCHOOL_SECTIONS.map(s=><option key={s}>{s}</option>)}</Sel></FG>
       </G2>}
-      {type==="Computer Institute"&&<FG label="Course" C={C}><Sel C={C} value={f.course} onChange={e=>set("course",e.target.value)}>{COMP_COURSES.map(c=><option key={c}>{c}</option>)}</Sel></FG>}
+      {type==="Computer Institute"&&<FG label="Course" C={C}><Sel C={C} value={f.course} onChange={e=>set("course",e.target.value)}>{[...new Set([...(db.courses||[]).filter(c=>c.instId===f.instId).map(c=>c.name),...COMP_COURSES])].map(c=><option key={c}>{c}</option>)}</Sel></FG>}
       {type==="Dance School"&&<G2>
         <FG label="Dance Style" C={C}><Sel C={C} value={f.danceStyle} onChange={e=>set("danceStyle",e.target.value)}>{DANCE_STYLES.map(d=><option key={d}>{d}</option>)}</Sel></FG>
         <FG label="Level" C={C}><Sel C={C} value={f.danceLevel} onChange={e=>set("danceLevel",e.target.value)}>{DANCE_LEVELS.map(d=><option key={d}>{d}</option>)}</Sel></FG>
@@ -3024,7 +3024,7 @@ function InstStudents({students,inst,courses,color,onUpdate,onDelete,C}){
           </div>
         </div>;})}
       </div>
-      {sel&&<StuProfileCard s={students.find(x=>x.id===sel.id)||sel} color={color} onClose={()=>setSel(null)} onPhoto={()=>setPhotoFor(sel.id)} onEdit={(s)=>{setEditId(s.id);setSel(null);}} onDelete={(id)=>{onDelete(id);setSel(null);}} C={C}/>}
+      {sel&&<StuProfileCard s={{...(students.find(x=>x.id===sel.id)||sel),_instType:inst?.type}} color={color} onClose={()=>setSel(null)} onPhoto={()=>setPhotoFor(sel.id)} onEdit={(s)=>{setEditId(s.id);setSel(null);}} onDelete={(id)=>{onDelete(id);setSel(null);}} C={C}/>}
     </div>
     {photoFor&&<PhotoModal sid={photoFor} student={students.find(s=>s.id===photoFor)} color={color} onSave={(sid,photo)=>{onUpdate(sid,{photo});setPhotoFor(null);}} onClose={()=>setPhotoFor(null)} C={C}/>}
     {editId&&<StuEditModal student={students.find(s=>s.id===editId)} inst={inst} courses={courses} color={color} onSave={(id,patch)=>{onUpdate(id,patch);setEditId(null);}} onClose={()=>setEditId(null)} C={C}/>}
@@ -3149,7 +3149,7 @@ function StuProfileCard({s,color,onClose,onPhoto,onEdit,onDelete,C}){
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
       {[{l:"Attendance",v:`${pct}%`,c:pct>=75?C.green:C.red},{l:"Avg Marks",v:avgM!=null?`${avgM}%`:"--",c:C.teal},{l:"Fee Paid",v:`Rs.${pf.toLocaleString()}`,c:C.green},{l:"HW Done",v:`${hwDone}/${s.homeworks?.length||0}`,c:C.purple}].map(r=><div key={r.l} style={{background:C.bg,borderRadius:9,padding:"10px",textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:14,fontWeight:800,color:r.c}}>{r.v}</div><div style={{fontSize:9,color:C.muted,marginTop:2}}>{r.l}</div></div>)}
     </div>
-    {[{l:"Status",v:s.status||"Studying"},{l:s.status==="Dropout"?"Dropout Date":"Completed On",v:fmt(s.completionDate)},{l:"Course",v:s.course},{l:"Department",v:s.department},{l:"Dance Style",v:s.danceStyle},{l:"Class",v:s.class},{l:"Batch",v:s.batch},{l:"Duration",v:s.duration},{l:"Year",v:s.year},{l:"Phone",v:s.phone},{l:"Email",v:s.email},{l:"Parent",v:s.parent},{l:"Parent Ph",v:s.parentPhone},{l:"DOB",v:fmt(s.dob)},{l:"Gender",v:s.gender},{l:"Blood",v:s.blood},{l:"Admitted",v:fmt(s.admissionDate)}].filter(r=>r.v&&r.v!=="--").map(r=><div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}><span style={{color:C.muted}}>{r.l}</span><span style={{fontWeight:600,color:C.text}}>{r.v}</span></div>)}
+    {[{l:"Status",v:s.status||"Studying"},{l:s.status==="Dropout"?"Dropout Date":"Completed On",v:fmt(s.completionDate)},{l:"Course",v:s.course},{l:"Department",v:s.department},{l:"Dance Style",v:s._instType==="Dance School"?s.danceStyle:undefined},{l:"Class",v:s.class},{l:"Batch",v:s.batch||s.danceBatch},{l:"Duration",v:s.duration},{l:"Year",v:s.year},{l:"Phone",v:s.phone},{l:"Email",v:s.email},{l:"Parent",v:s.parent},{l:"Parent Ph",v:s.parentPhone},{l:"DOB",v:fmt(s.dob)},{l:"Gender",v:s.gender},{l:"Blood",v:s.blood},{l:"Admitted",v:fmt(s.admissionDate)}].filter(r=>r.v&&r.v!=="--").map(r=><div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}><span style={{color:C.muted}}>{r.l}</span><span style={{fontWeight:600,color:C.text}}>{r.v}</span></div>)}
     {s.attendance?.length>0&&<div style={{marginTop:12}}><Sec C={C}>Last 7 Days</Sec><div style={{display:"flex",gap:3}}>{s.attendance.slice(-7).map((a,i)=><div key={i} title={`${fmt(a.date)}: ${a.status}`} style={{flex:1,height:24,borderRadius:5,background:a.status==="Present"?C.green:a.status==="Absent"?C.red:C.gold,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700}}>{a.status[0]}</div>)}</div></div>}
   </div>;
 }
@@ -5232,10 +5232,10 @@ function InstTests({db,saveDb,user,inst,color,notify,C}){
   const blank={title:"",subject:"",batchId:"",description:""};
   const [form,setForm]=useState(blank);
   const [qs,setQs]=useState([]);
-  const [qForm,setQForm]=useState({question:"",options:["","","",""],correct:0,marks:1});
+  const [qForm,setQForm]=useState({question:"",options:["","","",""],correct:0,marks:1,explanation:""});
   function addQ(){
     if(!qForm.question.trim()||!qForm.options[qForm.correct].trim()){notify("Enter the question and fill the correct option","error");return;}
-    setQs(x=>[...x,{...qForm,id:uid()}]); setQForm({question:"",options:["","","",""],correct:0,marks:1});
+    setQs(x=>[...x,{...qForm,id:uid()}]); setQForm({question:"",options:["","","",""],correct:0,marks:1,explanation:""});
   }
   function removeQ(id){setQs(x=>x.filter(q=>q.id!==id));}
   function createTest(){
@@ -5301,6 +5301,7 @@ function InstTests({db,saveDb,user,inst,color,notify,C}){
           </div>
           <div style={{display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap"}}>
             <div style={{width:120}}><LBL C={C}>Marks</LBL><Inp C={C} type="number" min={1} value={qForm.marks} onChange={e=>setQForm(f=>({...f,marks:Number(e.target.value)||1}))}/></div>
+            <div style={{flex:1}}><LBL C={C}>Explanation (shown to student after test)</LBL><Inp C={C} value={qForm.explanation} onChange={e=>setQForm(f=>({...f,explanation:e.target.value}))} placeholder="Why is this the correct answer? (optional)"/></div>
             <Btn onClick={addQ} C={C} color="teal">+ Add Question</Btn>
             <span style={{fontSize:11,color:C.muted}}>Tip: click an option's circle to set the correct answer.</span>
           </div>
@@ -5344,7 +5345,7 @@ function StuTests({db,saveDb,stu,C,notify}){
     if(unanswered>0&&!window.confirm(`${unanswered} question(s) not answered. Submit anyway?`))return;
     let score=0,correct=0;
     t.questions.forEach(q=>{if(answers[q.id]===q.correct){score+=Number(q.marks)||1;correct++;}});
-    const attempt={id:uid(),studentId:stu.id,name:stu.name,score,total:t.totalMarks,correctCount:correct,qCount:t.questions.length,submittedAt:new Date().toISOString()};
+    const attempt={id:uid(),studentId:stu.id,name:stu.name,score,total:t.totalMarks,correctCount:correct,qCount:t.questions.length,studentAnswers:{...answers},submittedAt:new Date().toISOString()};
     saveDb({tests:(db.tests||[]).map(x=>x.id===t.id?{...x,attempts:[...(x.attempts||[]).filter(a=>a.studentId!==stu.id),attempt]}:x)});
     notify(`Submitted! You scored ${score}/${t.totalMarks}`);
     setTakingId(null);setResultId(t.id);setAnswers({});
@@ -5392,6 +5393,26 @@ function StuTests({db,saveDb,stu,C,notify}){
       </div>}
       <Sec C={C}>🏆 Leaderboard — Top Marks</Sec>
       <TestLeaderboard test={resultTest} C={C} highlightId={stu.id}/>
+      <Sec C={C}>📋 Answer Review</Sec>
+      <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:6}}>
+        {resultTest.questions.map((q,i)=>{
+          const myAns=mine?(mine.studentAnswers||{})[q.id]:undefined;
+          const isCorrect=myAns===q.correct;
+          return <div key={q.id} style={{background:C.surface,borderRadius:12,border:`2px solid ${isCorrect?C.green:C.red}`,padding:"14px 16px",boxShadow:C.shadow}}>
+            <div style={{fontWeight:700,fontSize:13,color:C.text,marginBottom:8}}>Q{i+1}. {q.question} <span style={{fontSize:11,color:C.muted,fontWeight:500}}>({q.marks}m)</span></div>
+            <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:8}}>
+              {q.options.map((o,oi)=>o.trim()&&<div key={oi} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:8,background:oi===q.correct?C.greenL:myAns===oi&&oi!==q.correct?C.redL:C.bg,border:`1px solid ${oi===q.correct?C.green:myAns===oi&&oi!==q.correct?C.red:C.border}`}}>
+                <span style={{width:20,height:20,borderRadius:99,flexShrink:0,background:oi===q.correct?C.green:myAns===oi?C.red:"transparent",border:`2px solid ${oi===q.correct?C.green:myAns===oi?C.red:C.border}`,color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{oi===q.correct?"✓":myAns===oi?"✗":String.fromCharCode(65+oi)}</span>
+                <span style={{fontSize:12,color:C.text,fontWeight:oi===q.correct?700:400}}>{o}</span>
+                {oi===q.correct&&<span style={{fontSize:10,color:C.green,fontWeight:700,marginLeft:"auto"}}>Correct Answer</span>}
+                {myAns===oi&&oi!==q.correct&&<span style={{fontSize:10,color:C.red,fontWeight:700,marginLeft:"auto"}}>Your Answer</span>}
+              </div>)}
+            </div>
+            {q.explanation&&<div style={{background:C.blueL,borderRadius:8,padding:"8px 12px",fontSize:11,color:C.blue,fontWeight:600}}>💡 {q.explanation}</div>}
+            {!q.explanation&&<div style={{fontSize:10,color:C.muted,fontStyle:"italic"}}>No explanation provided for this question.</div>}
+          </div>;
+        })}
+      </div>
     </div>;
   }
 
