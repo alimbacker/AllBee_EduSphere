@@ -3024,10 +3024,10 @@ function InstStudents({students,inst,courses,db,saveDb,notify,color,onUpdate,onD
           </div>
         </div>;})}
       </div>
-      {sel&&<StuProfileCard s={students.find(x=>x.id===sel.id)||sel} color={color} onClose={()=>setSel(null)} onPhoto={()=>setPhotoFor(sel.id)} onEdit={(s)=>{setEditId(s.id);setSel(null);}} onDelete={(id)=>{onDelete(id);setSel(null);}} C={C}/>}
+      {sel&&<StuProfileCard s={students.find(x=>x.id===sel.id)||sel} inst={inst} color={color} onClose={()=>setSel(null)} onPhoto={()=>setPhotoFor(sel.id)} onEdit={(s)=>{setEditId(s.id);setSel(null);}} onDelete={(id)=>{onDelete(id);setSel(null);}} C={C}/>}
     </div>
     {photoFor&&<PhotoModal sid={photoFor} student={students.find(s=>s.id===photoFor)} color={color} onSave={(sid,photo)=>{onUpdate(sid,{photo});setPhotoFor(null);}} onClose={()=>setPhotoFor(null)} C={C}/>}
-    {editId&&<StuEditModal student={students.find(s=>s.id===editId)} inst={inst} courses={courses} color={color} onSave={(id,patch)=>{onUpdate(id,patch);setEditId(null);}} onClose={()=>setEditId(null)} C={C}/>}
+    {editId&&<StuEditModal student={students.find(s=>s.id===editId)} inst={inst} courses={courses} db={db} saveDb={saveDb} notify={notify} color={color} onSave={(id,patch)=>{onUpdate(id,patch);setEditId(null);}} onClose={()=>setEditId(null)} C={C}/>}
   </div>;
 }
 function PhotoModal({sid,student,color,onSave,onClose,C}){
@@ -3042,7 +3042,7 @@ function PhotoModal({sid,student,color,onSave,onClose,C}){
 }
 
 // ─── Student Edit Modal ───────────────────────────────────────────────────────
-function StuEditModal({student,inst,courses,color,onSave,onClose,C}){
+function StuEditModal({student,inst,courses,db,saveDb,notify,color,onSave,onClose,C}){
   const [f,setF]=useState({...student});
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const TYPE=inst.type;
@@ -3129,7 +3129,7 @@ function StuEditModal({student,inst,courses,color,onSave,onClose,C}){
   </div>;
 }
 
-function StuProfileCard({s,color,onClose,onPhoto,onEdit,onDelete,C}){
+function StuProfileCard({s,inst,color,onClose,onPhoto,onEdit,onDelete,C}){
   const pct=attPct(s.attendance);const tf=s.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;const pf=s.fees?.reduce((a,f)=>a+Number(f.paid||0),0)||0;const exams=s.exams||[];const avgM=exams.length?Math.round(exams.reduce((a,e)=>a+Number(e.percentage||0),0)/exams.length):null;const hwDone=s.homeworks?.filter(h=>h.status==="Submitted").length||0;
   return <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:20,position:"sticky",top:24,boxShadow:C.shadow,animation:"slideIn 0.3s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
@@ -3149,7 +3149,7 @@ function StuProfileCard({s,color,onClose,onPhoto,onEdit,onDelete,C}){
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
       {[{l:"Attendance",v:`${pct}%`,c:pct>=75?C.green:C.red},{l:"Avg Marks",v:avgM!=null?`${avgM}%`:"--",c:C.teal},{l:"Fee Paid",v:`Rs.${pf.toLocaleString()}`,c:C.green},{l:"HW Done",v:`${hwDone}/${s.homeworks?.length||0}`,c:C.purple}].map(r=><div key={r.l} style={{background:C.bg,borderRadius:9,padding:"10px",textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:14,fontWeight:800,color:r.c}}>{r.v}</div><div style={{fontSize:9,color:C.muted,marginTop:2}}>{r.l}</div></div>)}
     </div>
-    {[{l:"Status",v:s.status||"Studying"},{l:s.status==="Dropout"?"Dropout Date":"Completed On",v:fmt(s.completionDate)},{l:"Course",v:s.course},{l:"Department",v:s.department},{l:"Dance Style",v:s.danceStyle},{l:"Class",v:s.class},{l:"Batch",v:s.batch},{l:"Duration",v:s.duration},{l:"Year",v:s.year},{l:"Phone",v:s.phone},{l:"Email",v:s.email},{l:"Parent",v:s.parent},{l:"Parent Ph",v:s.parentPhone},{l:"DOB",v:fmt(s.dob)},{l:"Gender",v:s.gender},{l:"Blood",v:s.blood},{l:"Admitted",v:fmt(s.admissionDate)}].filter(r=>r.v&&r.v!=="--").map(r=><div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}><span style={{color:C.muted}}>{r.l}</span><span style={{fontWeight:600,color:C.text}}>{r.v}</span></div>)}
+    {[{l:"Status",v:s.status||"Studying"},{l:s.status==="Dropout"?"Dropout Date":"Completed On",v:fmt(s.completionDate)},{l:"Course",v:s.course},{l:"Department",v:s.department},{l:"Dance Style",v:inst?.type==="Dance School"?s.danceStyle:undefined},{l:"Class",v:s.class},{l:"Batch",v:s.batch},{l:"Duration",v:s.duration},{l:"Year",v:s.year},{l:"Phone",v:s.phone},{l:"Email",v:s.email},{l:"Parent",v:s.parent},{l:"Parent Ph",v:s.parentPhone},{l:"DOB",v:fmt(s.dob)},{l:"Gender",v:s.gender},{l:"Blood",v:s.blood},{l:"Admitted",v:fmt(s.admissionDate)}].filter(r=>r.v&&r.v!=="--").map(r=><div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}><span style={{color:C.muted}}>{r.l}</span><span style={{fontWeight:600,color:C.text}}>{r.v}</span></div>)}
     {s.attendance?.length>0&&<div style={{marginTop:12}}><Sec C={C}>Last 7 Days</Sec><div style={{display:"flex",gap:3}}>{s.attendance.slice(-7).map((a,i)=><div key={i} title={`${fmt(a.date)}: ${a.status}`} style={{flex:1,height:24,borderRadius:5,background:a.status==="Present"?C.green:a.status==="Absent"?C.red:C.gold,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700}}>{a.status[0]}</div>)}</div></div>}
   </div>;
 }
