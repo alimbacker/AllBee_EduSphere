@@ -1,11 +1,18 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { db as firestoreDb, doc, setDoc, onSnapshot, collection, getDocs } from "./firebase.js";
-// File storage for Notes (PDF/Word up to 10MB). Uses the SAME firebase app that firebase.js already initialised,
-// so no change to firebase.js is needed. Requires Firebase Storage to be enabled in the console (see notes).
-import { getStorage, ref as sRef, uploadBytesResumable, getBlob, deleteObject } from "firebase/storage";
-const fbStorage = getStorage(firestoreDb.app);
-// If Storage isn't reachable, fail in ~20s instead of the default 2-minute silent retry.
-try{ fbStorage.maxUploadRetryTime=20000; fbStorage.maxOperationRetryTime=20000; }catch(e){}
+// ─── File storage for Notes (PDF/Word up to 10MB) — Supabase Storage ──────────
+// Firestore (above) stays as the database; only file blobs live in Supabase.
+// FILL IN the two values below from Supabase → Project Settings → API.
+// The anon key is a PUBLIC key — safe to ship in client code; access is gated by
+// the Storage policies you add on the bucket (see setup notes).
+import { createClient } from "@supabase/supabase-js";
+const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";   // e.g. https://abcd1234.supabase.co
+const SUPABASE_ANON_KEY = "YOUR-ANON-PUBLIC-KEY";          // the "anon public" key
+const SUPA_BUCKET = "notes";                               // create this bucket in Supabase → Storage
+const supabaseConfigured = !!SUPABASE_URL && !!SUPABASE_ANON_KEY
+  && !SUPABASE_URL.includes("YOUR-PROJECT") && SUPABASE_ANON_KEY !== "YOUR-ANON-PUBLIC-KEY";
+const supabase = supabaseConfigured ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
 
 // EduSphere Corporate Design System
 const LIGHT={
@@ -364,7 +371,7 @@ export default function App(){
     </div>
   );
   return <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'Segoe UI',Inter,system-ui,sans-serif",fontSize:14,transition:"background 0.2s,color 0.2s"}}>
-    <style>{`*{box-sizing:border-box;}::placeholder{color:${C.muted2};}@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes slideIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}input:focus,select:focus,textarea:focus{outline:none;border-color:${C.teal}!important;box-shadow:0 0 0 3px ${C.teal}22!important;}button{cursor:pointer;transition:all 0.15s;font-family:inherit;}button:active{transform:scale(0.97);}::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:${C.border2};border-radius:4px}`}</style>
+    <style>{`*{box-sizing:border-box;}::placeholder{color:${C.muted2};}@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}@keyframes indet{0%{left:-42%}100%{left:100%}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes slideIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}input:focus,select:focus,textarea:focus{outline:none;border-color:${C.teal}!important;box-shadow:0 0 0 3px ${C.teal}22!important;}button{cursor:pointer;transition:all 0.15s;font-family:inherit;}button:active{transform:scale(0.97);}::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:${C.border2};border-radius:4px}`}</style>
     {toast&&<div style={{position:"fixed",top:18,right:18,zIndex:9999,padding:"12px 20px",borderRadius:10,fontWeight:600,fontSize:13,animation:"fadeIn 0.2s",boxShadow:C.shadowL,background:toastBg,color:"#fff"}}>{toast.type==="success"?"✓ ":toast.type==="error"?"✕ ":"⚠ "}{toast.msg}</div>}
     {!user&&<LoginPage onLogin={login} onRegister={register} db={db} C={C} dark={dark} setDark={setDark}/>}
     {user?.role==="superadmin"&&<SuperAdmin db={db} saveDb={saveDb} onLogout={logout} notify={notify} user={user} C={C} dark={dark} setDark={setDark}/>}
@@ -3214,43 +3221,48 @@ function loadPdfJs(){return new Promise((res,rej)=>{if(window.pdfjsLib)return re
 // Mammoth — converts .docx to HTML for the secure in-app Word viewer (and for Word test-imports)
 function loadMammoth(){return new Promise((res,rej)=>{if(window.mammoth)return res(window.mammoth);const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js";s.onload=()=>res(window.mammoth);s.onerror=()=>rej(new Error("mammoth"));document.head.appendChild(s);});}
 
-// ── Storage helpers for Note attachments ──────────────────────────────────────
-// Files are stored in Firebase Storage; Firestore only holds a tiny pointer {path,name,size,type}.
+// ── Storage helpers for Note attachments (Supabase Storage) ───────────────────
+// Files are stored in a Supabase bucket; Firestore only holds a tiny pointer {path,name,size,type}.
+const notConfiguredErr=()=>Object.assign(new Error("Supabase isn't configured yet — set SUPABASE_URL and SUPABASE_ANON_KEY near the top of App.jsx."),{code:"supabase/not-configured"});
 async function uploadNoteFile(instId,file,onProgress){
+  if(!supabase) throw notConfiguredErr();
   const safe=file.name.replace(/[^\w.\-]+/g,"_");
-  const path=`notes/${instId||"_"}/${uid()}-${safe}`;
-  const task=uploadBytesResumable(sRef(fbStorage,path),file,{contentType:file.type||"application/octet-stream"});
-  await new Promise((res,rej)=>{
-    let settled=false,timer=null;
-    const done=(fn,arg)=>{ if(settled)return; settled=true; if(timer)clearTimeout(timer); fn(arg); };
-    // Re-armed on every progress tick: a slow-but-moving upload is fine; only a real
-    // stall (no events for 20s — e.g. Storage not enabled / bucket unreachable) fails.
-    const arm=()=>{ if(timer)clearTimeout(timer); timer=setTimeout(()=>{ try{task.cancel();}catch(e){} done(rej,Object.assign(new Error("No response from Firebase Storage — make sure Storage is enabled in the Firebase console and the rules are published."),{code:"storage/stalled"})); },20000); };
-    arm();
-    task.on("state_changed",
-      snap=>{ arm(); if(onProgress)onProgress(Math.round((snap.bytesTransferred/snap.totalBytes)*100)); },
-      err=>done(rej,err), ()=>done(res));
-  });
-  return path;
+  const path=`${instId||"_"}/${uid()}-${safe}`; // path is WITHIN the bucket (no bucket name prefix)
+  // supabase-js upload doesn't emit byte-progress, so we show an indeterminate bar (-1).
+  if(onProgress)onProgress(-1);
+  const { data, error } = await supabase.storage.from(SUPA_BUCKET)
+    .upload(path,file,{contentType:file.type||"application/octet-stream",upsert:false,cacheControl:"3600"});
+  if(error) throw error;
+  if(onProgress)onProgress(100);
+  return (data&&data.path)||path;
 }
-// Translate Firebase Storage error codes into something a teacher can act on.
+// Translate Supabase Storage errors into something a teacher can act on.
 function storageErrMsg(err){
   const code=(err&&err.code)||"";
-  if(code==="storage/stalled"||code==="storage/retry-limit-exceeded"||code==="storage/unknown")
-    return "Can't reach Storage. Enable Firebase Storage in the console (Build → Storage → Get started), then publish the rules.";
-  if(code==="storage/unauthorized"||code==="storage/unauthenticated")
-    return "Permission denied by Storage rules. Publish the rules shown in setup (and check whether they require sign-in).";
-  if(code==="storage/no-default-bucket")
-    return "No storageBucket in your firebase config — add it to firebase.js (e.g. your-project.appspot.com).";
-  if(code==="storage/quota-exceeded") return "Storage quota exceeded for this project.";
-  if(/bucket/i.test(code)) return "Storage bucket not found — enable Storage / check the bucket name in firebase.js.";
+  const msg=((err&&err.message)||"").toLowerCase();
+  if(code==="supabase/not-configured") return err.message;
+  if(/row-level security|violates|rls|not authorized|permission/.test(msg))
+    return "Permission denied — add the Storage policies for the 'notes' bucket (see setup), then retry.";
+  if(/bucket not found|not found/.test(msg))
+    return "Bucket 'notes' not found — create a bucket named exactly 'notes' in Supabase → Storage.";
+  if(/payload too large|exceeded the maximum|413|too large/.test(msg))
+    return "File is over the bucket's size limit — raise the bucket file-size limit to at least 10 MB.";
+  if(/jwt|invalid api key|invalid key|401|signature/.test(msg))
+    return "Bad Supabase key — re-copy the 'anon public' key from Project Settings → API.";
+  if(/failed to fetch|networkerror|load failed/.test(msg))
+    return "Couldn't reach Supabase — check the SUPABASE_URL value and your connection.";
   return (err&&(err.message||err.code))||"Upload failed";
 }
-async function deleteNoteFile(path){ try{ if(path)await deleteObject(sRef(fbStorage,path)); }catch(e){ /* already gone / no perms — ignore */ } }
-// Returns a Blob for a stored attachment. Supports new Storage-backed notes (att.path)
+async function deleteNoteFile(path){ try{ if(path&&supabase)await supabase.storage.from(SUPA_BUCKET).remove([path]); }catch(e){ /* already gone / no perms — ignore */ } }
+// Returns a Blob for a stored attachment. Supports Supabase-backed notes (att.path)
 // AND legacy inline notes that still carry a base64 dataUrl, so old notes keep working.
 async function getAttachmentBlob(att){
-  if(att.path) return await getBlob(sRef(fbStorage,att.path));
+  if(att.path){
+    if(!supabase) throw notConfiguredErr();
+    const { data, error } = await supabase.storage.from(SUPA_BUCKET).download(att.path);
+    if(error) throw error;
+    return data; // a Blob
+  }
   if(att.dataUrl){ const r=await fetch(att.dataUrl); return await r.blob(); }
   throw new Error("File not found");
 }
@@ -5850,7 +5862,7 @@ function InstNotes({db,saveDb,user,inst,color,notify,C}){
       const ext=f.name.split(".").pop().toLowerCase();
       const ftype=ext==="pdf"?"pdf":"doc";
       try{
-        setUploading(true);setProgress(0);
+        setUploading(true);setProgress(-1);
         const path=await uploadNoteFile(inst.id,f,p=>setProgress(p));
         setForm(frm=>({...frm,attachments:[...(frm.attachments||[]),{type:ftype,fileName:f.name,fileSize:f.size,path,id:uid()}]}));
         notify(`Uploaded ${f.name}`);
@@ -5925,13 +5937,17 @@ function InstNotes({db,saveDb,user,inst,color,notify,C}){
           <input ref={fileRef} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple style={{display:"none"}} onChange={handleFileUpload}/>
         </div>
         {uploading&&<div style={{marginBottom:10}}>
-          <div style={{fontSize:12,color:C.teal,fontWeight:600,marginBottom:4}}>⏳ Uploading… {progress}%</div>
-          <div style={{height:6,borderRadius:4,background:C.bg,overflow:"hidden"}}><div style={{height:"100%",width:progress+"%",background:C.teal,transition:"width .2s"}}/></div>
+          <div style={{fontSize:12,color:C.teal,fontWeight:600,marginBottom:4}}>⏳ Uploading{progress>=0?` ${progress}%`:" to secure storage…"}</div>
+          <div style={{height:6,borderRadius:4,background:C.bg,overflow:"hidden",position:"relative"}}>
+            {progress>=0
+              ? <div style={{height:"100%",width:progress+"%",background:C.teal,transition:"width .2s"}}/>
+              : <div style={{position:"absolute",top:0,height:"100%",width:"40%",background:C.teal,borderRadius:4,animation:"indet 1.1s ease-in-out infinite"}}/>}
+          </div>
         </div>}
         {uploadError&&<div style={{marginBottom:10,padding:"12px 14px",borderRadius:10,background:C.redL||"#fdecec",border:`1px solid ${C.red}`,fontSize:12,color:C.red,lineHeight:1.5}}>
           <div style={{fontWeight:800,marginBottom:4}}>⚠️ Upload failed</div>
           <div>{uploadError}</div>
-          <div style={{marginTop:6,color:C.muted}}>One-time setup: in the Firebase console open <b>Build → Storage → Get started</b>, then paste the Storage rules and Publish. After that, uploads here will work.</div>
+          <div style={{marginTop:6,color:C.muted}}>One-time setup: in Supabase create a bucket named <b>notes</b> (Storage → New bucket), add the access policies, and make sure your URL + anon key are set in App.jsx. After that, uploads here will work.</div>
         </div>}
         {(form.attachments||[]).map((a,i)=><div key={a.id||i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,background:C.bg,border:`1px solid ${C.border}`,marginBottom:6}}>
           <span style={{fontSize:20}}>{a.type==="pdf"?"📄":"📝"}</span>

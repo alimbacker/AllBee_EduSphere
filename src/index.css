@@ -1,0 +1,7 @@
+/* The app injects its own theme styles at runtime; this just resets the page. */
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
