@@ -1,5 +1,9 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { db as firestoreDb, doc, setDoc, onSnapshot, collection, getDocs } from "./firebase.js";
+// File storage for Notes (PDF/Word up to 10MB). Uses the SAME firebase app that firebase.js already initialised,
+// so no change to firebase.js is needed. Requires Firebase Storage to be enabled in the console (see notes).
+import { getStorage, ref as sRef, uploadBytesResumable, getBlob, deleteObject } from "firebase/storage";
+const fbStorage = getStorage(firestoreDb.app);
 
 // EduSphere Corporate Design System
 const LIGHT={
@@ -3203,6 +3207,86 @@ function impDate(v){
 function impStatus(v){const n=String(v||"").toLowerCase();if(/complet|pass|finish|graduat|done/.test(n))return"Completed";if(/drop|discontinu|\bleft\b|quit|terminat|inactive/.test(n))return"Dropout";return"Studying";}
 function impGender(v){const n=String(v||"").toLowerCase();if(n.startsWith("f")||n==="female")return"Female";if(n.startsWith("m")||n==="male")return"Male";if(n)return"Other";return"Male";}
 function loadXLSX(){return new Promise((res,rej)=>{if(window.XLSX)return res(window.XLSX);const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=()=>res(window.XLSX);s.onerror=()=>rej(new Error("xlsx"));document.head.appendChild(s);});}
+// PDF.js — used for the secure in-app PDF viewer (renders pages to <canvas>, so there is no native download/print toolbar)
+function loadPdfJs(){return new Promise((res,rej)=>{if(window.pdfjsLib)return res(window.pdfjsLib);const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";s.onload=()=>{try{window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";}catch{}res(window.pdfjsLib);};s.onerror=()=>rej(new Error("pdfjs"));document.head.appendChild(s);});}
+// Mammoth — converts .docx to HTML for the secure in-app Word viewer (and for Word test-imports)
+function loadMammoth(){return new Promise((res,rej)=>{if(window.mammoth)return res(window.mammoth);const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js";s.onload=()=>res(window.mammoth);s.onerror=()=>rej(new Error("mammoth"));document.head.appendChild(s);});}
+
+// ── Storage helpers for Note attachments ──────────────────────────────────────
+// Files are stored in Firebase Storage; Firestore only holds a tiny pointer {path,name,size,type}.
+async function uploadNoteFile(instId,file,onProgress){
+  const safe=file.name.replace(/[^\w.\-]+/g,"_");
+  const path=`notes/${instId}/${uid()}-${safe}`;
+  const task=uploadBytesResumable(sRef(fbStorage,path),file,{contentType:file.type||"application/octet-stream"});
+  await new Promise((res,rej)=>{
+    task.on("state_changed",
+      snap=>{ if(onProgress)onProgress(Math.round((snap.bytesTransferred/snap.totalBytes)*100)); },
+      err=>rej(err), ()=>res());
+  });
+  return path;
+}
+async function deleteNoteFile(path){ try{ if(path)await deleteObject(sRef(fbStorage,path)); }catch(e){ /* already gone / no perms — ignore */ } }
+// Returns a Blob for a stored attachment. Supports new Storage-backed notes (att.path)
+// AND legacy inline notes that still carry a base64 dataUrl, so old notes keep working.
+async function getAttachmentBlob(att){
+  if(att.path) return await getBlob(sRef(fbStorage,att.path));
+  if(att.dataUrl){ const r=await fetch(att.dataUrl); return await r.blob(); }
+  throw new Error("File not found");
+}
+
+// ── MCQ question parsers (shared by CSV / Excel and Word / PDF imports) ────────
+// Tabular: rows = array of arrays. Header row names the columns
+// (question, optionA..optionD, correct, marks). Used by CSV and Excel.
+function parseTabularRows(rows){
+  const errors=[]; const parsed=[];
+  if(!rows||!rows.length){errors.push("File is empty");return{qs:parsed,errors};}
+  const header=(rows[0]||[]).map(h=>String(h||"").toLowerCase().trim());
+  const find=re=>header.findIndex(h=>re.test(h));
+  const qi=find(/question|^q$/), ai=find(/option\s*a|^a$/), bi=find(/option\s*b|^b$/),
+        ci=find(/option\s*c|^c$/), di=find(/option\s*d|^d$/), corr=find(/correct|answer|ans/), mi=find(/mark/);
+  if(qi<0){errors.push("Sheet must have a 'question' column (with optionA, optionB, … and a 'correct' column)");return{qs:parsed,errors};}
+  for(let r=1;r<rows.length;r++){
+    const row=rows[r]||[]; const get=i=>i>=0?String(row[i]??"").trim():"";
+    const q=get(qi); if(!q)continue;
+    const opts=[get(ai),get(bi),get(ci),get(di)].filter(Boolean);
+    if(!opts.length){errors.push(`Row ${r+1}: no options`);continue;}
+    let correctIdx=0; const cv=get(corr).toLowerCase();
+    if(/^\d+$/.test(cv))correctIdx=Math.max(0,Number(cv)-1);
+    else if(cv==="a")correctIdx=0;else if(cv==="b")correctIdx=1;else if(cv==="c")correctIdx=2;else if(cv==="d")correctIdx=3;
+    correctIdx=Math.min(correctIdx,opts.length-1);
+    parsed.push({question:q,options:opts,correct:correctIdx,marks:Number(get(mi))||1});
+  }
+  return{qs:parsed,errors};
+}
+// Free text (from Word/PDF). Expected layout per question:
+//   1. Question text
+//   A) option   B) option *   C) option   D) option      (the * / ✓ marks the answer)
+//   Answer: B   (optional, alternative to *)     Marks: 2  (optional)
+function parseQuestionsFromText(text){
+  const errors=[]; const parsed=[];
+  const lines=String(text||"").replace(/\r/g,"").split("\n").map(l=>l.trim());
+  let cur=null;
+  const flush=()=>{ if(cur&&cur.question&&cur.options.length){ if(cur.correct>=cur.options.length)cur.correct=0; parsed.push(cur); } cur=null; };
+  for(const line of lines){
+    if(!line)continue;
+    const qm=line.match(/^(?:Q\s*)?(\d+)\s*[\.\)]\s*(.+)$/i);          // "1. ..." / "Q1) ..."
+    const om=line.match(/^\(?([A-Da-d])\s*[\.\)\:]\s*(.+)$/);          // "A) ..." / "(b). ..."
+    const am=line.match(/^(?:ans(?:wer)?|correct)\s*[:\-]\s*([A-Da-d1-4])/i);
+    const mm=line.match(/^marks?\s*[:\-]\s*(\d+)/i);
+    if(qm){ flush(); cur={question:qm[2].trim(),options:[],correct:0,marks:1}; }
+    else if(om&&cur){
+      let opt=om[2].trim(); let isCorrect=false;
+      if(/\s*(\*|✓|\(correct\)|\[correct\])\s*$/i.test(opt)){isCorrect=true;opt=opt.replace(/\s*(\*|✓|\(correct\)|\[correct\])\s*$/i,"").trim();}
+      cur.options.push(opt); if(isCorrect)cur.correct=cur.options.length-1;
+    }
+    else if(am&&cur){ const v=am[1].toLowerCase(); cur.correct=/^\d$/.test(v)?Number(v)-1:("abcd".indexOf(v)); }
+    else if(mm&&cur){ cur.marks=Number(mm[1])||1; }
+    else if(cur&&!cur.options.length){ cur.question+=" "+line; } // wrapped question line
+  }
+  flush();
+  if(!parsed.length)errors.push("No questions detected. Use: a numbered question, then options A) B) C) D) with * on the correct one (or an 'Answer: B' line).");
+  return{qs:parsed,errors};
+}
 
 function InstApprovals({registrations,all,inst,color,onApprove,onReject,onDelete,C}){
   const [showHist,setShowHist]=useState(false);
@@ -5317,61 +5401,69 @@ function InstTests({db,saveDb,user,inst,color,notify,C}){
   }
   function removeQ(id){setQs(x=>x.filter(q=>q.id!==id));}
 
-  // ── Import questions from CSV or JSON ──
-  function handleImportFile(e){
+  // ── Import questions from CSV / JSON / Excel / Word / PDF ──
+  async function handleImportFile(e){
     const file=e.target.files?.[0];
     if(!file)return;
     e.target.value="";
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      const text=ev.target.result;
-      const ext=file.name.split(".").pop().toLowerCase();
-      try{
-        let parsed=[];
-        const errors=[];
-        if(ext==="json"){
-          const raw=JSON.parse(text);
-          const arr=Array.isArray(raw)?raw:raw.questions||[];
-          arr.forEach((q,i)=>{
-            const opts=q.options||[q.a,q.b,q.c,q.d].filter(Boolean);
-            const correct=typeof q.correct==="number"?q.correct:typeof q.answer==="number"?q.answer:0;
-            if(!q.question&&!q.q){errors.push(`Row ${i+1}: missing question`);return;}
-            if(!opts.length){errors.push(`Row ${i+1}: missing options`);return;}
-            parsed.push({question:(q.question||q.q||"").trim(),options:opts.map(String),correct:Math.min(correct,opts.length-1),marks:Number(q.marks)||1});
-          });
-        } else {
-          // CSV — expected columns: question,optionA,optionB,optionC,optionD,correct,marks
-          const lines=text.split(/\r?\n/).filter(l=>l.trim());
-          const header=lines[0].toLowerCase().split(",").map(h=>h.trim().replace(/"/g,""));
-          const qi=header.findIndex(h=>/question|q\b/.test(h));
-          const ai=header.findIndex(h=>/optiona|option_a|a\b/.test(h));
-          const bi=header.findIndex(h=>/optionb|option_b|b\b/.test(h));
-          const ci=header.findIndex(h=>/optionc|option_c|c\b/.test(h));
-          const di=header.findIndex(h=>/optiond|option_d|d\b/.test(h));
-          const corr=header.findIndex(h=>/correct|answer|ans/.test(h));
-          const mi=header.findIndex(h=>/mark/.test(h));
-          if(qi<0){errors.push("CSV must have a 'question' column");} else {
-            lines.slice(1).forEach((line,idx)=>{
-              const cols=line.match(/("(?:[^"]|"")*"|[^,]*)/g)||[];
-              const get=i=>i>=0?(cols[i]||"").replace(/^"|"$/g,"").replace(/""/g,'"').trim():"";
-              const q=get(qi);if(!q)return;
-              const opts=[get(ai),get(bi),get(ci),get(di)].filter(Boolean);
-              if(!opts.length){errors.push(`Row ${idx+2}: no options`);return;}
-              let correctIdx=0;
-              const cv=(get(corr)||"").toLowerCase();
-              if(/^\d+$/.test(cv))correctIdx=Math.max(0,Number(cv)-1);
-              else if(cv==="a")correctIdx=0;else if(cv==="b")correctIdx=1;else if(cv==="c")correctIdx=2;else if(cv==="d")correctIdx=3;
-              correctIdx=Math.min(correctIdx,opts.length-1);
-              parsed.push({question:q,options:opts,correct:correctIdx,marks:Number(get(mi))||1});
-            });
-          }
+    const ext=file.name.split(".").pop().toLowerCase();
+    try{
+      let result={qs:[],errors:[]};
+      if(ext==="json"){
+        const text=await file.text();
+        const raw=JSON.parse(text);
+        const arr=Array.isArray(raw)?raw:raw.questions||[];
+        const parsed=[],errors=[];
+        arr.forEach((q,i)=>{
+          const opts=q.options||[q.a,q.b,q.c,q.d].filter(Boolean);
+          const correct=typeof q.correct==="number"?q.correct:typeof q.answer==="number"?q.answer:0;
+          if(!q.question&&!q.q){errors.push(`Item ${i+1}: missing question`);return;}
+          if(!opts.length){errors.push(`Item ${i+1}: missing options`);return;}
+          parsed.push({question:(q.question||q.q||"").trim(),options:opts.map(String),correct:Math.min(correct,opts.length-1),marks:Number(q.marks)||1});
+        });
+        result={qs:parsed,errors};
+      } else if(ext==="csv"){
+        const text=await file.text();
+        // turn CSV text into rows-of-arrays, then reuse the tabular parser
+        const rows=text.split(/\r?\n/).filter(l=>l.trim()).map(line=>{
+          const cells=line.match(/("(?:[^"]|"")*"|[^,]*)/g)||[];
+          return cells.map(c=>c.replace(/^"|"$/g,"").replace(/""/g,'"').trim());
+        });
+        result=parseTabularRows(rows);
+      } else if(ext==="xlsx"||ext==="xls"){
+        const XLSX=await loadXLSX();
+        const buf=await file.arrayBuffer();
+        const wb=XLSX.read(buf,{type:"array"});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:""});
+        result=parseTabularRows(rows);
+      } else if(ext==="docx"){
+        const mammoth=await loadMammoth();
+        const buf=await file.arrayBuffer();
+        const out=await mammoth.extractRawText({arrayBuffer:buf});
+        result=parseQuestionsFromText(out.value||"");
+      } else if(ext==="pdf"){
+        const pdfjsLib=await loadPdfJs();
+        const buf=await file.arrayBuffer();
+        const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+        let text="";
+        for(let p=1;p<=pdf.numPages;p++){
+          const page=await pdf.getPage(p);
+          const tc=await page.getTextContent();
+          // rebuild lines using each item's Y position so the text parser sees real line breaks
+          let lastY=null,line="";const out=[];
+          tc.items.forEach(it=>{const y=it.transform[5];if(lastY!==null&&Math.abs(y-lastY)>3){out.push(line);line="";}line+=(line?" ":"")+it.str;lastY=y;});
+          if(line)out.push(line);
+          text+=out.join("\n")+"\n";
         }
-        if(!parsed.length&&!errors.length)errors.push("No questions found — check the file format");
-        setImportPreview({qs:parsed,errors});
-        setShowImport(true);
-      }catch(err){notify("Could not parse file: "+err.message,"error");}
-    };
-    reader.readAsText(file);
+        result=parseQuestionsFromText(text);
+      } else {
+        notify("Unsupported file. Use CSV, JSON, Excel (.xlsx), Word (.docx) or PDF.","error");return;
+      }
+      if(!result.qs.length&&!result.errors.length)result.errors.push("No questions found — check the file format");
+      setImportPreview(result);
+      setShowImport(true);
+    }catch(err){notify("Could not read file: "+(err?.message||err),"error");}
   }
 
   function confirmImport(){
@@ -5430,8 +5522,8 @@ function InstTests({db,saveDb,user,inst,color,notify,C}){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:12}}>
           <div style={{fontWeight:700,fontSize:14,color:C.text}}>Questions ({qs.length})</div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            <Btn onClick={()=>importRef.current?.click()} C={C} color="blue" size="sm" outline>📥 Import CSV / JSON</Btn>
-            <input ref={importRef} type="file" accept=".csv,.json,text/csv,application/json" style={{display:"none"}} onChange={handleImportFile}/>
+            <Btn onClick={()=>importRef.current?.click()} C={C} color="blue" size="sm" outline>📥 Import (CSV / Excel / Word / PDF / JSON)</Btn>
+            <input ref={importRef} type="file" accept=".csv,.json,.xlsx,.xls,.docx,.pdf,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf" style={{display:"none"}} onChange={handleImportFile}/>
           </div>
         </div>
 
@@ -5585,84 +5677,245 @@ function StuTests({db,saveDb,stu,C,notify}){
   </div>;
 }
 
+// ─── Secure in-app document viewer ───────────────────────────────────────────
+// Opens PDFs (rendered to <canvas> via pdf.js) and .docx (via mammoth) inside the app.
+// No download/print toolbar, right-click & text-selection disabled, a diagonal watermark
+// with the viewer's name+date, and the content is blurred whenever the window loses focus
+// or is hidden (a common moment when someone tries to grab a screenshot).
+// NOTE: a web page cannot truly block OS-level screenshots — the watermark makes any leak
+// traceable, and for the mobile app you can add native screenshot blocking (Android
+// FLAG_SECURE / iOS) in the WebView wrapper for hard protection.
+function SecureDocViewer({att,watermark,C,onClose}){
+  const [status,setStatus]=useState("loading"); // loading | ready | error
+  const [msg,setMsg]=useState("");
+  const [hidden,setHidden]=useState(false);
+  const hostRef=useRef();
+  const cancelled=useRef(false);
+
+  // Blur when the tab/app is hidden or loses focus
+  useEffect(()=>{
+    const onVis=()=>setHidden(document.hidden);
+    const onBlur=()=>setHidden(true);
+    const onFocus=()=>setHidden(document.hidden?true:false);
+    const onKey=(e)=>{
+      const k=(e.key||"").toLowerCase();
+      // Block PrintScreen, Ctrl/Cmd+P (print), Ctrl/Cmd+S (save)
+      if(k==="printscreen"||((e.ctrlKey||e.metaKey)&&(k==="p"||k==="s"))){
+        e.preventDefault();
+        try{navigator.clipboard&&navigator.clipboard.writeText("");}catch{}
+        setHidden(true); setTimeout(()=>setHidden(document.hidden),1200);
+      }
+    };
+    document.addEventListener("visibilitychange",onVis);
+    window.addEventListener("blur",onBlur);
+    window.addEventListener("focus",onFocus);
+    window.addEventListener("keyup",onKey);
+    window.addEventListener("keydown",onKey);
+    return()=>{document.removeEventListener("visibilitychange",onVis);window.removeEventListener("blur",onBlur);window.removeEventListener("focus",onFocus);window.removeEventListener("keyup",onKey);window.removeEventListener("keydown",onKey);};
+  },[]);
+
+  useEffect(()=>{
+    cancelled.current=false;
+    (async()=>{
+      try{
+        const ext=(att.fileName||att.name||"").split(".").pop().toLowerCase();
+        const blob=await getAttachmentBlob(att);
+        if(cancelled.current)return;
+        const host=hostRef.current; if(!host)return; host.innerHTML="";
+        if(ext==="pdf"||att.type==="pdf"){
+          const pdfjsLib=await loadPdfJs();
+          const buf=await blob.arrayBuffer();
+          if(cancelled.current)return;
+          const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+          const width=Math.min(host.clientWidth||900,900);
+          for(let p=1;p<=pdf.numPages;p++){
+            if(cancelled.current)return;
+            const page=await pdf.getPage(p);
+            const base=page.getViewport({scale:1});
+            const scale=(width/base.width)*(window.devicePixelRatio||1);
+            const vp=page.getViewport({scale});
+            const canvas=document.createElement("canvas");
+            canvas.width=vp.width; canvas.height=vp.height;
+            canvas.style.width="100%"; canvas.style.height="auto";
+            canvas.style.display="block"; canvas.style.margin="0 auto 12px";
+            canvas.style.borderRadius="6px"; canvas.style.boxShadow="0 2px 10px rgba(0,0,0,0.25)";
+            host.appendChild(canvas);
+            await page.render({canvasContext:canvas.getContext("2d"),viewport:vp}).promise;
+          }
+          setStatus("ready");
+        } else if(ext==="docx"){
+          const mammoth=await loadMammoth();
+          const buf=await blob.arrayBuffer();
+          if(cancelled.current)return;
+          const out=await mammoth.convertToHtml({arrayBuffer:buf});
+          const wrap=document.createElement("div");
+          wrap.style.cssText="background:#fff;color:#111;padding:28px 32px;border-radius:8px;max-width:820px;margin:0 auto;line-height:1.6;font-size:15px;";
+          wrap.innerHTML=out.value||"<p>(empty document)</p>";
+          host.appendChild(wrap);
+          setStatus("ready");
+        } else {
+          setMsg("Live preview isn't available for legacy .doc files. Please ask your teacher to re-upload it as PDF or .docx.");
+          setStatus("error");
+        }
+      }catch(e){
+        setMsg("Couldn't open this file. "+(e?.message||"")); setStatus("error");
+      }
+    })();
+    return()=>{cancelled.current=true;};
+  },[att]);
+
+  const wmText=watermark||"allbee";
+  const wmRows=Array.from({length:10});
+  return <div onContextMenu={e=>e.preventDefault()} style={{position:"fixed",inset:0,zIndex:3000,background:"#0d0f10",display:"flex",flexDirection:"column",userSelect:"none",WebkitUserSelect:"none"}}>
+    {/* top bar */}
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:"#16191b",borderBottom:"1px solid #2a2f31",flexShrink:0}}>
+      <span style={{fontSize:18}}>{(att.type==="pdf"||(att.fileName||att.name||"").toLowerCase().endsWith(".pdf"))?"📄":"📝"}</span>
+      <div style={{flex:1,minWidth:0,color:"#fff",fontWeight:700,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{att.fileName||att.name}</div>
+      <span style={{fontSize:10,color:"#7a8487",border:"1px solid #2a2f31",padding:"3px 8px",borderRadius:20}}>🔒 View only · no download</span>
+      <button onClick={onClose} style={{background:"#2a2f31",color:"#fff",border:"none",borderRadius:8,width:34,height:34,fontSize:16,cursor:"pointer"}}>✕</button>
+    </div>
+    {/* scroll area */}
+    <div style={{flex:1,overflow:"auto",position:"relative",padding:"16px",WebkitOverflowScrolling:"touch"}}>
+      <div ref={hostRef} draggable={false} style={{position:"relative",zIndex:1,pointerEvents:"none"}}/>
+      {status==="loading"&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#9aa4a7",fontSize:14}}>⏳ Loading secure preview…</div>}
+      {status==="error"&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#e88",fontSize:14,padding:24,textAlign:"center"}}>{msg}</div>}
+      {/* diagonal watermark overlay */}
+      <div aria-hidden style={{position:"absolute",inset:0,zIndex:2,pointerEvents:"none",overflow:"hidden",display:"flex",flexDirection:"column",justifyContent:"space-around",opacity:0.12,transform:"rotate(-30deg) scale(1.4)"}}>
+        {wmRows.map((_,i)=><div key={i} style={{whiteSpace:"nowrap",color:"#fff",fontSize:18,fontWeight:800,letterSpacing:2,textAlign:"center"}}>{Array.from({length:6}).map((_,j)=><span key={j} style={{margin:"0 28px"}}>{wmText}</span>)}</div>)}
+      </div>
+      {/* blur shield when window hidden / capture attempt */}
+      {hidden&&<div style={{position:"absolute",inset:0,zIndex:5,background:"rgba(13,15,16,0.92)",backdropFilter:"blur(14px)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,textAlign:"center",padding:24}}>
+        <div style={{fontSize:34}}>🔒</div>
+        <div style={{color:"#fff",fontWeight:700,fontSize:15}}>Protected content hidden</div>
+        <div style={{color:"#9aa4a7",fontSize:12,maxWidth:300}}>Bring this window back into focus to keep reading. Screenshots are watermarked with your name.</div>
+      </div>}
+    </div>
+  </div>;
+}
+
 // ─── Notes (Staff) — PDF & Drive links + File Upload ─────────────────────────
+const NOTE_MAX=10*1024*1024; // 10 MB per file
 function InstNotes({db,saveDb,user,inst,color,notify,C}){
   const batches=(db.batches||[]).filter(b=>b.instId===inst.id);
   const notes=(db.notes||[]).filter(n=>n.instId===inst.id).sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
-  const blank={title:"",subject:"",batchId:"",description:"",links:[{type:"pdf",url:""}],attachments:[]};
+  const blank={title:"",subject:"",category:"",batchId:"",description:"",links:[{type:"pdf",url:""}],attachments:[]};
   const [form,setForm]=useState(blank);
   const [showAdd,setShowAdd]=useState(false);
-  const [addMode,setAddMode]=useState("link"); // "link" | "file"
+  const [addMode,setAddMode]=useState("file"); // "file" | "link" | "both"
   const [uploading,setUploading]=useState(false);
+  const [progress,setProgress]=useState(0);
+  const [openFolder,setOpenFolder]=useState(null); // null = folder grid
+  const [viewing,setViewing]=useState(null);        // attachment shown in secure viewer
   const fileRef=useRef();
   const LINK_TYPES=[["pdf","📄 PDF"],["drive","🟢 Drive"],["doc","📝 DOC"],["link","🔗 Link"]];
+
+  // categories used so far (for quick-pick chips)
+  const cats=Array.from(new Set(notes.map(n=>(n.category||"General").trim()||"General")));
 
   function addLinkRow(){setForm(f=>({...f,links:[...f.links,{type:"drive",url:""}]}));}
   function setLink(i,k,v){setForm(f=>({...f,links:f.links.map((l,idx)=>idx===i?{...l,[k]:v}:l)}));}
   function rmLink(i){setForm(f=>({...f,links:f.links.filter((_,idx)=>idx!==i)}));}
   function rmAttachment(i){setForm(f=>({...f,attachments:(f.attachments||[]).filter((_,idx)=>idx!==i)}));}
 
-  function handleFileUpload(e){
+  async function handleFileUpload(e){
     const files=Array.from(e.target.files||[]);
-    if(!files.length)return;
-    const MAX=1.5*1024*1024; // 1.5 MB per file
-    const allowed=["application/pdf","application/msword","application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
-    for(const f of files){
-      if(!allowed.includes(f.type)&&!f.name.match(/\.(pdf|doc|docx)$/i)){notify(`${f.name}: only PDF and DOC/DOCX files allowed`,"error");continue;}
-      if(f.size>MAX){notify(`${f.name} exceeds 1.5 MB — upload to Google Drive and paste the link instead`,"error");continue;}
-      setUploading(true);
-      const reader=new FileReader();
-      reader.onload=ev=>{
-        const dataUrl=ev.target.result;
-        const ext=f.name.split(".").pop().toLowerCase();
-        const ftype=ext==="pdf"?"pdf":"doc";
-        setForm(frm=>({...frm,attachments:[...(frm.attachments||[]),{type:ftype,fileName:f.name,fileSize:f.size,dataUrl,id:uid()}]}));
-        setUploading(false);
-      };
-      reader.onerror=()=>{notify("Failed to read file","error");setUploading(false);};
-      reader.readAsDataURL(f);
-    }
     e.target.value="";
+    if(!files.length)return;
+    for(const f of files){
+      if(!f.name.match(/\.(pdf|docx)$/i)){notify(`${f.name}: only PDF and Word (.docx) files are supported`,"error");continue;}
+      if(f.size>NOTE_MAX){notify(`${f.name} is ${(f.size/1024/1024).toFixed(1)} MB — the limit is 10 MB`,"error");continue;}
+      const ext=f.name.split(".").pop().toLowerCase();
+      const ftype=ext==="pdf"?"pdf":"doc";
+      try{
+        setUploading(true);setProgress(0);
+        const path=await uploadNoteFile(inst.id,f,p=>setProgress(p));
+        setForm(frm=>({...frm,attachments:[...(frm.attachments||[]),{type:ftype,fileName:f.name,fileSize:f.size,path,id:uid()}]}));
+        notify(`Uploaded ${f.name}`);
+      }catch(err){
+        notify(`Upload failed for ${f.name} — ${err?.code||err?.message||"check Storage rules"}`,"error");
+      }finally{setUploading(false);setProgress(0);}
+    }
   }
 
   function save(){
+    if(uploading){notify("Please wait for the upload to finish","error");return;}
     if(!form.title.trim()){notify("Title is required","error");return;}
     const links=(addMode==="link"||addMode==="both")?form.links.filter(l=>l.url.trim()).map(l=>({...l,url:l.url.trim()})):[];
     const attachments=form.attachments||[];
-    if(!links.length&&!attachments.length){notify("Add at least one link or upload a file","error");return;}
+    if(!links.length&&!attachments.length){notify("Upload a file or add a link","error");return;}
     if(links.some(l=>!l.url.startsWith("http"))){notify("Each link must start with http","error");return;}
-    saveDb({notes:[...(db.notes||[]),{...form,links,attachments,id:uid(),instId:inst.id,createdBy:user.name,createdAt:new Date().toISOString()}]});
-    setForm(blank);setShowAdd(false);setAddMode("link");notify("📒 Note added!");
+    const category=(form.category||"").trim()||"General";
+    saveDb({notes:[...(db.notes||[]),{...form,category,links,attachments,id:uid(),instId:inst.id,createdBy:user.name,createdAt:new Date().toISOString()}]});
+    setForm(blank);setShowAdd(false);setAddMode("file");notify("📒 Note added!");
   }
-  function del(id){if(!confirmDelete("this note"))return;saveDb({notes:(db.notes||[]).filter(n=>n.id!==id)});notify("Deleted","error");}
+  async function del(n){
+    if(!confirmDelete("this note"))return;
+    // remove stored files too (best-effort)
+    for(const a of (n.attachments||[])){ if(a.path) await deleteNoteFile(a.path); }
+    saveDb({notes:(db.notes||[]).filter(x=>x.id!==n.id)});notify("Deleted","error");
+  }
   const linkIcon=(t)=>t==="pdf"?"📄":t==="drive"?"🟢":t==="doc"?"📝":"🔗";
   const batchName=(id)=>id?(batches.find(b=>b.id===id)?.name||"Unknown batch"):"All batches";
   const fmtSize=(b)=>b>1024*1024?(b/1024/1024).toFixed(1)+"MB":(b/1024).toFixed(0)+"KB";
 
+  // group notes into folders by category
+  const folders={};
+  notes.forEach(n=>{const c=(n.category||"General").trim()||"General";(folders[c]=folders[c]||[]).push(n);});
+  const folderNames=Object.keys(folders).sort();
+  const shown=openFolder?(folders[openFolder]||[]):[];
+
   return <div style={{animation:"fadeUp 0.4s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
-      <PH title="📒 Notes" sub="Share study material — upload PDFs, DOCs or paste links" C={C}/>
-      <Btn onClick={()=>{setShowAdd(s=>!s);setForm(blank);setAddMode("link");}} C={C} color="green">+ Add Note</Btn>
+      <PH title="📒 Notes" sub="Organise study material in folders — upload PDFs & Word files (view-only, no download) or paste links" C={C}/>
+      <Btn onClick={()=>{setShowAdd(s=>!s);setForm(blank);setAddMode("file");}} C={C} color="green">+ Add Note</Btn>
     </div>
     {showAdd&&<div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:22,marginBottom:20,boxShadow:C.shadow}}>
       <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>New Note</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:8}}>
         <FG label="Title *" C={C}><Inp C={C} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Chapter 5 — Notes"/></FG>
         <FG label="Subject" C={C}><Inp C={C} value={form.subject} onChange={e=>setForm(f=>({...f,subject:e.target.value}))} placeholder="Subject"/></FG>
+        <FG label="Folder / Category *" C={C}><Inp C={C} value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))} placeholder="e.g. Physics, Question Papers, Class 10…"/></FG>
         <FG label="Visible to" C={C}><BatchSelect batches={batches} value={form.batchId} onChange={e=>setForm(f=>({...f,batchId:e.target.value}))} C={C}/></FG>
-        <FG label="Description" C={C}><Inp C={C} value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Short description"/></FG>
+        <FG label="Description" C={C} span><Inp C={C} value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Short description"/></FG>
       </div>
+      {cats.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
+        <span style={{fontSize:11,color:C.muted,alignSelf:"center"}}>Existing folders:</span>
+        {cats.map(c=><button key={c} onClick={()=>setForm(f=>({...f,category:c}))} style={{padding:"3px 10px",borderRadius:20,border:`1px solid ${C.border}`,background:form.category===c?C.greenL:C.bg,color:form.category===c?C.green:C.muted,fontSize:11,fontWeight:600,cursor:"pointer"}}>📁 {c}</button>)}
+      </div>}
 
       {/* ── Mode toggle ── */}
       <div style={{display:"flex",gap:8,marginBottom:14}}>
-        {[["link","🔗 Paste Link"],["file","📁 Upload File"],["both","🔗+📁 Both"]].map(([k,lbl])=>
+        {[["file","📁 Upload File"],["link","🔗 Paste Link"],["both","🔗+📁 Both"]].map(([k,lbl])=>
           <button key={k} onClick={()=>setAddMode(k)} style={{padding:"7px 14px",borderRadius:8,border:`2px solid ${addMode===k?C.green:C.border}`,background:addMode===k?C.greenL:"transparent",color:addMode===k?C.green:C.muted,fontWeight:700,fontSize:12,cursor:"pointer"}}>{lbl}</button>
         )}
       </div>
 
+      {/* ── File upload section ── */}
+      {(addMode==="file"||addMode==="both")&&<div style={{marginBottom:14}}>
+        <LBL C={C}>Upload Files (PDF / Word .docx — max 10 MB each · students view in-app, can't download)</LBL>
+        <div onClick={()=>!uploading&&fileRef.current?.click()} style={{border:`2px dashed ${C.green}`,borderRadius:10,padding:"22px 16px",textAlign:"center",cursor:uploading?"default":"pointer",background:C.greenL+"33",marginBottom:10}}>
+          <div style={{fontSize:28,marginBottom:6}}>📂</div>
+          <div style={{fontSize:13,fontWeight:700,color:C.green,marginBottom:2}}>Click to choose PDF / Word files</div>
+          <div style={{fontSize:11,color:C.muted}}>Up to 10 MB each. Stored securely — opened in a protected in-app viewer.</div>
+          <input ref={fileRef} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple style={{display:"none"}} onChange={handleFileUpload}/>
+        </div>
+        {uploading&&<div style={{marginBottom:10}}>
+          <div style={{fontSize:12,color:C.teal,fontWeight:600,marginBottom:4}}>⏳ Uploading… {progress}%</div>
+          <div style={{height:6,borderRadius:4,background:C.bg,overflow:"hidden"}}><div style={{height:"100%",width:progress+"%",background:C.teal,transition:"width .2s"}}/></div>
+        </div>}
+        {(form.attachments||[]).map((a,i)=><div key={a.id||i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,background:C.bg,border:`1px solid ${C.border}`,marginBottom:6}}>
+          <span style={{fontSize:20}}>{a.type==="pdf"?"📄":"📝"}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.fileName}</div>
+            <div style={{fontSize:10,color:C.muted}}>{fmtSize(a.fileSize)} · uploaded ✓</div>
+          </div>
+          <Btn onClick={()=>rmAttachment(i)} C={C} color="red" size="sm" outline>✕</Btn>
+        </div>)}
+      </div>}
+
       {/* ── Link section ── */}
       {(addMode==="link"||addMode==="both")&&<div style={{marginBottom:14}}>
-        <LBL C={C}>Links (PDF / Drive / DOC)</LBL>
+        <LBL C={C}>Links (PDF / Drive / DOC) — note: links open externally and aren't download-protected</LBL>
         {form.links.map((l,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
           <div style={{width:130,flexShrink:0}}><Sel C={C} value={l.type} onChange={e=>setLink(i,"type",e.target.value)}>{LINK_TYPES.map(([v,lbl])=><option key={v} value={v}>{lbl}</option>)}</Sel></div>
           <Inp C={C} value={l.url} onChange={e=>setLink(i,"url",e.target.value)} placeholder="https://… (PDF, Drive, or DOC URL)"/>
@@ -5671,47 +5924,46 @@ function InstNotes({db,saveDb,user,inst,color,notify,C}){
         <Btn onClick={addLinkRow} C={C} color="blue" size="sm" outline>+ Add another link</Btn>
       </div>}
 
-      {/* ── File upload section ── */}
-      {(addMode==="file"||addMode==="both")&&<div style={{marginBottom:14}}>
-        <LBL C={C}>Upload Files (PDF / DOC / DOCX — max 1.5 MB each)</LBL>
-        <div onClick={()=>fileRef.current?.click()} style={{border:`2px dashed ${C.green}`,borderRadius:10,padding:"22px 16px",textAlign:"center",cursor:"pointer",background:C.greenL+"33",marginBottom:10}}>
-          <div style={{fontSize:28,marginBottom:6}}>📂</div>
-          <div style={{fontSize:13,fontWeight:700,color:C.green,marginBottom:2}}>Click to choose PDF / DOC files</div>
-          <div style={{fontSize:11,color:C.muted}}>Max 1.5 MB per file. Larger files → use Google Drive link.</div>
-          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple style={{display:"none"}} onChange={handleFileUpload}/>
-        </div>
-        {uploading&&<div style={{fontSize:12,color:C.teal,fontWeight:600,marginBottom:8}}>⏳ Reading file…</div>}
-        {(form.attachments||[]).map((a,i)=><div key={a.id||i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,background:C.bg,border:`1px solid ${C.border}`,marginBottom:6}}>
-          <span style={{fontSize:20}}>{a.type==="pdf"?"📄":"📝"}</span>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.fileName}</div>
-            <div style={{fontSize:10,color:C.muted}}>{fmtSize(a.fileSize)}</div>
-          </div>
-          <Btn onClick={()=>rmAttachment(i)} C={C} color="red" size="sm" outline>✕</Btn>
-        </div>)}
-      </div>}
-
       <div style={{display:"flex",gap:10,marginTop:6}}>
         <Btn onClick={save} C={C} color="green" disabled={uploading}>Save Note</Btn>
         <Btn onClick={()=>{setShowAdd(false);setForm(blank);}} C={C} color="red" outline>Cancel</Btn>
       </div>
     </div>}
 
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:16}}>
-      {notes.map(n=><div key={n.id} style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,borderTop:`3px solid ${C.green}`,padding:18,boxShadow:C.shadow,display:"flex",flexDirection:"column",gap:8}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-          <div style={{flex:1}}><div style={{fontWeight:800,fontSize:14,color:C.text}}>{n.title}</div>{n.subject&&<div style={{fontSize:11,color:C.muted,marginTop:2}}>📘 {n.subject}</div>}<div style={{marginTop:6}}><Badge label={batchName(n.batchId)} color={n.batchId?"blue":"green"} C={C}/></div></div>
-          <Btn onClick={()=>del(n.id)} C={C} color="red" size="sm" outline>🗑</Btn>
-        </div>
-        {n.description&&<div style={{fontSize:12,color:C.muted,lineHeight:1.5}}>{n.description}</div>}
-        <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:4}}>
-          {(n.links||[]).map((l,i)=><a key={i} href={l.url} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",borderRadius:9,background:C.bg,border:`1px solid ${C.border}`,color:C.text,fontSize:12,fontWeight:600,textDecoration:"none"}}>{linkIcon(l.type)} Open {l.type==="pdf"?"PDF":l.type==="doc"?"DOC":l.type==="drive"?"Drive":"Link"} →</a>)}
-          {(n.attachments||[]).map((a,i)=><a key={i} href={a.dataUrl} download={a.fileName} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",borderRadius:9,background:C.bg,border:`1px solid ${C.border}`,color:C.text,fontSize:12,fontWeight:600,textDecoration:"none"}}>{a.type==="pdf"?"📄":"📝"} {a.fileName} <span style={{marginLeft:"auto",fontSize:10,color:C.muted}}>{a.fileSize>1024*1024?(a.fileSize/1024/1024).toFixed(1)+"MB":(a.fileSize/1024).toFixed(0)+"KB"}</span></a>)}
-        </div>
-        <div style={{fontSize:9,color:C.muted,marginTop:4}}>By {n.createdBy} · {fmt((n.createdAt||"").slice(0,10))}</div>
-      </div>)}
-      {!notes.length&&<div style={{gridColumn:"1/-1"}}><Empty msg="No notes yet — add one above" C={C}/></div>}
-    </div>
+    {/* ── Folder grid ── */}
+    {!openFolder&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:14}}>
+      {folderNames.map(fn=>{const items=folders[fn];const files=items.reduce((a,n)=>a+(n.attachments?.length||0)+(n.links?.length||0),0);return(
+        <button key={fn} onClick={()=>setOpenFolder(fn)} style={{textAlign:"left",background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:18,boxShadow:C.shadow,cursor:"pointer",display:"flex",flexDirection:"column",gap:6}}>
+          <div style={{fontSize:34}}>📁</div>
+          <div style={{fontWeight:800,fontSize:14,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fn}</div>
+          <div style={{fontSize:11,color:C.muted}}>{items.length} note{items.length!==1?"s":""} · {files} file{files!==1?"s":""}</div>
+        </button>);})}
+      {!folderNames.length&&<div style={{gridColumn:"1/-1"}}><Empty msg="No notes yet — add one above" C={C}/></div>}
+    </div>}
+
+    {/* ── Inside a folder ── */}
+    {openFolder&&<div>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+        <Btn onClick={()=>setOpenFolder(null)} C={C} color="red" size="sm" outline>← Folders</Btn>
+        <div style={{fontWeight:800,fontSize:16,color:C.text}}>📁 {openFolder}</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:16}}>
+        {shown.map(n=><div key={n.id} style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,borderTop:`3px solid ${C.green}`,padding:18,boxShadow:C.shadow,display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+            <div style={{flex:1}}><div style={{fontWeight:800,fontSize:14,color:C.text}}>{n.title}</div>{n.subject&&<div style={{fontSize:11,color:C.muted,marginTop:2}}>📘 {n.subject}</div>}<div style={{marginTop:6}}><Badge label={batchName(n.batchId)} color={n.batchId?"blue":"green"} C={C}/></div></div>
+            <Btn onClick={()=>del(n)} C={C} color="red" size="sm" outline>🗑</Btn>
+          </div>
+          {n.description&&<div style={{fontSize:12,color:C.muted,lineHeight:1.5}}>{n.description}</div>}
+          <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:4}}>
+            {(n.attachments||[]).map((a,i)=><button key={i} onClick={()=>setViewing(a)} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",borderRadius:9,background:C.bg,border:`1px solid ${C.border}`,color:C.text,fontSize:12,fontWeight:600,cursor:"pointer",textAlign:"left"}}>{a.type==="pdf"?"📄":"📝"} {a.fileName} <span style={{marginLeft:"auto",fontSize:10,color:C.muted}}>{fmtSize(a.fileSize)} · View 🔒</span></button>)}
+            {(n.links||[]).map((l,i)=><a key={i} href={l.url} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",borderRadius:9,background:C.bg,border:`1px solid ${C.border}`,color:C.text,fontSize:12,fontWeight:600,textDecoration:"none"}}>{linkIcon(l.type)} Open {l.type==="pdf"?"PDF":l.type==="doc"?"DOC":l.type==="drive"?"Drive":"Link"} ↗</a>)}
+          </div>
+          <div style={{fontSize:9,color:C.muted,marginTop:4}}>By {n.createdBy} · {fmt((n.createdAt||"").slice(0,10))}</div>
+        </div>)}
+      </div>
+    </div>}
+
+    {viewing&&<SecureDocViewer att={viewing} watermark={inst.name+" · "+user.name} C={C} onClose={()=>setViewing(null)}/>}
   </div>;
 }
 
@@ -5720,23 +5972,51 @@ function StuNotes({db,stu,C}){
   const notes=(db.notes||[]).filter(n=>n.instId===stu.instId&&(!n.batchId||n.batchId==="all"||n.batchId===stu.batchId)).sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
   const linkIcon=(t)=>t==="pdf"?"📄":t==="drive"?"🟢":t==="doc"?"📝":"🔗";
   const fmtSize=(b)=>b>1024*1024?(b/1024/1024).toFixed(1)+"MB":(b/1024).toFixed(0)+"KB";
+  const [openFolder,setOpenFolder]=useState(null);
+  const [viewing,setViewing]=useState(null);
+
+  const folders={};
+  notes.forEach(n=>{const c=(n.category||"General").trim()||"General";(folders[c]=folders[c]||[]).push(n);});
+  const folderNames=Object.keys(folders).sort();
+  const shown=openFolder?(folders[openFolder]||[]):[];
+
   return <div style={{animation:"fadeUp 0.4s ease"}}>
-    <PH title="📒 Notes" sub="Study material from your teachers" C={C}/>
+    <PH title="📒 Notes" sub="Study material from your teachers — open in folders" C={C}/>
     {!notes.length&&<div style={{textAlign:"center",padding:"48px 20px"}}><div style={{fontSize:48,marginBottom:12}}>📒</div><div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No notes yet</div><div style={{fontSize:12,color:C.muted}}>Your teacher will add notes and PDFs here</div></div>}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:16,marginTop:14}}>
-      {notes.map(n=><div key={n.id} style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,borderTop:`3px solid ${C.green}`,padding:18,boxShadow:C.shadow,display:"flex",flexDirection:"column",gap:8}}>
-        <div><div style={{fontWeight:800,fontSize:15,color:C.text}}>{n.title}</div>{n.subject&&<div style={{fontSize:12,color:C.muted,marginTop:2}}>📘 {n.subject}</div>}</div>
-        {n.description&&<div style={{fontSize:12,color:C.muted,lineHeight:1.5}}>{n.description}</div>}
-        <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:4}}>
-          {(n.links||[]).map((l,i)=><a key={i} href={l.url} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"11px",borderRadius:10,background:`linear-gradient(135deg,${C.green},${C.green}cc)`,color:"#fff",fontSize:13,fontWeight:700,textDecoration:"none",boxShadow:`0 4px 12px ${C.green}44`}}>{linkIcon(l.type)} Open {l.type==="pdf"?"PDF":l.type==="doc"?"DOC":l.type==="drive"?"Drive":"Link"} →</a>)}
-          {(n.attachments||[]).map((a,i)=><a key={i} href={a.dataUrl} download={a.fileName} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderRadius:10,background:`linear-gradient(135deg,${C.green},${C.green}cc)`,color:"#fff",fontSize:13,fontWeight:700,textDecoration:"none",boxShadow:`0 4px 12px ${C.green}44`}}>
-            <span style={{fontSize:18}}>{a.type==="pdf"?"📄":"📝"}</span>
-            <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.fileName}</span>
-            <span style={{fontSize:10,opacity:0.8,flexShrink:0}}>{fmtSize(a.fileSize)} ⬇</span>
-          </a>)}
-        </div>
-      </div>)}
-    </div>
+
+    {/* folder grid */}
+    {!openFolder&&!!notes.length&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:14,marginTop:14}}>
+      {folderNames.map(fn=>{const items=folders[fn];const files=items.reduce((a,n)=>a+(n.attachments?.length||0)+(n.links?.length||0),0);return(
+        <button key={fn} onClick={()=>setOpenFolder(fn)} style={{textAlign:"left",background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:16,boxShadow:C.shadow,cursor:"pointer",display:"flex",flexDirection:"column",gap:6}}>
+          <div style={{fontSize:32}}>📁</div>
+          <div style={{fontWeight:800,fontSize:13,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fn}</div>
+          <div style={{fontSize:11,color:C.muted}}>{files} file{files!==1?"s":""}</div>
+        </button>);})}
+    </div>}
+
+    {/* inside folder */}
+    {openFolder&&<div>
+      <div style={{display:"flex",alignItems:"center",gap:10,margin:"14px 0"}}>
+        <button onClick={()=>setOpenFolder(null)} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,color:C.text,cursor:"pointer"}}>← Folders</button>
+        <div style={{fontWeight:800,fontSize:16,color:C.text}}>📁 {openFolder}</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:16}}>
+        {shown.map(n=><div key={n.id} style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,borderTop:`3px solid ${C.green}`,padding:18,boxShadow:C.shadow,display:"flex",flexDirection:"column",gap:8}}>
+          <div><div style={{fontWeight:800,fontSize:15,color:C.text}}>{n.title}</div>{n.subject&&<div style={{fontSize:12,color:C.muted,marginTop:2}}>📘 {n.subject}</div>}</div>
+          {n.description&&<div style={{fontSize:12,color:C.muted,lineHeight:1.5}}>{n.description}</div>}
+          <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:4}}>
+            {(n.attachments||[]).map((a,i)=><button key={i} onClick={()=>setViewing(a)} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderRadius:10,background:`linear-gradient(135deg,${C.green},${C.green}cc)`,color:"#fff",fontSize:13,fontWeight:700,border:"none",cursor:"pointer",boxShadow:`0 4px 12px ${C.green}44`,textAlign:"left"}}>
+              <span style={{fontSize:18}}>{a.type==="pdf"?"📄":"📝"}</span>
+              <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.fileName}</span>
+              <span style={{fontSize:10,opacity:0.85,flexShrink:0}}>{fmtSize(a.fileSize)} · 🔒 View</span>
+            </button>)}
+            {(n.links||[]).map((l,i)=><a key={i} href={l.url} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"11px",borderRadius:10,background:C.bg,border:`1px solid ${C.border}`,color:C.text,fontSize:13,fontWeight:700,textDecoration:"none"}}>{linkIcon(l.type)} Open {l.type==="pdf"?"PDF":l.type==="doc"?"DOC":l.type==="drive"?"Drive":"Link"} ↗</a>)}
+          </div>
+        </div>)}
+      </div>
+    </div>}
+
+    {viewing&&<SecureDocViewer att={viewing} watermark={(stu.name||"Student")+" · "+(stu.rollNo||"")} C={C} onClose={()=>setViewing(null)}/>}
   </div>;
 }
 
