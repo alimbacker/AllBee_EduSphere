@@ -4,6 +4,8 @@ import { db as firestoreDb, doc, setDoc, onSnapshot, collection, getDocs } from 
 // so no change to firebase.js is needed. Requires Firebase Storage to be enabled in the console (see notes).
 import { getStorage, ref as sRef, uploadBytesResumable, getBlob, deleteObject } from "firebase/storage";
 const fbStorage = getStorage(firestoreDb.app);
+// If Storage isn't reachable, fail in ~20s instead of the default 2-minute silent retry.
+try{ fbStorage.maxUploadRetryTime=20000; fbStorage.maxOperationRetryTime=20000; }catch(e){}
 
 // EduSphere Corporate Design System
 const LIGHT={
@@ -3216,14 +3218,33 @@ function loadMammoth(){return new Promise((res,rej)=>{if(window.mammoth)return r
 // Files are stored in Firebase Storage; Firestore only holds a tiny pointer {path,name,size,type}.
 async function uploadNoteFile(instId,file,onProgress){
   const safe=file.name.replace(/[^\w.\-]+/g,"_");
-  const path=`notes/${instId}/${uid()}-${safe}`;
+  const path=`notes/${instId||"_"}/${uid()}-${safe}`;
   const task=uploadBytesResumable(sRef(fbStorage,path),file,{contentType:file.type||"application/octet-stream"});
   await new Promise((res,rej)=>{
+    let settled=false,timer=null;
+    const done=(fn,arg)=>{ if(settled)return; settled=true; if(timer)clearTimeout(timer); fn(arg); };
+    // Re-armed on every progress tick: a slow-but-moving upload is fine; only a real
+    // stall (no events for 20s — e.g. Storage not enabled / bucket unreachable) fails.
+    const arm=()=>{ if(timer)clearTimeout(timer); timer=setTimeout(()=>{ try{task.cancel();}catch(e){} done(rej,Object.assign(new Error("No response from Firebase Storage — make sure Storage is enabled in the Firebase console and the rules are published."),{code:"storage/stalled"})); },20000); };
+    arm();
     task.on("state_changed",
-      snap=>{ if(onProgress)onProgress(Math.round((snap.bytesTransferred/snap.totalBytes)*100)); },
-      err=>rej(err), ()=>res());
+      snap=>{ arm(); if(onProgress)onProgress(Math.round((snap.bytesTransferred/snap.totalBytes)*100)); },
+      err=>done(rej,err), ()=>done(res));
   });
   return path;
+}
+// Translate Firebase Storage error codes into something a teacher can act on.
+function storageErrMsg(err){
+  const code=(err&&err.code)||"";
+  if(code==="storage/stalled"||code==="storage/retry-limit-exceeded"||code==="storage/unknown")
+    return "Can't reach Storage. Enable Firebase Storage in the console (Build → Storage → Get started), then publish the rules.";
+  if(code==="storage/unauthorized"||code==="storage/unauthenticated")
+    return "Permission denied by Storage rules. Publish the rules shown in setup (and check whether they require sign-in).";
+  if(code==="storage/no-default-bucket")
+    return "No storageBucket in your firebase config — add it to firebase.js (e.g. your-project.appspot.com).";
+  if(code==="storage/quota-exceeded") return "Storage quota exceeded for this project.";
+  if(/bucket/i.test(code)) return "Storage bucket not found — enable Storage / check the bucket name in firebase.js.";
+  return (err&&(err.message||err.code))||"Upload failed";
 }
 async function deleteNoteFile(path){ try{ if(path)await deleteObject(sRef(fbStorage,path)); }catch(e){ /* already gone / no perms — ignore */ } }
 // Returns a Blob for a stored attachment. Supports new Storage-backed notes (att.path)
@@ -5804,6 +5825,7 @@ function InstNotes({db,saveDb,user,inst,color,notify,C}){
   const [addMode,setAddMode]=useState("file"); // "file" | "link" | "both"
   const [uploading,setUploading]=useState(false);
   const [progress,setProgress]=useState(0);
+  const [uploadError,setUploadError]=useState("");   // persistent setup-error hint
   const [openFolder,setOpenFolder]=useState(null); // null = folder grid
   const [viewing,setViewing]=useState(null);        // attachment shown in secure viewer
   const fileRef=useRef();
@@ -5821,6 +5843,7 @@ function InstNotes({db,saveDb,user,inst,color,notify,C}){
     const files=Array.from(e.target.files||[]);
     e.target.value="";
     if(!files.length)return;
+    setUploadError("");
     for(const f of files){
       if(!f.name.match(/\.(pdf|docx)$/i)){notify(`${f.name}: only PDF and Word (.docx) files are supported`,"error");continue;}
       if(f.size>NOTE_MAX){notify(`${f.name} is ${(f.size/1024/1024).toFixed(1)} MB — the limit is 10 MB`,"error");continue;}
@@ -5832,7 +5855,9 @@ function InstNotes({db,saveDb,user,inst,color,notify,C}){
         setForm(frm=>({...frm,attachments:[...(frm.attachments||[]),{type:ftype,fileName:f.name,fileSize:f.size,path,id:uid()}]}));
         notify(`Uploaded ${f.name}`);
       }catch(err){
-        notify(`Upload failed for ${f.name} — ${err?.code||err?.message||"check Storage rules"}`,"error");
+        const m=storageErrMsg(err);
+        setUploadError(m+(err&&err.code?`  (${err.code})`:""));
+        notify(`Upload failed — ${m}`,"error");
       }finally{setUploading(false);setProgress(0);}
     }
   }
@@ -5902,6 +5927,11 @@ function InstNotes({db,saveDb,user,inst,color,notify,C}){
         {uploading&&<div style={{marginBottom:10}}>
           <div style={{fontSize:12,color:C.teal,fontWeight:600,marginBottom:4}}>⏳ Uploading… {progress}%</div>
           <div style={{height:6,borderRadius:4,background:C.bg,overflow:"hidden"}}><div style={{height:"100%",width:progress+"%",background:C.teal,transition:"width .2s"}}/></div>
+        </div>}
+        {uploadError&&<div style={{marginBottom:10,padding:"12px 14px",borderRadius:10,background:C.redL||"#fdecec",border:`1px solid ${C.red}`,fontSize:12,color:C.red,lineHeight:1.5}}>
+          <div style={{fontWeight:800,marginBottom:4}}>⚠️ Upload failed</div>
+          <div>{uploadError}</div>
+          <div style={{marginTop:6,color:C.muted}}>One-time setup: in the Firebase console open <b>Build → Storage → Get started</b>, then paste the Storage rules and Publish. After that, uploads here will work.</div>
         </div>}
         {(form.attachments||[]).map((a,i)=><div key={a.id||i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,background:C.bg,border:`1px solid ${C.border}`,marginBottom:6}}>
           <span style={{fontSize:20}}>{a.type==="pdf"?"📄":"📝"}</span>
