@@ -546,6 +546,7 @@ function StudentRegister({db,onRegister,onBack,C}){
   const set=(k,v)=>setF(o=>({...o,[k]:v}));
   const selInst=insts.find(i=>i.id===f.instId);
   const type=selInst?.type;
+  const instCourses=useMemo(()=>{const custom=(db?.courses||[]).filter(c=>c.instId===f.instId).map(c=>c.name).filter(Boolean);return[...new Set([...custom,...COMP_COURSES])];},[db?.courses,f.instId]);
 
   function submit(){
     if(!f.instId){setErr("Please choose your institution.");return;}
@@ -595,7 +596,7 @@ function StudentRegister({db,onRegister,onBack,C}){
         <FG label="Class" C={C}><Sel C={C} value={f.class} onChange={e=>set("class",e.target.value)}>{SCHOOL_CLASSES.map(c=><option key={c}>{c}</option>)}</Sel></FG>
         <FG label="Section" C={C}><Sel C={C} value={f.section} onChange={e=>set("section",e.target.value)}>{SCHOOL_SECTIONS.map(s=><option key={s}>{s}</option>)}</Sel></FG>
       </G2>}
-      {type==="Computer Institute"&&<FG label="Course" C={C}><Sel C={C} value={f.course} onChange={e=>set("course",e.target.value)}>{[...new Set([...(db.courses||[]).filter(c=>c.instId===f.instId).map(c=>c.name),...COMP_COURSES])].map(c=><option key={c}>{c}</option>)}</Sel></FG>}
+      {type==="Computer Institute"&&<FG label="Course" C={C}><Sel C={C} value={f.course} onChange={e=>set("course",e.target.value)}>{instCourses.map(c=><option key={c}>{c}</option>)}</Sel></FG>}
       {type==="Dance School"&&<G2>
         <FG label="Dance Style" C={C}><Sel C={C} value={f.danceStyle} onChange={e=>set("danceStyle",e.target.value)}>{DANCE_STYLES.map(d=><option key={d}>{d}</option>)}</Sel></FG>
         <FG label="Level" C={C}><Sel C={C} value={f.danceLevel} onChange={e=>set("danceLevel",e.target.value)}>{DANCE_LEVELS.map(d=><option key={d}>{d}</option>)}</Sel></FG>
@@ -3024,7 +3025,7 @@ function InstStudents({students,inst,courses,color,onUpdate,onDelete,C}){
           </div>
         </div>;})}
       </div>
-      {sel&&<StuProfileCard s={{...(students.find(x=>x.id===sel.id)||sel),_instType:inst?.type}} color={color} onClose={()=>setSel(null)} onPhoto={()=>setPhotoFor(sel.id)} onEdit={(s)=>{setEditId(s.id);setSel(null);}} onDelete={(id)=>{onDelete(id);setSel(null);}} C={C}/>}
+      {sel&&<StuProfileCard s={students.find(x=>x.id===sel.id)||sel} inst={inst} color={color} onClose={()=>setSel(null)} onPhoto={()=>setPhotoFor(sel.id)} onEdit={(s)=>{setEditId(s.id);setSel(null);}} onDelete={(id)=>{onDelete(id);setSel(null);}} C={C}/>}
     </div>
     {photoFor&&<PhotoModal sid={photoFor} student={students.find(s=>s.id===photoFor)} color={color} onSave={(sid,photo)=>{onUpdate(sid,{photo});setPhotoFor(null);}} onClose={()=>setPhotoFor(null)} C={C}/>}
     {editId&&<StuEditModal student={students.find(s=>s.id===editId)} inst={inst} courses={courses} color={color} onSave={(id,patch)=>{onUpdate(id,patch);setEditId(null);}} onClose={()=>setEditId(null)} C={C}/>}
@@ -3129,7 +3130,7 @@ function StuEditModal({student,inst,courses,color,onSave,onClose,C}){
   </div>;
 }
 
-function StuProfileCard({s,color,onClose,onPhoto,onEdit,onDelete,C}){
+function StuProfileCard({s,inst,color,onClose,onPhoto,onEdit,onDelete,C}){
   const pct=attPct(s.attendance);const tf=s.fees?.reduce((a,f)=>a+Number(f.amount||0),0)||0;const pf=s.fees?.reduce((a,f)=>a+Number(f.paid||0),0)||0;const exams=s.exams||[];const avgM=exams.length?Math.round(exams.reduce((a,e)=>a+Number(e.percentage||0),0)/exams.length):null;const hwDone=s.homeworks?.filter(h=>h.status==="Submitted").length||0;
   return <div style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:20,position:"sticky",top:24,boxShadow:C.shadow,animation:"slideIn 0.3s ease"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
@@ -3149,7 +3150,7 @@ function StuProfileCard({s,color,onClose,onPhoto,onEdit,onDelete,C}){
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
       {[{l:"Attendance",v:`${pct}%`,c:pct>=75?C.green:C.red},{l:"Avg Marks",v:avgM!=null?`${avgM}%`:"--",c:C.teal},{l:"Fee Paid",v:`Rs.${pf.toLocaleString()}`,c:C.green},{l:"HW Done",v:`${hwDone}/${s.homeworks?.length||0}`,c:C.purple}].map(r=><div key={r.l} style={{background:C.bg,borderRadius:9,padding:"10px",textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:14,fontWeight:800,color:r.c}}>{r.v}</div><div style={{fontSize:9,color:C.muted,marginTop:2}}>{r.l}</div></div>)}
     </div>
-    {[{l:"Status",v:s.status||"Studying"},{l:s.status==="Dropout"?"Dropout Date":"Completed On",v:fmt(s.completionDate)},{l:"Course",v:s.course},{l:"Department",v:s.department},{l:"Dance Style",v:s._instType==="Dance School"?s.danceStyle:undefined},{l:"Class",v:s.class},{l:"Batch",v:s.batch||s.danceBatch},{l:"Duration",v:s.duration},{l:"Year",v:s.year},{l:"Phone",v:s.phone},{l:"Email",v:s.email},{l:"Parent",v:s.parent},{l:"Parent Ph",v:s.parentPhone},{l:"DOB",v:fmt(s.dob)},{l:"Gender",v:s.gender},{l:"Blood",v:s.blood},{l:"Admitted",v:fmt(s.admissionDate)}].filter(r=>r.v&&r.v!=="--").map(r=><div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}><span style={{color:C.muted}}>{r.l}</span><span style={{fontWeight:600,color:C.text}}>{r.v}</span></div>)}
+    {[{l:"Status",v:s.status||"Studying"},{l:s.status==="Dropout"?"Dropout Date":"Completed On",v:fmt(s.completionDate)},{l:"Course",v:s.course},{l:"Department",v:s.department},{l:"Dance Style",v:inst?.type==="Dance School"?s.danceStyle:undefined},{l:"Class",v:s.class},{l:"Batch",v:s.batch},{l:"Duration",v:s.duration},{l:"Year",v:s.year},{l:"Phone",v:s.phone},{l:"Email",v:s.email},{l:"Parent",v:s.parent},{l:"Parent Ph",v:s.parentPhone},{l:"DOB",v:fmt(s.dob)},{l:"Gender",v:s.gender},{l:"Blood",v:s.blood},{l:"Admitted",v:fmt(s.admissionDate)}].filter(r=>r.v&&r.v!=="--").map(r=><div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}><span style={{color:C.muted}}>{r.l}</span><span style={{fontWeight:600,color:C.text}}>{r.v}</span></div>)}
     {s.attendance?.length>0&&<div style={{marginTop:12}}><Sec C={C}>Last 7 Days</Sec><div style={{display:"flex",gap:3}}>{s.attendance.slice(-7).map((a,i)=><div key={i} title={`${fmt(a.date)}: ${a.status}`} style={{flex:1,height:24,borderRadius:5,background:a.status==="Present"?C.green:a.status==="Absent"?C.red:C.gold,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700}}>{a.status[0]}</div>)}</div></div>}
   </div>;
 }
@@ -3479,7 +3480,7 @@ function InstRegister({inst,onSave,color,m,courses,C}){
   const [f,setF]=useState(blank);const [err,setErr]=useState({});
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   function validate(){const e={};if(!f.name.trim())e.name="Required";if(!f.phone.match(/^\d{10}$/))e.phone="10 digits needed";if(!f.dob)e.dob="Required";if(inst.type==="College"&&!f.department)e.department="Required";setErr(e);return!Object.keys(e).length;}
-  function submit(){if(validate()){onSave({...f,institution:inst.type});setF(blank);setStep(0);}}
+  function submit(){if(validate()){const data={...f,institution:inst.type};if(inst.type!=="Dance School"){delete data.danceStyle;delete data.danceLevel;delete data.danceBatch;delete data.danceGoal;}onSave(data);setF(blank);setStep(0);}}
   const steps=inst.type==="College"?[["🏫 Academic",<CollegeF f={f} set={set} err={err} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:inst.type==="School"?[["🏫 Class",<SchoolF f={f} set={set} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:inst.type==="Computer Institute"?[["💻 Course",<CompF f={f} set={set} courses={courses} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]]:[["💃 Dance",<DanceF f={f} set={set} C={C}/>],["👤 Personal",<PersonalF f={f} set={set} err={err} color={color} C={C}/>],["📞 Contact",<ContactF f={f} set={set} err={err} C={C}/>]];
   return <div style={{maxWidth:700,animation:"fadeUp 0.4s ease"}}>
     <PH title={`${m.icon} Register Student`} sub={`Enrolling into ${inst.name}`} C={C}/>
@@ -5229,7 +5230,7 @@ function InstTests({db,saveDb,user,inst,color,notify,C}){
   const pendingFor=(t)=>{const done=new Set((t.attempts||[]).map(a=>a.studentId));return expectedFor(t).filter(s=>!done.has(s.id));};
   const [view,setView]=useState("list");
   const [activeId,setActiveId]=useState(null);
-  const blank={title:"",subject:"",batchId:"",description:""};
+  const blank={title:"",subject:"",batchId:"",description:"",mode:"mcq"};
   const [form,setForm]=useState(blank);
   const [qs,setQs]=useState([]);
   const [qForm,setQForm]=useState({question:"",options:["","","",""],correct:0,marks:1,explanation:""});
@@ -5259,7 +5260,7 @@ function InstTests({db,saveDb,user,inst,color,notify,C}){
     {view==="list"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
       {tests.map(t=>{const subs=t.attempts||[];const top=subs.length?Math.max(...subs.map(s=>s.score)):0;return <div key={t.id} style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,padding:18,boxShadow:C.shadow,borderLeft:`4px solid ${C.purple}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10}}>
-          <div><div style={{fontWeight:700,fontSize:14,color:C.text}}>{t.title}</div><div style={{fontSize:11,color:C.muted,marginTop:3}}>{t.subject} · {t.questions?.length||0} questions · {t.totalMarks} marks</div><div style={{marginTop:6}}><Badge label={batchName(t.batchId)} color={t.batchId?"blue":"green"} C={C}/></div></div>
+          <div><div style={{fontWeight:700,fontSize:14,color:C.text}}>{t.title}</div><div style={{fontSize:11,color:C.muted,marginTop:3}}>{t.subject} · {t.questions?.length||0} questions · {t.totalMarks} marks</div><div style={{marginTop:6,display:"flex",gap:6,flexWrap:"wrap"}}><Badge label={batchName(t.batchId)} color={t.batchId?"blue":"green"} C={C}/><Badge label={t.mode==="quiz"?"⚡ Quiz":"📋 MCQ"} color={t.mode==="quiz"?"purple":"teal"} C={C}/></div></div>
           <div style={{display:"flex",gap:8}}>
             <div style={{textAlign:"center",padding:"6px 14px",background:C.bg,borderRadius:8,border:`1px solid ${C.border}`}}><div style={{fontWeight:800,fontSize:16,color:C.purple}}>{subs.length}</div><div style={{fontSize:9,color:C.muted}}>Attempts</div></div>
             <div style={{textAlign:"center",padding:"6px 14px",background:C.bg,borderRadius:8,border:`1px solid ${C.border}`}}><div style={{fontWeight:800,fontSize:16,color:pendingFor(t).length?C.red:C.green}}>{pendingFor(t).length}</div><div style={{fontSize:9,color:C.muted}}>Pending</div></div>
@@ -5280,6 +5281,13 @@ function InstTests({db,saveDb,user,inst,color,notify,C}){
           <FG label="Test Title *" C={C} span><Inp C={C} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Unit 1 Quiz — Mathematics"/></FG>
           <FG label="Subject *" C={C}><Inp C={C} value={form.subject} onChange={e=>setForm(f=>({...f,subject:e.target.value}))} placeholder="Subject"/></FG>
           <FG label="Visible to" C={C}><BatchSelect batches={batches} value={form.batchId} onChange={e=>setForm(f=>({...f,batchId:e.target.value}))} C={C}/></FG>
+          <FG label="Test Mode" C={C}><div style={{display:"flex",gap:8}}>
+            {[{v:"mcq",l:"📋 MCQ",d:"All questions shown at once, submit at end"},
+              {v:"quiz",l:"⚡ Quiz",d:"One question at a time, instant feedback"}].map(m=><button key={m.v} onClick={()=>setForm(f=>({...f,mode:m.v}))} style={{flex:1,padding:"10px 8px",borderRadius:9,border:`2px solid ${form.mode===m.v?C.teal:C.border}`,background:form.mode===m.v?`${C.teal}14`:C.bg,cursor:"pointer",textAlign:"left"}}>
+              <div style={{fontWeight:700,fontSize:12,color:form.mode===m.v?C.teal:C.text}}>{m.l}</div>
+              <div style={{fontSize:10,color:C.muted,marginTop:2}}>{m.d}</div>
+            </button>)}
+          </div></FG>
           <FG label="Instructions (optional)" C={C} span><Inp C={C} value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Shown to students before they start"/></FG>
         </div>
       </div>
@@ -5287,7 +5295,7 @@ function InstTests({db,saveDb,user,inst,color,notify,C}){
         <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:C.text}}>Questions ({qs.length})</div>
         {qs.map((q,i)=><div key={q.id} style={{padding:"10px 14px",background:C.bg,borderRadius:9,marginBottom:8,border:`1px solid ${C.border}`}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-            <div style={{flex:1}}><div style={{fontWeight:600,fontSize:12,color:C.text}}>Q{i+1}. {q.question}</div><div style={{fontSize:11,marginTop:4}}>{q.options.map((o,oi)=>o.trim()&&<span key={oi} style={{marginRight:12,color:oi===q.correct?C.green:C.muted,fontWeight:oi===q.correct?700:400}}>{String.fromCharCode(65+oi)}. {o}{oi===q.correct?" ✓":""}</span>)}</div></div>
+            <div style={{flex:1}}><div style={{fontWeight:600,fontSize:12,color:C.text}}>Q{i+1}. {q.question}</div><div style={{fontSize:11,marginTop:4}}>{q.options.map((o,oi)=>o.trim()&&<span key={oi} style={{marginRight:12,color:oi===q.correct?C.green:C.muted,fontWeight:oi===q.correct?700:400}}>{String.fromCharCode(65+oi)}. {o}{oi===q.correct?" ✓":""}</span>)}</div>{q.explanation&&<div style={{fontSize:10,color:C.blue,marginTop:3}}>💡 {q.explanation}</div>}</div>
             <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}><span style={{fontSize:11,color:C.purple,fontWeight:700}}>{q.marks}m</span><Btn onClick={()=>removeQ(q.id)} C={C} color="red" size="sm" outline>✕</Btn></div>
           </div>
         </div>)}
@@ -5301,10 +5309,9 @@ function InstTests({db,saveDb,user,inst,color,notify,C}){
           </div>
           <div style={{display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap"}}>
             <div style={{width:120}}><LBL C={C}>Marks</LBL><Inp C={C} type="number" min={1} value={qForm.marks} onChange={e=>setQForm(f=>({...f,marks:Number(e.target.value)||1}))}/></div>
-            <div style={{flex:1}}><LBL C={C}>Explanation (shown to student after test)</LBL><Inp C={C} value={qForm.explanation} onChange={e=>setQForm(f=>({...f,explanation:e.target.value}))} placeholder="Why is this the correct answer? (optional)"/></div>
-            <Btn onClick={addQ} C={C} color="teal">+ Add Question</Btn>
-            <span style={{fontSize:11,color:C.muted}}>Tip: click an option's circle to set the correct answer.</span>
+            <div style={{flex:1}}><LBL C={C}>Explanation (optional — shown to students after test)</LBL><Inp C={C} value={qForm.explanation||""} onChange={e=>setQForm(f=>({...f,explanation:e.target.value}))} placeholder="Why is this the correct answer?"/></div>
           </div>
+          <div style={{marginTop:10}}><Btn onClick={addQ} C={C} color="teal">+ Add Question</Btn><span style={{fontSize:11,color:C.muted,marginLeft:12}}>Tip: click the circle to set the correct answer.</span></div>
         </div>
       </div>
       <Btn onClick={createTest} C={C} color="purple">📤 Publish Test</Btn>
@@ -5327,6 +5334,16 @@ function InstTests({db,saveDb,user,inst,color,notify,C}){
               <div style={{minWidth:0}}><div style={{fontSize:12,fontWeight:600,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div><div style={{fontSize:9,color:C.muted}}>{s.rollNo||"--"}</div></div>
             </div>)}
           </div>;})()}
+      <Sec C={C}>🔑 Answer Key</Sec>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {active.questions.map((q,i)=><div key={q.id} style={{background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:"12px 14px"}}>
+          <div style={{fontWeight:600,fontSize:12,color:C.text,marginBottom:8}}>Q{i+1}. {q.question} <span style={{color:C.muted,fontWeight:400,fontSize:11}}>({q.marks}m)</span></div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:q.explanation?8:0}}>
+            {q.options.map((o,oi)=>o.trim()&&<span key={oi} style={{padding:"4px 12px",borderRadius:7,fontSize:11,fontWeight:oi===q.correct?700:400,background:oi===q.correct?C.greenL:C.bg,color:oi===q.correct?C.green:C.muted,border:`1.5px solid ${oi===q.correct?C.green:C.border}`}}>{String.fromCharCode(65+oi)}. {o}{oi===q.correct?" ✓":""}</span>)}
+          </div>
+          {q.explanation&&<div style={{fontSize:11,color:C.text,background:C.blueL,borderRadius:8,padding:"8px 12px",borderLeft:`3px solid ${C.blue}`}}>💡 <span style={{fontWeight:700,color:C.blue}}>Explanation:</span> {q.explanation}</div>}
+        </div>)}
+      </div>
     </div>}
   </div>;
 }
@@ -5337,29 +5354,101 @@ function StuTests({db,saveDb,stu,C,notify}){
   const [takingId,setTakingId]=useState(null);
   const [resultId,setResultId]=useState(null);
   const [answers,setAnswers]=useState({});
+  const [quizStep,setQuizStep]=useState(0);
+  const [quizRevealed,setQuizRevealed]=useState(false);
   const myAttempt=(t)=>(t.attempts||[]).find(a=>a.studentId===stu.id);
 
-  function start(t){setTakingId(t.id);setAnswers({});setResultId(null);}
+  function start(t){setTakingId(t.id);setAnswers({});setResultId(null);setQuizStep(0);setQuizRevealed(false);}
+
+  function saveAndFinish(t,finalAnswers){
+    let score=0,correct=0;
+    t.questions.forEach(q=>{if(finalAnswers[q.id]===q.correct){score+=Number(q.marks)||1;correct++;}});
+    const attempt={id:uid(),studentId:stu.id,name:stu.name,score,total:t.totalMarks,correctCount:correct,qCount:t.questions.length,submittedAt:new Date().toISOString(),answers:{...finalAnswers}};
+    const pct=t.totalMarks>0?Math.round(score/t.totalMarks*100):0;
+    const ag=pct>=90?"A+":pct>=80?"A":pct>=70?"B+":pct>=60?"B":pct>=50?"C":"F";
+    const examEntry={id:uid(),examName:t.title,subject:t.subject,date:new Date().toISOString().slice(0,10),marks:score,maxMarks:t.totalMarks,percentage:pct,grade:ag,remarks:`Online Test · ${correct}/${t.questions.length} correct`,fromTest:true,testId:t.id};
+    const updatedStudents=(db.students||[]).map(s=>s.id===stu.id?{...s,exams:[...(s.exams||[]).filter(e=>e.testId!==t.id),examEntry]}:s);
+    saveDb({tests:(db.tests||[]).map(x=>x.id===t.id?{...x,attempts:[...(x.attempts||[]).filter(a=>a.studentId!==stu.id),attempt]}:x),students:updatedStudents});
+    notify(`✅ Submitted! You scored ${score}/${t.totalMarks}`);
+    setTakingId(null);setResultId(t.id);setAnswers({});setQuizStep(0);setQuizRevealed(false);
+  }
+
   function submit(t){
     const unanswered=t.questions.filter(q=>answers[q.id]===undefined).length;
     if(unanswered>0&&!window.confirm(`${unanswered} question(s) not answered. Submit anyway?`))return;
-    let score=0,correct=0;
-    t.questions.forEach(q=>{if(answers[q.id]===q.correct){score+=Number(q.marks)||1;correct++;}});
-    const attempt={id:uid(),studentId:stu.id,name:stu.name,score,total:t.totalMarks,correctCount:correct,qCount:t.questions.length,studentAnswers:{...answers},submittedAt:new Date().toISOString()};
-    saveDb({tests:(db.tests||[]).map(x=>x.id===t.id?{...x,attempts:[...(x.attempts||[]).filter(a=>a.studentId!==stu.id),attempt]}:x)});
-    notify(`Submitted! You scored ${score}/${t.totalMarks}`);
-    setTakingId(null);setResultId(t.id);setAnswers({});
+    saveAndFinish(t,answers);
   }
 
   const taking=tests.find(t=>t.id===takingId);
   const resultTest=tests.find(t=>t.id===resultId);
 
-  // ── Taking a test ──
+  // ── Quiz mode (one question at a time) ──
+  if(taking&&taking.mode==="quiz"){
+    const q=taking.questions[quizStep];
+    const isLast=quizStep===taking.questions.length-1;
+    const chosen=answers[q.id];
+    const isCorrect=chosen===q.correct;
+    return <div style={{animation:"fadeUp 0.4s ease"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:12}}>
+        <PH title={`⚡ ${taking.title}`} sub={`${taking.subject} · Quiz Mode`} C={C}/>
+        <Btn onClick={()=>{if(window.confirm("Leave the quiz? Your progress won't be saved."))setTakingId(null);}} C={C} color="red" size="sm" outline>Quit</Btn>
+      </div>
+      {/* Progress bar */}
+      <div style={{marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginBottom:4}}>
+          <span>Question {quizStep+1} of {taking.questions.length}</span>
+          <span>{Object.keys(answers).length} answered</span>
+        </div>
+        <div style={{height:6,background:C.border,borderRadius:99,overflow:"hidden"}}>
+          <div style={{height:"100%",width:`${((quizStep+1)/taking.questions.length)*100}%`,background:C.teal,borderRadius:99,transition:"width 0.3s"}}/>
+        </div>
+      </div>
+      {/* Question card */}
+      <div style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,padding:"20px 22px",boxShadow:C.shadowM,marginBottom:14}}>
+        <div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:16,lineHeight:1.5}}>Q{quizStep+1}. {q.question} <span style={{fontSize:11,color:C.muted,fontWeight:400}}>({q.marks} mark{q.marks!==1?"s":""})</span></div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {q.options.map((o,oi)=>{
+            if(!o.trim())return null;
+            let borderColor=C.border,bg=C.bg,textColor=C.text;
+            if(quizRevealed){
+              if(oi===q.correct){borderColor=C.green;bg=C.greenL;textColor=C.green;}
+              else if(oi===chosen){borderColor=C.red;bg=C.redL;textColor=C.red;}
+            } else if(chosen===oi){borderColor=C.teal;bg=`${C.teal}12`;}
+            return <button key={oi} onClick={()=>{if(!quizRevealed)setAnswers(a=>({...a,[q.id]:oi}));}} style={{textAlign:"left",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderRadius:10,cursor:quizRevealed?"default":"pointer",border:`2px solid ${borderColor}`,background:bg,transition:"all 0.2s"}}>
+              <span style={{width:26,height:26,borderRadius:99,flexShrink:0,border:`2px solid ${borderColor}`,background:chosen===oi?borderColor:"transparent",color:"#fff",fontSize:12,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {quizRevealed&&oi===q.correct?"✓":quizRevealed&&oi===chosen&&!isCorrect?"✗":String.fromCharCode(65+oi)}
+              </span>
+              <span style={{fontSize:13,color:textColor,fontWeight:quizRevealed&&oi===q.correct?700:400}}>{o}</span>
+            </button>;
+          })}
+        </div>
+        {/* Reveal feedback */}
+        {quizRevealed&&<div style={{marginTop:14,padding:"12px 14px",borderRadius:10,background:isCorrect?C.greenL:C.redL,border:`1px solid ${isCorrect?C.green:C.red}`}}>
+          <div style={{fontWeight:700,fontSize:13,color:isCorrect?C.green:C.red,marginBottom:q.explanation?6:0}}>
+            {isCorrect?"✅ Correct! Well done!":"❌ Incorrect. The correct answer is "+String.fromCharCode(65+q.correct)+". "+q.options[q.correct]}
+          </div>
+          {q.explanation&&<div style={{fontSize:12,color:C.text,lineHeight:1.5}}>💡 {q.explanation}</div>}
+        </div>}
+      </div>
+      {/* Action buttons */}
+      <div style={{display:"flex",gap:10}}>
+        {!quizRevealed?
+          <Btn onClick={()=>{if(chosen===undefined){notify("Please select an answer first","error");return;}setQuizRevealed(true);}} C={C} color="teal" disabled={chosen===undefined}>Check Answer</Btn>
+          :isLast?
+            <Btn onClick={()=>saveAndFinish(taking,answers)} C={C} color="green">✅ Finish Quiz</Btn>
+            :<Btn onClick={()=>{setQuizStep(s=>s+1);setQuizRevealed(false);}} C={C} color="purple">Next Question →</Btn>
+        }
+        {!quizRevealed&&quizStep>0&&<Btn onClick={()=>{setQuizStep(s=>s-1);setQuizRevealed(answers[taking.questions[quizStep-1]?.id]!==undefined);}} C={C} color="gold" outline>← Back</Btn>}
+      </div>
+    </div>;
+  }
+
+  // ── MCQ mode (all questions at once) ──
   if(taking){
     const answered=taking.questions.filter(q=>answers[q.id]!==undefined).length;
     return <div style={{animation:"fadeUp 0.4s ease"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:6}}>
-        <PH title={`📝 ${taking.title}`} sub={`${taking.subject} · ${taking.totalMarks} marks`} C={C}/>
+        <PH title={`📋 ${taking.title}`} sub={`${taking.subject} · ${taking.totalMarks} marks`} C={C}/>
         <Btn onClick={()=>{if(window.confirm("Leave the test? Your answers won't be saved."))setTakingId(null);}} C={C} color="red" size="sm" outline>Quit</Btn>
       </div>
       {taking.description&&<div style={{background:C.goldL,color:C.gold,borderRadius:9,padding:"10px 14px",fontSize:12,marginBottom:14}}>ℹ️ {taking.description}</div>}
@@ -5393,26 +5482,37 @@ function StuTests({db,saveDb,stu,C,notify}){
       </div>}
       <Sec C={C}>🏆 Leaderboard — Top Marks</Sec>
       <TestLeaderboard test={resultTest} C={C} highlightId={stu.id}/>
-      <Sec C={C}>📋 Answer Review</Sec>
-      <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:6}}>
-        {resultTest.questions.map((q,i)=>{
-          const myAns=mine?(mine.studentAnswers||{})[q.id]:undefined;
-          const isCorrect=myAns===q.correct;
-          return <div key={q.id} style={{background:C.surface,borderRadius:12,border:`2px solid ${isCorrect?C.green:C.red}`,padding:"14px 16px",boxShadow:C.shadow}}>
-            <div style={{fontWeight:700,fontSize:13,color:C.text,marginBottom:8}}>Q{i+1}. {q.question} <span style={{fontSize:11,color:C.muted,fontWeight:500}}>({q.marks}m)</span></div>
-            <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:8}}>
-              {q.options.map((o,oi)=>o.trim()&&<div key={oi} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:8,background:oi===q.correct?C.greenL:myAns===oi&&oi!==q.correct?C.redL:C.bg,border:`1px solid ${oi===q.correct?C.green:myAns===oi&&oi!==q.correct?C.red:C.border}`}}>
-                <span style={{width:20,height:20,borderRadius:99,flexShrink:0,background:oi===q.correct?C.green:myAns===oi?C.red:"transparent",border:`2px solid ${oi===q.correct?C.green:myAns===oi?C.red:C.border}`,color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{oi===q.correct?"✓":myAns===oi?"✗":String.fromCharCode(65+oi)}</span>
-                <span style={{fontSize:12,color:C.text,fontWeight:oi===q.correct?700:400}}>{o}</span>
-                {oi===q.correct&&<span style={{fontSize:10,color:C.green,fontWeight:700,marginLeft:"auto"}}>Correct Answer</span>}
-                {myAns===oi&&oi!==q.correct&&<span style={{fontSize:10,color:C.red,fontWeight:700,marginLeft:"auto"}}>Your Answer</span>}
-              </div>)}
-            </div>
-            {q.explanation&&<div style={{background:C.blueL,borderRadius:8,padding:"8px 12px",fontSize:11,color:C.blue,fontWeight:600}}>💡 {q.explanation}</div>}
-            {!q.explanation&&<div style={{fontSize:10,color:C.muted,fontStyle:"italic"}}>No explanation provided for this question.</div>}
-          </div>;
-        })}
-      </div>
+      {mine&&resultTest.questions?.length>0&&<>
+        <Sec C={C}>📋 Answer Review</Sec>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {resultTest.questions.map((q,i)=>{
+            const studentAns=mine.answers?.[q.id];
+            const isRight=studentAns===q.correct;
+            return <div key={q.id} style={{background:C.surface,borderRadius:12,border:`2px solid ${isRight?C.green:C.red}22`,padding:"14px 16px",boxShadow:C.shadow}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:10}}>
+                <div style={{fontWeight:700,fontSize:13,color:C.text,lineHeight:1.4}}>Q{i+1}. {q.question}</div>
+                <span style={{flexShrink:0,fontSize:11,fontWeight:800,padding:"3px 10px",borderRadius:99,background:isRight?C.greenL:C.redL,color:isRight?C.green:C.red}}>{isRight?"✅ Correct":"❌ Wrong"}</span>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {q.options.map((o,oi)=>{
+                  if(!o.trim())return null;
+                  const isCorrectOpt=oi===q.correct;
+                  const isStudentAns=oi===studentAns;
+                  return <div key={oi} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 11px",borderRadius:8,background:isCorrectOpt?C.greenL:isStudentAns&&!isRight?C.redL:C.bg,border:`1.5px solid ${isCorrectOpt?C.green:isStudentAns&&!isRight?C.red:C.border}`}}>
+                    <span style={{width:22,height:22,borderRadius:99,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,background:isCorrectOpt?C.green:isStudentAns&&!isRight?C.red:C.border,color:"#fff"}}>{String.fromCharCode(65+oi)}</span>
+                    <span style={{fontSize:12,color:C.text,flex:1}}>{o}</span>
+                    {isCorrectOpt&&<span style={{fontSize:10,fontWeight:700,color:C.green,flexShrink:0}}>✓ Correct Answer</span>}
+                    {isStudentAns&&!isRight&&<span style={{fontSize:10,fontWeight:700,color:C.red,flexShrink:0}}>Your Answer</span>}
+                  </div>;
+                })}
+              </div>
+              {q.explanation&&<div style={{marginTop:10,padding:"10px 12px",background:C.blueL,borderRadius:8,borderLeft:`3px solid ${C.blue}`,fontSize:12,color:C.text,lineHeight:1.5}}>
+                <span style={{fontWeight:700,color:C.blue}}>💡 Explanation: </span>{q.explanation}
+              </div>}
+            </div>;
+          })}
+        </div>
+      </>}
     </div>;
   }
 
@@ -5421,13 +5521,13 @@ function StuTests({db,saveDb,stu,C,notify}){
     <PH title="📝 Tests" sub="Attempt your tests and check the leaderboard" C={C}/>
     {!tests.length&&<div style={{textAlign:"center",padding:"48px 20px"}}><div style={{fontSize:48,marginBottom:12}}>📝</div><div style={{fontWeight:700,fontSize:15,color:C.text,marginBottom:6}}>No tests yet</div><div style={{fontSize:12,color:C.muted}}>Your teacher will add tests here</div></div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14,marginTop:14}}>
-      {tests.map(t=>{const done=myAttempt(t);return <div key={t.id} style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,borderTop:`3px solid ${C.purple}`,padding:18,boxShadow:C.shadow,display:"flex",flexDirection:"column",gap:8}}>
-        <div><div style={{fontWeight:800,fontSize:15,color:C.text}}>{t.title}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>📘 {t.subject}</div></div>
+      {tests.map(t=>{const done=myAttempt(t);const isQuiz=t.mode==="quiz";return <div key={t.id} style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,borderTop:`3px solid ${isQuiz?C.purple:C.teal}`,padding:18,boxShadow:C.shadow,display:"flex",flexDirection:"column",gap:8}}>
+        <div><div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{fontWeight:800,fontSize:15,color:C.text}}>{t.title}</span><Badge label={isQuiz?"⚡ Quiz":"📋 MCQ"} color={isQuiz?"purple":"teal"} C={C}/></div><div style={{fontSize:12,color:C.muted,marginTop:2}}>📘 {t.subject}</div></div>
         <div style={{fontSize:11,color:C.muted}}>{t.questions?.length||0} questions · {t.totalMarks} marks</div>
         {done?<>
           <div style={{background:C.greenL,color:C.green,borderRadius:8,padding:"8px 12px",fontSize:12,fontWeight:700}}>✅ Scored {done.score}/{t.totalMarks}</div>
           <Btn onClick={()=>setResultId(t.id)} C={C} color="blue" outline>🏆 View Result & Rank</Btn>
-        </>:<Btn onClick={()=>start(t)} C={C} color="purple">▶ Start Test</Btn>}
+        </>:<Btn onClick={()=>start(t)} C={C} color={isQuiz?"purple":"teal"}>{isQuiz?"⚡ Start Quiz":"▶ Start Test"}</Btn>}
       </div>;})}
     </div>
   </div>;
